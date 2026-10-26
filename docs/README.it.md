@@ -1,6 +1,6 @@
 # SC4SIM.dll – SC4 System Integration Module (CAM)
 
-DLL del **SC4 System Integration Module (SIM)** del Colossus Addon Mod. Versione **1.1.0**.
+DLL del **SC4 System Integration Module (SIM)** del Colossus Addon Mod. Versione **1.2.0**.
 
 ## Ricompense dei consiglieri (Lua del SIM)
 
@@ -78,6 +78,26 @@ installarne una sola.
 
 Codice in `src/powerpoles` (LGPL 2.1, `src/powerpoles/LICENSE-sc4-render-services.txt`), documentazione tecnica in
 `docs/`, parser INI `vendor/mINI` (MIT).
+
+## Advanced Water Management (1.2.0)
+
+Porting nel SC4SIM.dll di [sc4-advanced-water-management](https://github.com/0xC0000054/sc4-advanced-water-management)
+di null 45 (licenza MIT, `src/water/LICENSE-sc4-advanced-water-management.txt`).
+
+* **Finestra di query**: il misuratore di efficienza degli edifici idrici mostra l'efficienza reale; una pompa di
+  acqua dolce o salata che non produce niente (troppo lontana dall'acqua) mostra 0%.
+* **Tooltip al passaggio del mouse**, con [sc4-query-ui-hooks](https://github.com/0xC0000054/sc4-query-ui-hooks):
+  lo stesso misuratore e il messaggio di chiusura per inquinamento.
+* **Controllo mensile**: una notifica al mese se una pompa di acqua dolce o salata non produce niente (testi in
+  `CAM_Locale_en.dat` del SIM).
+* **Trucco `ScanPumps`**: lo stesso controllo a richiesta.
+
+Differenze dall'originale: log in `SC4SIM.log`, interruttore `[AdvancedWaterManagement] Enabled` in `SC4SIM.ini`,
+hook installato a PostAppInit, niente Windows Implementation Library. Se è caricata anche
+`AdvancedWaterManagement.dll`, il SIM lascia la gestione dell'acqua a quella: va tolta dal pacchetto del SIM.
+
+Il director del SIM si iscrive una sola volta ai messaggi (apertura e chiusura città, nuovo mese, trucchi) e li passa
+ai moduli.
 
 ## Installazione
 

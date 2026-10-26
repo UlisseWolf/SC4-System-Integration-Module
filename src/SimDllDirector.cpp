@@ -9,10 +9,15 @@
 // Version 1.1.0:
 //  * Custom power poles: port of the "re/custom-powerlines" sample of sc4-render-services (LGPL 2.1), without the
 //    SC4RenderServices ImGui overlay. See src/powerpoles and docs/power-pole-customization.md; settings in SC4SIM.ini.
+//
+// Version 1.2.0:
+//  * Advanced Water Management: port of sc4-advanced-water-management by Nicholas Hayes (MIT). See src/water.
+//  * The director subscribes once to every message its modules need and forwards them.
 // The reward creators themselves are Lua (create_reward_utilities, ...): reward scripts call them while the game
 // compiles them, before any DLL can reach the city's Lua, so they live in the SIM Lua package 0x0151A000.
 #include "SimLog.h"
 #include "powerpoles/PowerPoleCustomization.h"
+#include "water/AdvancedWater.h"
 #include "version.h"
 
 #include "cIGZCOM.h"
@@ -27,6 +32,8 @@
 #include "cRZCOMDllDirector.h"
 #include "GZCLSIDDefs.h"
 #include "GZServPtrs.h"
+#include "cIGZCheatCodeManager.h"
+#include "cISC4App.h"
 #include "SCLuaUtil.h"
 
 #include <array>
@@ -84,6 +91,7 @@ public:
 		SimLog::Open();
 		SimLog::Write(SimLog::Level::Info, "SC4 SIM DLL " SIM_DLL_VERSION_STR);
 		PowerPoleCustomization::OnStart();
+		AdvancedWater::OnStart();
 		cIGZFrameWork* const framework = pCOM->FrameWork();
 		if (framework->GetState() < cIGZFrameWork::kStatePreAppInit) framework->AddHook(this);
 		else PostAppInit();
@@ -92,14 +100,47 @@ public:
 
 	bool PostAppInit() override
 	{
+		// One subscription per message for all modules: modules never subscribe themselves.
 		cIGZMessageServer2Ptr ms2;
-		if (ms2) ms2->AddNotification(this, kMsgPostCityInit);
+		if (ms2)
+		{
+			for (uint32_t type : { kMsgPostCityInit, kMsgPreCityShutdown, AdvancedWater::kMessageSimNewMonth })
+			{
+				if (!ms2->AddNotification(this, type))
+				{
+					SimLog::Write(SimLog::Level::Error, "Could not subscribe to message 0x%08X.", type);
+				}
+			}
+		}
+		else
+		{
+			SimLog::Write(SimLog::Level::Error, "Message server unavailable: no city notifications.");
+		}
+
 		PowerPoleCustomization::PostAppInit(this);
+		AdvancedWater::PostAppInit();
+
+		// Cheat codes (keepwires, ScanPumps) are registered by the modules; the notification is added once here.
+		cISC4AppPtr app;
+		if (app)
+		{
+			if (cIGZCheatCodeManager* cheats = app->GetCheatCodeManager())
+			{
+				cheats->AddNotification2(this, 0);
+				cheatManager = cheats;
+			}
+		}
 		return true;
 	}
 
 	bool PostAppShutdown() override
 	{
+		if (cheatManager)
+		{
+			cheatManager->RemoveNotification2(this, 0);
+			cheatManager.Reset();
+		}
+		AdvancedWater::PostAppShutdown();
 		PowerPoleCustomization::PostAppShutdown(this);
 		return true;
 	}
@@ -110,15 +151,23 @@ public:
 		if (type == kMsgPostCityInit)
 		{
 			PostCityInit(static_cast<cISC4City*>(static_cast<cIGZMessage2Standard*>(message)->GetVoid1()));
+			AdvancedWater::DoMessage(message);
 		}
 		else if (type == kMsgPreCityShutdown || type == kMsgCheatIssued)
 		{
 			PowerPoleCustomization::DoMessage(message);
+			AdvancedWater::DoMessage(message);
+		}
+		else if (type == AdvancedWater::kMessageSimNewMonth)
+		{
+			AdvancedWater::DoMessage(message);
 		}
 		return true;
 	}
 
 private:
+	cRZAutoRefCount<cIGZCheatCodeManager> cheatManager;
+
 	void PostCityInit(cISC4City* city)
 	{
 		cISC4AdvisorSystem* advisors = city ? city->GetAdvisorSystem() : nullptr;

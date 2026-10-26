@@ -3028,20 +3028,14 @@ public:
                  kUpdateConnectionCallSites.size() + kDeterminePolePositionsCallSites.size() +
                  2 + createFloorPatches_.size() + 4 + 2 + 2 + 1 + 1 + 1 + 1 + 1);
 
-        cIGZMessageServer2Ptr pMS2;
-        if (pMS2) {
-            pMS2->AddNotification(target, kSC4MessagePreCityShutdown);
-            messageServer_ = pMS2;
-        } else {
-            LOG_WARN("PowerPoleCustomization: message server unavailable; city-shutdown flush "
-                     "relies on the destructor hook alone.");
-        }
+        // SC4SIM: the SC4SIM director subscribes once to PreCityShutdown and to the cheat-code
+        // notifications for all its modules and forwards them to DoMessage.
+        (void)target;
 
         const cISC4AppPtr app;
         if (app) {
             if (auto* const cheats = app->GetCheatCodeManager()) {
                 if (cheats->RegisterCheatCode(kCheatKeepWires, cRZBaseString("keepwires"))) {
-                    cheats->AddNotification2(target, 0);
                     cheatManager_ = cheats;
                     LOG_INFO("PowerPoleCustomization: cheat code registered (keepwires) -- toggles "
                              "suppression of power-line rerouting on zone changes.");
@@ -3058,14 +3052,10 @@ public:
     }
 
     bool PostAppShutdown(cIGZMessageTarget2* target) {
+        (void)target;
         if (cheatManager_) {
             cheatManager_->UnregisterCheatCode(kCheatKeepWires);
-            cheatManager_->RemoveNotification2(target, 0);
             cheatManager_.Reset();
-        }
-        if (messageServer_) {
-            messageServer_->RemoveNotification(target, kSC4MessagePreCityShutdown);
-            messageServer_ = nullptr;
         }
         onKeyDownPatch_.Uninstall();
         farDrawNetworkLinePatch_.Uninstall();
@@ -3151,7 +3141,6 @@ private:
     VTableSlotPatch onKeyDownPatch_{};         // Tab/Shift-Tab pole-style switch
     bool styleUiValidated_ = false;            // OnKeyDown + FAR vtable slots byte-confirmed at install
     cRZAutoRefCount<cIGZCheatCodeManager> cheatManager_; // holds the keepwires cheat registration
-    cRZAutoRefCount<cIGZMessageServer2> messageServer_;  // holds the city-shutdown notification
 };
 
 PowerPoleModule sModule;

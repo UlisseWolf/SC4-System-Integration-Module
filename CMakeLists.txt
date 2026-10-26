@@ -19,13 +19,18 @@ add_library(SC4SIM SHARED
   src/powerpoles/PowerPoleCustomization.cpp
   src/powerpoles/RelativeCallPatch.cpp
   src/powerpoles/VersionDetection.cpp
+  src/water/AdvancedWater.cpp
+  src/water/SC4NotificationDialog.cpp
+  src/water/WaterBuildingOccupantFilter.cpp
+  src/water/WaterBuildingPropertyUtil.cpp
   ${GZCOM}/src/cRZBaseString.cpp
   ${GZCOM}/src/cRZBaseVariant.cpp
   ${GZCOM}/src/cRZCOMDllDirector.cpp
   ${GZCOM}/src/SCLuaUtil.cpp
   ${GZCOM}/src/SCPropertyUtil.cpp
+  ${GZCOM}/src/StringResourceManager.cpp
 )
-target_include_directories(SC4SIM PRIVATE src src/powerpoles vendor/mINI/src ${GZCOM}/include)
+target_include_directories(SC4SIM PRIVATE src src/powerpoles src/water vendor/mINI/src ${GZCOM}/include)
 target_link_libraries(SC4SIM PRIVATE version)
 target_compile_definitions(SC4SIM PRIVATE WIN32 _WINDOWS _USRDLL NOMINMAX)
 target_compile_options(SC4SIM PRIVATE /W4 /permissive- /utf-8)

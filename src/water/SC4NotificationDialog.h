@@ -1,0 +1,26 @@
+////////////////////////////////////////////////////////////////////////////
+//
+// This file is part of sc4-advanced-water-management, a DLL Plugin for
+// SimCity 4 that improves interoperability with advanced water management.
+//
+// Copyright (c) 2024, 2025 Nicholas Hayes
+//
+// This file is licensed under terms of the MIT License.
+// See LICENSE-sc4-advanced-water-management.txt for more information.
+// Included in SC4SIM.dll (SC4 System Integration Module) without changes unless noted.
+//
+////////////////////////////////////////////////////////////////////////////
+
+#pragma once
+#include "StringResourceKey.h"
+
+class cIGZString;
+
+// SC4's standard notification dialog with an OK button.
+// TGI 0, 0x96A006B0, 0xCA8CBF0F
+namespace SC4NotificationDialog
+{
+	void ShowDialog(cIGZString const& message, cIGZString const& caption);
+	void ShowDialog(StringResourceKey const& messageKey, StringResourceKey const& captionKey);
+};
+
