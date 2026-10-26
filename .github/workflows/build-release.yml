@@ -1,0 +1,80 @@
+# Builds SC4SIM.dll on every push to master and publishes SC4SIM-<version>.zip (SC4SIM.dll + SC4SIM.ini)
+# as a GitHub release. The version comes from SIM_DLL_VERSION_STR in src/version.h: a new release (tag
+# v<version>) is created only when that version has no release yet, so bump src/version.h to publish.
+name: Build and release SC4SIM.dll
+
+on:
+  push:
+    branches: [master]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: build-release-master
+  cancel-in-progress: false
+
+jobs:
+  build:
+    # Manual runs are accepted only on master as well.
+    if: github.ref == 'refs/heads/master'
+    runs-on: windows-2022
+
+    steps:
+      - name: Check out
+        uses: actions/checkout@v4
+
+      - name: Set up MSBuild
+        uses: microsoft/setup-msbuild@v2
+
+      - name: Build (Release | x86)
+        run: msbuild SC4SIM.sln /m /nologo /p:Configuration=Release /p:Platform=x86
+
+      - name: Read version
+        id: version
+        shell: pwsh
+        run: |
+          $match = Select-String -Path src/version.h -Pattern '#define\s+SIM_DLL_VERSION_STR\s+"([^"]+)"'
+          if (-not $match) { throw "SIM_DLL_VERSION_STR not found in src/version.h" }
+          $version = $match.Matches[0].Groups[1].Value
+          "version=$version" >> $env:GITHUB_OUTPUT
+          Write-Host "SC4SIM.dll version $version"
+
+      - name: Package
+        id: package
+        shell: pwsh
+        run: |
+          $version = '${{ steps.version.outputs.version }}'
+          $dll = 'bin/Release/SC4SIM.dll'
+          if (-not (Test-Path $dll)) { throw "$dll was not built" }
+          New-Item -ItemType Directory -Force -Path package | Out-Null
+          Copy-Item $dll package/
+          Copy-Item SC4SIM.ini package/
+          $zip = "SC4SIM-$version.zip"
+          Compress-Archive -Path package/* -DestinationPath $zip -Force
+          "zip=$zip" >> $env:GITHUB_OUTPUT
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: SC4SIM-${{ steps.version.outputs.version }}
+          path: package/
+          if-no-files-found: error
+
+      - name: Publish release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          $version = '${{ steps.version.outputs.version }}'
+          $tag = "v$version"
+          gh release view $tag 2>$null | Out-Null
+          if ($LASTEXITCODE -eq 0) {
+            Write-Host "Release $tag already exists: build checked, nothing published. Bump src/version.h to publish a new release."
+            exit 0
+          }
+          gh release create $tag '${{ steps.package.outputs.zip }}' `
+            --target '${{ github.sha }}' `
+            --title "SC4SIM.dll $version" `
+            --notes "SC4SIM.dll $version for SimCity 4 1.1.641. Copy SC4SIM.dll and SC4SIM.ini to the top level of the Plugins folder. See the README for the features and settings."

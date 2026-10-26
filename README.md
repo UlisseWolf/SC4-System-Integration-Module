@@ -4,6 +4,7 @@
 ![Version](https://img.shields.io/badge/version-1.4.0-informational)
 ![Game](https://img.shields.io/badge/SimCity_4-1.1.641-success)
 ![Platform](https://img.shields.io/badge/platform-Windows_x86-lightgrey)
+[![Build and release](https://github.com/UlisseWolf/SC4-System-Integration-Module/actions/workflows/build-release.yml/badge.svg?branch=master)](https://github.com/UlisseWolf/SC4-System-Integration-Module/actions/workflows/build-release.yml)
 
 **SC4SIM.dll** is the DLL of the **SC4 System Integration Module (SIM)** of the
 [Colossus Addon Mod](https://github.com/UlisseWolf/Colossus_Addon_Mod) for SimCity 4 Deluxe / Rush Hour.
@@ -55,8 +56,8 @@ it and says so in the log:
 
 ## Installation
 
-1. Build `SC4SIM.dll` (see [Building](#building)), or download it from the [Releases](../../releases) page when
-   one is available.
+1. Download `SC4SIM-<version>.zip` from the [Releases](../../releases) page, or build `SC4SIM.dll` yourself (see
+   [Building](#building)).
 2. Copy `SC4SIM.dll` and, optionally, `SC4SIM.ini` to your SimCity 4 **Plugins** folder.
 3. Start the game. `SC4SIM.log`, created next to the DLL, should report:
    - `SC4 SIM DLL 1.4.0`;
@@ -206,6 +207,18 @@ Dependencies are vendored:
 - the DLL also links Windows' `version.lib`.
 
 The C runtime is linked statically, so players do not need the Visual C++ Redistributable.
+
+## Continuous integration
+
+[`.github/workflows/build-release.yml`](.github/workflows/build-release.yml) runs on every push to `master` (and on manual
+runs from `master`):
+
+1. builds `SC4SIM.sln` (Release | x86) with MSBuild on Windows;
+2. packages `SC4SIM-<version>.zip` with `SC4SIM.dll` and `SC4SIM.ini`, and keeps it as a build artifact;
+3. publishes it as the GitHub release `v<version>` if that release does not exist yet.
+
+The version is `SIM_DLL_VERSION_STR` in `src/version.h`: bump it to publish a new release. Pushes that do not change
+the version only check that the DLL still builds.
 
 ## Repository layout
 
