@@ -1,6 +1,6 @@
 # SC4SIM.dll – SC4 System Integration Module (CAM)
 
-DLL del **SC4 System Integration Module (SIM)** del Colossus Addon Mod. Versione **1.2.0**.
+DLL del **SC4 System Integration Module (SIM)** del Colossus Addon Mod. Versione **1.3.0**.
 
 ## Ricompense dei consiglieri (Lua del SIM)
 
@@ -78,6 +78,15 @@ installarne una sola.
 
 Codice in `src/powerpoles` (LGPL 2.1, `src/powerpoles/LICENSE-sc4-render-services.txt`), documentazione tecnica in
 `docs/`, parser INI `vendor/mINI` (MIT).
+
+## Linee elettriche attraverso zone e campi agricoli (1.3.0)
+
+Aggiunta del SIM, non presente nel codice di caspervg. Nel gioco base `CellIsOKForPlacement` (0x0064FD00) vieta
+i tralicci su qualunque casella con una zona, quindi una zona o un campo più largo della distanza tra i tralicci
+interrompe la linea. Il SIM intercetta le chiamate 0x0064FF3E (controllo del trascinamento) e 0x006509AD
+(`DeterminePolePositions`) e permette i tralicci sulle zone vuote e sui campi agricoli (lotti senza edificio); i
+lotti con un edificio bloccano ancora. `CrossZones=false` in `SC4SIM.ini` la disattiva. Analisi completa in
+`docs/power-lines-across-zones.md`. Da provare in gioco: con `DebugLog=true` il log scrive ogni casella cambiata.
 
 ## Advanced Water Management (1.2.0)
 

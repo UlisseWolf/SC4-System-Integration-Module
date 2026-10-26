@@ -4,6 +4,7 @@
 // Changes for SC4SIM: no ImGui status overlay (that part needs SC4RenderServices), settings in SC4SIM.ini,
 // log in SC4SIM.log, and the director is now a module driven by the SC4SIM director (PowerPoleCustomization.h).
 // Everything else (hooks, addresses, exemplar properties, styles, FAR drag, Tab switch, keepwires) is unchanged.
+// Added by SC4SIM: CellIsOKForPlacementHook, power lines across empty zones and farm fields (CrossZones setting).
 //
 // Custom power-pole cable attach points: lets a pole prop exemplar declare, per connection
 // direction, how many cables it carries and exactly where each one attaches on the model,
@@ -49,6 +50,9 @@
 #include "cIGZPersistResourceManager.h"
 #include "cIGZWin.h"
 #include "cISC4App.h"
+#include "cISC4City.h"
+#include "cISC4Lot.h"
+#include "cISC4LotManager.h"
 #include "cISCProperty.h"
 #include "cISCPropertyHolder.h"
 #include "cISCExemplarPropertyHolder.h"
@@ -567,6 +571,7 @@ namespace {
     struct Settings {
         bool enabled = true;
         uint32_t maxPointsPerDirection = 8; // raise to allow denser cable bundles than vanilla's 4
+        bool crossZones = true;             // SC4SIM: poles on empty zones and farm fields (see CellIsOKForPlacementHook)
     };
 
     Settings gSettings;
@@ -2309,6 +2314,61 @@ namespace {
     }
 
     // ------------------------------------------------------------------
+    // SC4SIM: power lines across zones and farm fields. Not part of the sc4-render-services sample;
+    // reverse engineered on the 1.1.641 executable (see docs/power-lines-across-zones.md).
+    //
+    // cSC4PowerLineTool::CellIsOKForPlacement (0x0064fd00, __thiscall, args cellX, cellZ, RET 8) returns
+    //   0 = a pole may stand here,
+    //   1 = zoned cell (cISC4ZoneManager::GetZoneType != None, Landfill, Plopped),
+    //   2 = a building occupant or a lot on the cell, 3 = a blocking flora-type occupant.
+    // DeterminePolePositions (call 0x006509ad) only places poles on 0. Over 1 the wire may span, but no
+    // pole can stand, so a zone wider than the pole spacing breaks the line; the drag validation
+    // (call 0x0064ff3e) stops the drag at 2. A farm field is a zoned lot without a building.
+    // The hook turns 1 and 2 into 0 when the cell has no lot (empty zone) or its lot has no building
+    // (farm field). Lots with a building keep the vanilla answer. The third caller (0x0065210b, the pole
+    // relocation of UpdateOnZoneChange) is left vanilla, so relocated poles still avoid zones.
+    // ------------------------------------------------------------------
+    constexpr uintptr_t kCellIsOKForPlacement = 0x0064fd00;
+    constexpr std::array<uintptr_t, 2> kCellIsOKForPlacementCallSites = {
+        0x0064ff3e, // drag validation (truncates the drag on 2, warns on 1)
+        0x006509ad, // DeterminePolePositions
+    };
+    constexpr uint32_t kCellOK = 0;
+    constexpr uint32_t kCellZoned = 1;
+    constexpr uint32_t kCellBuildingOrLot = 2;
+
+    using CellIsOKForPlacementFn = uint32_t(__thiscall*)(void* tool, int32_t cellX, int32_t cellZ);
+
+    uint32_t __fastcall CellIsOKForPlacementHook(void* tool, void* /*edx*/, int32_t cellX, int32_t cellZ) {
+        const auto original = reinterpret_cast<CellIsOKForPlacementFn>(kCellIsOKForPlacement);
+        const uint32_t result = original(tool, cellX, cellZ);
+        if (!gSettings.enabled || !gSettings.crossZones || (result != kCellZoned && result != kCellBuildingOrLot)) {
+            return result;
+        }
+
+        const cISC4AppPtr app;
+        cISC4City* const city = app ? app->GetCity() : nullptr;
+        cISC4LotManager* const lotManager = city ? city->GetLotManager() : nullptr;
+        if (lotManager == nullptr) {
+            return result;
+        }
+
+        cISC4Lot* const lot = lotManager->GetLot(cellX, cellZ, false);
+        uint32_t newResult = result;
+        if (lot == nullptr) {
+            // Empty zone: allowed. A building occupant without a lot (2) keeps blocking.
+            newResult = result == kCellZoned ? kCellOK : result;
+        } else if (lot->GetBuilding() == nullptr) {
+            // Farm field (or an empty lot): allowed. A lot with a building keeps the vanilla answer.
+            newResult = kCellOK;
+        }
+        LOG_DEBUG("PowerPoleCustomization: [zones] cell ({}, {}) vanilla {} -> {} (lot {}, building {}).",
+                  cellX, cellZ, result, newResult, lot != nullptr ? "yes" : "no",
+                  lot != nullptr && lot->GetBuilding() != nullptr ? "yes" : "no");
+        return newResult;
+    }
+
+    // ------------------------------------------------------------------
     // FAR drag hook (see the kDrawNetworkLine constants block above and
     // docs/sc4-powerline-tool-re.md SS17 for the design). Validated in-game 2026-07-19.
     // ------------------------------------------------------------------
@@ -2899,12 +2959,15 @@ namespace {
                 ParseUInt32(section.get("MaxPointsPerDirection"), gSettings.maxPointsPerDirection), 1u, 15u);
         }
 
+        if (section.has("CrossZones")) {
+            gSettings.crossZones = ParseBool(section.get("CrossZones"), gSettings.crossZones);
+        }
         if (section.has("DebugLog")) {
             SimLog::SetDebug(ParseBool(section.get("DebugLog"), false));
         }
 
-        LOG_INFO("PowerPoleCustomization: settings enabled={}, maxPointsPerDirection={}",
-                 gSettings.enabled, gSettings.maxPointsPerDirection);
+        LOG_INFO("PowerPoleCustomization: settings enabled={}, maxPointsPerDirection={}, crossZones={}",
+                 gSettings.enabled, gSettings.maxPointsPerDirection, gSettings.crossZones);
 
         LoadPoleStyles(ini);
     }
@@ -2977,6 +3040,11 @@ public:
                                                kDeterminePolePositionsCallSites[i], kDeterminePolePositions,
                                                &DeterminePolePositionsHook);
         }
+        for (size_t i = 0; i < kCellIsOKForPlacementCallSites.size(); ++i) {
+            installed += InstallCallSitePatch(cellIsOKForPlacementPatches_[i], "CellIsOKForPlacement",
+                                               kCellIsOKForPlacementCallSites[i], kCellIsOKForPlacement,
+                                               &CellIsOKForPlacementHook);
+        }
         installed += wireWidthLookupPatch_.Install() ? 1 : 0;
 
         installed += InstallCallSitePatch(createFloorPatches_[0], "CreateFloor@SetPosition",
@@ -3026,6 +3094,7 @@ public:
         LOG_INFO("PowerPoleCustomization: installed {} of {} patches.", installed,
                  initConnectionPointsPatches_.size() + kAddConnectionCallSites.size() +
                  kUpdateConnectionCallSites.size() + kDeterminePolePositionsCallSites.size() +
+                 kCellIsOKForPlacementCallSites.size() +
                  2 + createFloorPatches_.size() + 4 + 2 + 2 + 1 + 1 + 1 + 1 + 1);
 
         // SC4SIM: the SC4SIM director subscribes once to PreCityShutdown and to the cheat-code
@@ -3066,6 +3135,7 @@ public:
         for (auto& patch : addConnectionPatches_) patch.Uninstall();
         for (auto& patch : updateConnectionPatches_) patch.Uninstall();
         for (auto& patch : determinePolePositionsPatches_) patch.Uninstall();
+        for (auto& patch : cellIsOKForPlacementPatches_) patch.Uninstall();
         wireWidthLookupPatch_.Uninstall();
         for (auto& patch : createFloorPatches_) patch.Uninstall();
         floorTextureHashPatch1_.Uninstall();
@@ -3125,6 +3195,7 @@ private:
     std::array<TerrainDecal::RelativeCallPatch, 4> addConnectionPatches_{};
     std::array<TerrainDecal::RelativeCallPatch, 2> updateConnectionPatches_{};
     std::array<TerrainDecal::RelativeCallPatch, 3> determinePolePositionsPatches_{};
+    std::array<TerrainDecal::RelativeCallPatch, 2> cellIsOKForPlacementPatches_{}; // SC4SIM: zones / farm fields
     std::array<TerrainDecal::RelativeCallPatch, 3> createFloorPatches_{};
     Imm32CallPatch floorTextureHashPatch1_{};
     Imm32CallPatch floorTextureHashPatch2_{};

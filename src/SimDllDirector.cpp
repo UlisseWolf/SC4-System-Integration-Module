@@ -13,6 +13,10 @@
 // Version 1.2.0:
 //  * Advanced Water Management: port of sc4-advanced-water-management by Nicholas Hayes (MIT). See src/water.
 //  * The director subscribes once to every message its modules need and forwards them.
+//
+// Version 1.3.0:
+//  * Power lines across empty zones and farm fields (CellIsOKForPlacement hook, CrossZones in SC4SIM.ini).
+//    See docs/power-lines-across-zones.md.
 // The reward creators themselves are Lua (create_reward_utilities, ...): reward scripts call them while the game
 // compiles them, before any DLL can reach the city's Lua, so they live in the SIM Lua package 0x0151A000.
 #include "SimLog.h"
