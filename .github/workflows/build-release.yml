@@ -1,5 +1,5 @@
-# Builds SC4SIM.dll on every push to master and publishes SC4SIM-<version>.zip (SC4SIM.dll + SC4SIM.ini)
-# as a GitHub release. The version comes from SIM_DLL_VERSION_STR in src/version.h: a new release (tag
+# Builds SC4SIM.dll on every push to master and publishes SC4SIM-<version>.zip (SC4SIM.dll, SC4SIM.ini and the
+# license files in Licenses/) as a GitHub release. The version comes from SIM_DLL_VERSION_STR in src/version.h: a new release (tag
 # v<version>) is created only when that version has no release yet, so bump src/version.h to publish.
 name: Build and release SC4SIM.dll
 
@@ -7,6 +7,11 @@ on:
   push:
     branches: [master]
   workflow_dispatch:
+    inputs:
+      replace_asset:
+        description: Replace the zip of an existing release with the same version
+        type: boolean
+        default: false
 
 permissions:
   contents: write
@@ -51,6 +56,24 @@ jobs:
           New-Item -ItemType Directory -Force -Path package | Out-Null
           Copy-Item $dll package/
           Copy-Item SC4SIM.ini package/
+          # SC4SIM.dll is LGPL-3.0; the code it includes from other projects keeps its own license.
+          New-Item -ItemType Directory -Force -Path package/Licenses | Out-Null
+          Copy-Item LICENSE package/Licenses/LICENSE-SC4SIM-LGPL-3.0.txt
+          Copy-Item src/powerpoles/LICENSE-sc4-render-services.txt package/Licenses/LICENSE-sc4-render-services-LGPL-2.1.txt
+          Copy-Item src/water/LICENSE-sc4-advanced-water-management.txt package/Licenses/LICENSE-sc4-advanced-water-management-MIT.txt
+          Copy-Item vendor/gzcom-dll/LICENSE package/Licenses/LICENSE-gzcom-dll-LGPL-2.1.txt
+          Copy-Item vendor/mINI/LICENSE package/Licenses/LICENSE-mINI-MIT.txt
+          @(
+            "SC4SIM.dll $version - SC4 System Integration Module DLL (Colossus Addon Mod)",
+            "Source code: ${{ github.server_url }}/${{ github.repository }}",
+            "",
+            "SC4SIM.dll is licensed under the GNU Lesser General Public License v3.0 (LICENSE-SC4SIM-LGPL-3.0.txt).",
+            "It includes code from other projects, which keeps its own license:",
+            "- custom power poles: sc4-render-services by caspervg, LGPL 2.1 (LICENSE-sc4-render-services-LGPL-2.1.txt)",
+            "- Advanced Water Management: sc4-advanced-water-management by Nicholas Hayes, MIT (LICENSE-sc4-advanced-water-management-MIT.txt)",
+            "- gzcom-dll: LGPL 2.1 (LICENSE-gzcom-dll-LGPL-2.1.txt)",
+            "- mINI: MIT (LICENSE-mINI-MIT.txt)"
+          ) | Set-Content -Path package/Licenses/README.txt -Encoding utf8
           $zip = "SC4SIM-$version.zip"
           Compress-Archive -Path package/* -DestinationPath $zip -Force
           "zip=$zip" >> $env:GITHUB_OUTPUT
@@ -70,6 +93,11 @@ jobs:
           $version = '${{ steps.version.outputs.version }}'
           $tag = "v$version"
           gh release view $tag 2>$null | Out-Null
+          if ($LASTEXITCODE -eq 0 -and '${{ inputs.replace_asset }}' -eq 'true') {
+            gh release upload $tag '${{ steps.package.outputs.zip }}' --clobber
+            Write-Host "Release ${tag}: zip replaced."
+            exit 0
+          }
           if ($LASTEXITCODE -eq 0) {
             Write-Host "Release $tag already exists: build checked, nothing published. Bump src/version.h to publish a new release."
             exit 0

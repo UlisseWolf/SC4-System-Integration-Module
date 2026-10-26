@@ -214,11 +214,13 @@ The C runtime is linked statically, so players do not need the Visual C++ Redist
 runs from `master`):
 
 1. builds `SC4SIM.sln` (Release | x86) with MSBuild on Windows;
-2. packages `SC4SIM-<version>.zip` with `SC4SIM.dll` and `SC4SIM.ini`, and keeps it as a build artifact;
+2. packages `SC4SIM-<version>.zip` with `SC4SIM.dll`, `SC4SIM.ini` and the license files (`Licenses/`), and keeps it as
+   a build artifact;
 3. publishes it as the GitHub release `v<version>` if that release does not exist yet.
 
 The version is `SIM_DLL_VERSION_STR` in `src/version.h`: bump it to publish a new release. Pushes that do not change
-the version only check that the DLL still builds.
+the version only check that the DLL still builds. A manual run with *Replace the zip of an existing release* replaces
+the zip of the current version's release instead.
 
 ## Repository layout
 
