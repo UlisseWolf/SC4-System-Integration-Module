@@ -1,0 +1,1 @@
+mINI https://github.com/metayeti/mINI commit 682e706d8e1904eddec648fc6efbb468a7e53f1e (copied: src/mini/ini.h, LICENSE)

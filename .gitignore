@@ -1,0 +1,20 @@
+# Visual Studio / CMake
+.vs/
+bin/
+obj/
+build/
+out/
+Release/
+Debug/
+*.user
+*.suo
+*.obj
+*.pdb
+*.ilk
+*.ipdb
+*.iobj
+*.tlog
+*.log
+# Python
+__pycache__/
+*.pyc
