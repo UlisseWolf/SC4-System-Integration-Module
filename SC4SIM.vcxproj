@@ -87,6 +87,9 @@
     <ClCompile Include="vendor\gzcom-dll\gzcom-dll\src\StringResourceManager.cpp">
       <WarningLevel>Level3</WarningLevel>
     </ClCompile>
+    <ClCompile Include="vendor\gzcom-dll\gzcom-dll\src\cRZCellMap.cpp">
+      <WarningLevel>Level3</WarningLevel>
+    </ClCompile>
   </ItemGroup>
   
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

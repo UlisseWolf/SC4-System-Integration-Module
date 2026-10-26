@@ -51,6 +51,46 @@ The relocation at `0x0065210B` is left vanilla, so poles moved by a zone change 
 `CrossZones=false` in `[SC4PowerPoleCustomization]` of `SC4SIM.ini` turns the patch off without
 uninstalling it.
 
+## Removing the zone under new poles (1.4.0, validated in game 2026-10-26)
+
+`cSC4PowerLineTool::PlacePoles` — `0x00651560`, `__thiscall`, one byte argument, `RET 4` — builds the poles listed
+in the tool's `tPoleInfo` vector (`tool+0x36C..+0x370`, stride `0x30`). The entries are written by the pole-add
+helper `0x00650760`: `+0x00` pole index, `+0x04`/`+0x08` cell X/Z (from the dragged-cell vector, the cells passed to
+`CellIsOKForPlacement`), `+0x0C` cell index, `+0x10` pole occupant (cleared at the end of `PlacePoles`), `+0x24..+0x2D`
+the snap key compared by the list scan `0x0064F170`. Outside itself it is called at:
+
+| Call site | Caller |
+| --- | --- |
+| `0x006522C8` | neighbour auto-connect (`0x006520C0`) |
+| `0x006529CB` | line placement (power tool vtable slot `0xD4`) |
+
+Both callers read the vector after the call, so it is still valid there. `tool+0x50 != 0` is the removal mode:
+`PlacePoles` then takes the `RemoveConnection` branch.
+
+The two calls are redirected to `PlacePolesHook`. **`PlacePoles` also runs on every mouse move of a drag** (the
+in-game log showed the pole count growing while dragging), so the hook only records the pole cells of the latest call.
+The drag end is caught on the network-tool input control (vtable `0x00AAB008`):
+
+| Slot | Function | Hook |
+| --- | --- | --- |
+| `+0x40` | `OnMouseDownL` (`0x00661EE0`) | forgets the cells of a previous, cancelled drag |
+| `+0x48` | `OnMouseUpL` (`0x00661F50`) | after the original returns, dezones the recorded pole cells |
+
+Every recorded pole cell that is still zoned is dezoned with the same call the game makes to dezone a rectangle
+(`0x00467075`):
+
+```
+PlaceZone(region, None, place = 1, skipFunds = 1, checkSlope = 0, skipZoneSize = 1, checkLotSize = 1, 0, 0, 0)
+```
+
+- **Lots with a building are never touched.**
+- **Farm fields (lots without a building) are dezoned when `DezoneFieldCells=true` (default).** The game cannot take
+  one cell from a lot, so it demolishes that field lot; the farm grows new fields around the pole.
+- **The keepwires bypass is switched on around the call,** so the zone change does not reroute the line that was
+  just placed. The hook is installed only if the keepwires patch is.
+
+Settings: `DezoneUnderPoles` (default `true`) and `DezoneFieldCells` (default `true`).
+
 ## Interaction with zone growth
 
 A pole on a zoned cell is an obstacle like any other. When a lot later grows over it, the game's
@@ -68,4 +108,6 @@ The analysis is static. With `DebugLog=true`, every overridden cell is written t
 Points to check:
 - that a farm field lot really has no building (`building no`);
 - that poles placed on fields and empty zones behave normally when saved, reloaded and when the farm or
-  zone develops.
+  zone develops;
+- that the pole cells lose their zone after placement (`[zones] dezone pole cell` lines with `DebugLog=true`),
+  and that the line is not rerouted by that change.

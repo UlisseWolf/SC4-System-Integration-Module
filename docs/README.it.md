@@ -1,6 +1,6 @@
 # SC4SIM.dll – SC4 System Integration Module (CAM)
 
-DLL del **SC4 System Integration Module (SIM)** del Colossus Addon Mod. Versione **1.3.0**.
+DLL del **SC4 System Integration Module (SIM)** del Colossus Addon Mod. Versione **1.4.0**.
 
 ## Ricompense dei consiglieri (Lua del SIM)
 
@@ -87,6 +87,16 @@ interrompe la linea. Il SIM intercetta le chiamate 0x0064FF3E (controllo del tra
 (`DeterminePolePositions`) e permette i tralicci sulle zone vuote e sui campi agricoli (lotti senza edificio); i
 lotti con un edificio bloccano ancora. `CrossZones=false` in `SC4SIM.ini` la disattiva. Analisi completa in
 `docs/power-lines-across-zones.md`. Da provare in gioco: con `DebugLog=true` il log scrive ogni casella cambiata.
+
+## Zona rimossa sotto i nuovi tralicci (1.4.0)
+
+`PlacePoles` (0x00651560) gira a ogni movimento del mouse durante il trascinamento, quindi il SIM registra solo le
+caselle dei tralicci (chiamate 0x006522C8 e 0x006529CB) e le dezona quando il trascinamento finisce (hook di
+`OnMouseUpL`, 0x00661F50, sul controllo di input degli strumenti di rete; `OnMouseDownL` dimentica le caselle di un
+trascinamento annullato). Usa la stessa chiamata con cui il gioco dezona (`PlaceZone` con zona None), con il bypass
+di keepwires attivo così la linea non viene ridisegnata. I lotti con un edificio non vengono toccati; su un campo
+agricolo il gioco demolisce quel campo (non può togliere una sola casella a un lotto) e la fattoria ne fa crescere
+di nuovi intorno al traliccio. Impostazioni: `DezoneUnderPoles` e `DezoneFieldCells` (entrambe `true`).
 
 ## Advanced Water Management (1.2.0)
 

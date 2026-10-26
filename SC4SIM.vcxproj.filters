@@ -23,6 +23,7 @@
     <ClCompile Include="vendor\gzcom-dll\gzcom-dll\src\SCLuaUtil.cpp"><Filter>Vendor</Filter></ClCompile>
     <ClCompile Include="vendor\gzcom-dll\gzcom-dll\src\SCPropertyUtil.cpp"><Filter>Vendor</Filter></ClCompile>
     <ClCompile Include="vendor\gzcom-dll\gzcom-dll\src\StringResourceManager.cpp"><Filter>Vendor</Filter></ClCompile>
+    <ClCompile Include="vendor\gzcom-dll\gzcom-dll\src\cRZCellMap.cpp"><Filter>Vendor</Filter></ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="src\SimLog.h"><Filter>Source</Filter></ClInclude>

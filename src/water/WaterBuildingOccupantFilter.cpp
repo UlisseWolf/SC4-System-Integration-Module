@@ -80,7 +80,7 @@ bool WaterBuildingOccupantFilter::IsOccupantTypeIncluded(uint32_t dwType)
 	return dwType == kOccupantType_Building;
 }
 
-bool WaterBuildingOccupantFilter::IsPropertyHolderIncluded(cISCPropertyHolder* pProperties)
+bool WaterBuildingOccupantFilter::IsPropertyHolderIncluded(cISCPropertyHolder* /*pProperties*/)
 {
 	return true;
 }

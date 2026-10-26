@@ -1,7 +1,7 @@
 # SC4SIM — SC4 System Integration Module DLL for SimCity 4
 
 [![License: LGPL v3](https://img.shields.io/badge/License-LGPL_v3-blue.svg)](LICENSE)
-![Version](https://img.shields.io/badge/version-1.3.0-informational)
+![Version](https://img.shields.io/badge/version-1.4.0-informational)
 ![Game](https://img.shields.io/badge/SimCity_4-1.1.641-success)
 ![Platform](https://img.shields.io/badge/platform-Windows_x86-lightgrey)
 
@@ -10,7 +10,7 @@
 SIM collects shared game systems that any mod can rely on, without forcing players to install a specific mod
 such as NEON.
 
-> **Status:** source release, version 1.3.0. Building with MSVC and in-game testing are the next steps.
+> **Status:** source release, version 1.4.0. Building with MSVC and in-game testing are the next steps.
 
 ---
 
@@ -36,6 +36,7 @@ such as NEON.
 | `sim` Lua table | 1.0.0 | `sim.version()` lets scripts detect the DLL. When a city opens, the DLL logs whether the SIM Lua and every reward creator are available. |
 | Custom power poles | 1.1.0 | Custom cable geometry, wire appearance, named pole styles switched with Tab, fractional-angle (FAR) power lines and the `keepwires` cheat. |
 | Power lines across zones | 1.3.0 | Power poles can stand on empty zones and farm fields, so lines are no longer cut by zones wider than the pole spacing. |
+| Dezoning under poles | 1.4.0 | The cell under every new pole loses its zone (optionally also on farm fields). |
 | Advanced Water Management | 1.2.0 | The real efficiency of water buildings in the query dialog and tool tip, a monthly warning for fresh or salt water pumps that produce nothing, and the `ScanPumps` cheat. |
 
 ## Requirements
@@ -58,7 +59,7 @@ it and says so in the log:
    one is available.
 2. Copy `SC4SIM.dll` and, optionally, `SC4SIM.ini` to your SimCity 4 **Plugins** folder.
 3. Start the game. `SC4SIM.log`, created next to the DLL, should report:
-   - `SC4 SIM DLL 1.3.0`;
+   - `SC4 SIM DLL 1.4.0`;
    - `PowerPoleCustomization: installed N of N patches`;
    - `AdvancedWater: installed the water building query UI hook`.
 
@@ -139,7 +140,12 @@ SC4SIM includes only the power-pole module: it does not contain SC4RenderService
 - **Across zones and farm fields** *(SC4SIM addition, not in the original sample)*. In the base game a pole can
   never stand on a zoned cell, so a zone or a farm field wider than the pole spacing cuts the line. SC4SIM lets
   poles stand on empty zones and on farm fields; lots with a building still block. `CrossZones=false` turns it
-  off. The reverse-engineering notes are in [`docs/power-lines-across-zones.md`](docs/power-lines-across-zones.md).
+  off.
+- **Dezoning under poles** *(SC4SIM addition)*. When a drag ends, the cell under each new pole loses its zone.
+  - Lots with a building are never touched.
+  - On a farm field the game demolishes that field lot (it cannot take one cell from a lot) and the farm grows new
+    fields around the pole; `DezoneFieldCells=false` keeps fields untouched.
+  - The reverse-engineering notes are in [`docs/power-lines-across-zones.md`](docs/power-lines-across-zones.md).
 
 **Differences from the original sample:**
 - no ImGui status overlay;
@@ -172,6 +178,8 @@ The reverse-engineering notes behind every address are in [`docs/sc4-powerline-t
 | `[AdvancedWaterManagement]` | `Enabled` | `true` | Turns Advanced Water Management on or off. |
 | `[SC4PowerPoleCustomization]` | `Enabled` | `true` | Turns the custom power poles on or off. |
 | | `CrossZones` | `true` | Lets poles stand on empty zones and farm fields. |
+| | `DezoneUnderPoles` | `true` | Removes the zone from the cell of every new pole when the drag ends. |
+| | `DezoneFieldCells` | `true` | Also on farm fields; the game demolishes that field lot. |
 | | `DebugLog` | `false` | Writes the power-pole debug traces to `SC4SIM.log`. |
 | | `MaxPointsPerDirection` | `8` | Maximum number of cables per direction (1–15). |
 | `[PowerPoles.<name>]` | `REG.*`, `FAR-*`, `InterPoleDistance` | — | Pole styles, see above. |

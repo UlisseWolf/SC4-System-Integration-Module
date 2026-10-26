@@ -17,6 +17,9 @@
 // Version 1.3.0:
 //  * Power lines across empty zones and farm fields (CellIsOKForPlacement hook, CrossZones in SC4SIM.ini).
 //    See docs/power-lines-across-zones.md.
+//
+// Version 1.4.0:
+//  * Dezoning under new poles (PlacePoles hook, DezoneUnderPoles / DezoneFieldCells in SC4SIM.ini).
 // The reward creators themselves are Lua (create_reward_utilities, ...): reward scripts call them while the game
 // compiles them, before any DLL can reach the city's Lua, so they live in the SIM Lua package 0x0151A000.
 #include "SimLog.h"

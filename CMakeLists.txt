@@ -29,6 +29,7 @@ add_library(SC4SIM SHARED
   ${GZCOM}/src/SCLuaUtil.cpp
   ${GZCOM}/src/SCPropertyUtil.cpp
   ${GZCOM}/src/StringResourceManager.cpp
+  ${GZCOM}/src/cRZCellMap.cpp
 )
 target_include_directories(SC4SIM PRIVATE src src/powerpoles src/water vendor/mINI/src ${GZCOM}/include)
 target_link_libraries(SC4SIM PRIVATE version)

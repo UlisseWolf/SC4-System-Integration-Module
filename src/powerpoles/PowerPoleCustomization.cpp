@@ -53,6 +53,8 @@
 #include "cISC4City.h"
 #include "cISC4Lot.h"
 #include "cISC4LotManager.h"
+#include "cISC4ZoneManager.h"
+#include "SC4CellRegion.h"
 #include "cISCProperty.h"
 #include "cISCPropertyHolder.h"
 #include "cISCExemplarPropertyHolder.h"
@@ -87,6 +89,7 @@
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
+#include <utility>
 #include <vector>
 
 namespace {
@@ -572,6 +575,8 @@ namespace {
         bool enabled = true;
         uint32_t maxPointsPerDirection = 8; // raise to allow denser cable bundles than vanilla's 4
         bool crossZones = true;             // SC4SIM: poles on empty zones and farm fields (see CellIsOKForPlacementHook)
+        bool dezoneUnderPoles = true;       // SC4SIM: remove the zone from the cell of every new pole
+        bool dezoneFieldCells = true;       // SC4SIM: also on farm fields (the game demolishes that field lot)
     };
 
     Settings gSettings;
@@ -2023,6 +2028,8 @@ namespace {
             return true;
         }
 
+        [[nodiscard]] bool IsInstalled() const noexcept { return installed_; } // SC4SIM
+
         void Uninstall() {
             if (!installed_) {
                 return;
@@ -2366,6 +2373,118 @@ namespace {
                   cellX, cellZ, result, newResult, lot != nullptr ? "yes" : "no",
                   lot != nullptr && lot->GetBuilding() != nullptr ? "yes" : "no");
         return newResult;
+    }
+
+    // ------------------------------------------------------------------
+    // SC4SIM: remove the zone under new poles (see docs/power-lines-across-zones.md).
+    //
+    // cSC4PowerLineTool::PlacePoles (0x00651560, __thiscall, one byte argument, RET 4) builds the poles
+    // listed in the tool's tPoleInfo vector (tool+0x36c..+0x370, stride 0x30). The entries are written by the
+    // pole-add helper 0x00650760: +0x00 pole index, +0x04/+0x08 the cell X/Z taken from the dragged-cell
+    // vector (the same cells passed to CellIsOKForPlacement), +0x0c the cell index, +0x10 the pole occupant
+    // (cleared at the end of PlacePoles), +0x24..+0x2d the snap key compared by the list scan 0x0064f170.
+    // It is called from outside itself at 0x006522c8
+    // (neighbour auto-connect, 0x006520c0) and 0x006529cb (line placement, power tool vtable slot 0xD4);
+    // both read the same vector after the call, so it is still valid there. tool+0x50 != 0 is the removal
+    // mode (PlacePoles takes the RemoveConnection branch). PlacePoles also runs on every mouse move of a drag,
+    // so the hook only records the pole cells; when the drag ends (OnMouseUpL hook below) every recorded pole
+    // cell that is still zoned is dezoned, with the call the game itself uses to dezone a rectangle (0x00467075):
+    // PlaceZone(region, None, place=1, skipFunds=1, checkSlope=0, skipZoneSize=1, checkLotSize=1, 0, 0, 0).
+    // Cells with a lot are skipped (a lot cannot lose a single cell: the game would demolish it), unless
+    // DezoneFieldCells is on and the lot has no building (farm field). The keepwires bypass is switched on
+    // around the call, so the zone change does not reroute the line that was just placed.
+    // ------------------------------------------------------------------
+    constexpr uintptr_t kPlacePoles = 0x00651560;
+    constexpr std::array<uintptr_t, 2> kPlacePolesCallSites = {
+        0x006522c8, // neighbour auto-connect
+        0x006529cb, // line placement
+    };
+    constexpr uint32_t kTool_RemovalMode = 0x50;     // byte
+    constexpr uint32_t kTool_PoleInfoBegin = 0x36c;
+    constexpr uint32_t kTool_PoleInfoEnd = 0x370;
+    constexpr uint32_t kPoleInfoStride = 0x30;
+    constexpr uint32_t kPoleInfo_CellX = 0x04;
+    constexpr uint32_t kPoleInfo_CellZ = 0x08;
+
+    using PlacePolesFn = void(__thiscall*)(void* tool, uint8_t flag);
+
+    bool IsDezonableZone(const cISC4ZoneManager::ZoneType type) {
+        using ZoneType = cISC4ZoneManager::ZoneType;
+        return type != ZoneType::None && type != ZoneType::Landfill && type != ZoneType::Plopped;
+    }
+
+    // Pole cells of the latest PlacePoles call. During a drag the game runs PlacePoles on every mouse move
+    // (the log shows the pole count growing with the drag), so nothing may be dezoned there: the cells are only
+    // recorded, and dezoned when the drag ends (OnMouseUpL of the network tool input control, see below).
+    std::vector<std::pair<int32_t, int32_t>> gPendingPoleCells;
+
+    void RecordPoleCells(void* tool) {
+        gPendingPoleCells.clear();
+        const auto* const base = reinterpret_cast<const uint8_t*>(tool);
+        const auto begin = *reinterpret_cast<const uintptr_t*>(base + kTool_PoleInfoBegin);
+        const auto end = *reinterpret_cast<const uintptr_t*>(base + kTool_PoleInfoEnd);
+        if (begin == 0 || end < begin || (end - begin) % kPoleInfoStride != 0 || (end - begin) / kPoleInfoStride > 4096) {
+            return;
+        }
+        for (uintptr_t entry = begin; entry < end; entry += kPoleInfoStride) {
+            const int32_t x = *reinterpret_cast<const int32_t*>(entry + kPoleInfo_CellX);
+            const int32_t z = *reinterpret_cast<const int32_t*>(entry + kPoleInfo_CellZ);
+            if (x >= 0 && z >= 0 && x <= 1024 && z <= 1024) {
+                gPendingPoleCells.emplace_back(x, z);
+            }
+        }
+    }
+
+    void DezonePendingPoleCells() {
+        const cISC4AppPtr app;
+        cISC4City* const city = app ? app->GetCity() : nullptr;
+        cISC4ZoneManager* const zoneManager = city ? city->GetZoneManager() : nullptr;
+        cISC4LotManager* const lotManager = city ? city->GetLotManager() : nullptr;
+        if (zoneManager == nullptr || lotManager == nullptr || gPendingPoleCells.empty()) {
+            gPendingPoleCells.clear();
+            return;
+        }
+
+        LOG_DEBUG("PowerPoleCustomization: [zones] drag ended with {} pole(s).", gPendingPoleCells.size());
+        uint32_t dezoned = 0;
+        for (const auto& [x, z] : gPendingPoleCells) {
+            const auto zone = zoneManager->GetZoneType(x, z);
+            if (!IsDezonableZone(zone)) {
+                LOG_DEBUG("PowerPoleCustomization: [zones] pole cell ({}, {}) zone {}: nothing to dezone.", x, z,
+                          static_cast<int32_t>(zone));
+                continue;
+            }
+            if (cISC4Lot* const lot = lotManager->GetLot(x, z, false)) {
+                if (!gSettings.dezoneFieldCells || lot->GetBuilding() != nullptr) {
+                    LOG_DEBUG("PowerPoleCustomization: [zones] pole cell ({}, {}) zone {} is inside a lot{}: kept.", x, z,
+                              static_cast<int32_t>(zone), lot->GetBuilding() != nullptr ? " with a building" : "");
+                    continue;
+                }
+            }
+
+            SC4CellRegion<int32_t> region(x, z, x, z, true);
+            const bool savedKeepWires = gKeepWiresOnZoneChange;
+            gKeepWiresOnZoneChange = true;
+            const bool ok = zoneManager->PlaceZone(region, cISC4ZoneManager::ZoneType::None,
+                                                   true, true, false, true, true, nullptr, nullptr, 0);
+            gKeepWiresOnZoneChange = savedKeepWires;
+            if (ok) {
+                ++dezoned;
+            }
+            LOG_DEBUG("PowerPoleCustomization: [zones] dezone pole cell ({}, {}) zone {}: {}.", x, z,
+                      static_cast<int32_t>(zone), ok ? "done" : "refused");
+        }
+        LOG_DEBUG("PowerPoleCustomization: [zones] dezoned {} pole cell(s).", dezoned);
+        gPendingPoleCells.clear();
+    }
+
+    void __fastcall PlacePolesHook(void* tool, void* /*edx*/, uint8_t flag) {
+        const auto original = reinterpret_cast<PlacePolesFn>(kPlacePoles);
+        original(tool, flag);
+        if (gSettings.enabled && gSettings.crossZones && gSettings.dezoneUnderPoles
+            && *(reinterpret_cast<const uint8_t*>(tool) + kTool_RemovalMode) == 0) {
+            RecordPoleCells(tool);
+        }
     }
 
     // ------------------------------------------------------------------
@@ -2738,6 +2857,31 @@ namespace {
         return original(control, vkCode, modifiers);
     }
 
+    // SC4SIM: end of a power-line drag. cSC4ViewInputControlNetworkTool::OnMouseDownL (vtable +0x40,
+    // 0x00661ee0) starts a drag, OnMouseUpL (vtable +0x48, 0x00661f50) ends it and hands it to the tool.
+    // The pole cells recorded by PlacePolesHook during the drag are dezoned after OnMouseUpL returns.
+    constexpr uintptr_t kOnMouseDownLSlot = kNetworkToolInputControlVtable + 0x40;
+    constexpr uintptr_t kOnMouseDownL = 0x00661ee0;
+    constexpr uintptr_t kOnMouseUpLSlot = kNetworkToolInputControlVtable + 0x48;
+    constexpr uintptr_t kOnMouseUpL = 0x00661f50;
+    using OnMouseButtonFn = uint8_t(__thiscall*)(void* control, int32_t x, int32_t z, uint32_t modifiers);
+
+    uint8_t __fastcall OnMouseDownLHook(void* control, void* /*edx*/, int32_t x, int32_t z, uint32_t modifiers) {
+        if (IsNetworkControlDrivingPowerTool(control)) {
+            gPendingPoleCells.clear(); // a new drag: forget any cells of a cancelled one
+        }
+        return reinterpret_cast<OnMouseButtonFn>(kOnMouseDownL)(control, x, z, modifiers);
+    }
+
+    uint8_t __fastcall OnMouseUpLHook(void* control, void* /*edx*/, int32_t x, int32_t z, uint32_t modifiers) {
+        const bool powerTool = IsNetworkControlDrivingPowerTool(control);
+        const uint8_t result = reinterpret_cast<OnMouseButtonFn>(kOnMouseUpL)(control, x, z, modifiers);
+        if (powerTool && gSettings.enabled && gSettings.crossZones && gSettings.dezoneUnderPoles) {
+            DezonePendingPoleCells();
+        }
+        return result;
+    }
+
     // Does a style define any orientation of the given FAR ratio?
     bool StyleDefinesRatio(const PoleStyle& style, const uint32_t ratioIndex) {
         for (uint32_t orient = 0; orient < kFarOrientCount; ++orient) {
@@ -2962,12 +3106,20 @@ namespace {
         if (section.has("CrossZones")) {
             gSettings.crossZones = ParseBool(section.get("CrossZones"), gSettings.crossZones);
         }
+        if (section.has("DezoneUnderPoles")) {
+            gSettings.dezoneUnderPoles = ParseBool(section.get("DezoneUnderPoles"), gSettings.dezoneUnderPoles);
+        }
+        if (section.has("DezoneFieldCells")) {
+            gSettings.dezoneFieldCells = ParseBool(section.get("DezoneFieldCells"), gSettings.dezoneFieldCells);
+        }
         if (section.has("DebugLog")) {
             SimLog::SetDebug(ParseBool(section.get("DebugLog"), false));
         }
 
-        LOG_INFO("PowerPoleCustomization: settings enabled={}, maxPointsPerDirection={}, crossZones={}",
-                 gSettings.enabled, gSettings.maxPointsPerDirection, gSettings.crossZones);
+        LOG_INFO("PowerPoleCustomization: settings enabled={}, maxPointsPerDirection={}, crossZones={}, "
+                 "dezoneUnderPoles={}, dezoneFieldCells={}",
+                 gSettings.enabled, gSettings.maxPointsPerDirection, gSettings.crossZones,
+                 gSettings.dezoneUnderPoles, gSettings.dezoneFieldCells);
 
         LoadPoleStyles(ini);
     }
@@ -3083,6 +3235,19 @@ public:
         installed += keepWiresPatch_.Install(kUpdateOnZoneChange,
             {0x83, 0xec, 0x68, 0x8b, 0x44, 0x24, 0x7c}, &KeepWiresOnZoneChangeHook,
             "KeepWiresOnZoneChange") ? 1 : 0;
+        // SC4SIM: the dezoning hook relies on the keepwires bypass (see PlacePolesHook).
+        if (keepWiresPatch_.IsInstalled()) {
+            for (size_t i = 0; i < kPlacePolesCallSites.size(); ++i) {
+                installed += InstallCallSitePatch(placePolesPatches_[i], "PlacePoles",
+                                                   kPlacePolesCallSites[i], kPlacePoles, &PlacePolesHook);
+            }
+            installed += onMouseDownLPatch_.Install(kOnMouseDownLSlot, kOnMouseDownL, &OnMouseDownLHook,
+                                                    "OnMouseDownL@NetworkToolInputControl") ? 1 : 0;
+            installed += onMouseUpLPatch_.Install(kOnMouseUpLSlot, kOnMouseUpL, &OnMouseUpLHook,
+                                                  "OnMouseUpL@NetworkToolInputControl") ? 1 : 0;
+        } else {
+            LOG_WARN("PowerPoleCustomization: keepwires hook not installed; dezoning under poles disabled.");
+        }
 
         // Tab / Shift-Tab pole-style switch. Byte-validates the OnKeyDown slot, which transitively
         // confirms the network-tool input-control vtable the overlay's power-tool check also reads.
@@ -3094,7 +3259,7 @@ public:
         LOG_INFO("PowerPoleCustomization: installed {} of {} patches.", installed,
                  initConnectionPointsPatches_.size() + kAddConnectionCallSites.size() +
                  kUpdateConnectionCallSites.size() + kDeterminePolePositionsCallSites.size() +
-                 kCellIsOKForPlacementCallSites.size() +
+                 kCellIsOKForPlacementCallSites.size() + kPlacePolesCallSites.size() + 2 +
                  2 + createFloorPatches_.size() + 4 + 2 + 2 + 1 + 1 + 1 + 1 + 1);
 
         // SC4SIM: the SC4SIM director subscribes once to PreCityShutdown and to the cheat-code
@@ -3127,6 +3292,9 @@ public:
             cheatManager_.Reset();
         }
         onKeyDownPatch_.Uninstall();
+        onMouseDownLPatch_.Uninstall();
+        onMouseUpLPatch_.Uninstall();
+        gPendingPoleCells.clear();
         farDrawNetworkLinePatch_.Uninstall();
         keepWiresPatch_.Uninstall();
         modelInstanceIdPatch_.Uninstall();
@@ -3136,6 +3304,7 @@ public:
         for (auto& patch : updateConnectionPatches_) patch.Uninstall();
         for (auto& patch : determinePolePositionsPatches_) patch.Uninstall();
         for (auto& patch : cellIsOKForPlacementPatches_) patch.Uninstall();
+        for (auto& patch : placePolesPatches_) patch.Uninstall();
         wireWidthLookupPatch_.Uninstall();
         for (auto& patch : createFloorPatches_) patch.Uninstall();
         floorTextureHashPatch1_.Uninstall();
@@ -3196,6 +3365,7 @@ private:
     std::array<TerrainDecal::RelativeCallPatch, 2> updateConnectionPatches_{};
     std::array<TerrainDecal::RelativeCallPatch, 3> determinePolePositionsPatches_{};
     std::array<TerrainDecal::RelativeCallPatch, 2> cellIsOKForPlacementPatches_{}; // SC4SIM: zones / farm fields
+    std::array<TerrainDecal::RelativeCallPatch, 2> placePolesPatches_{};           // SC4SIM: dezone under new poles
     std::array<TerrainDecal::RelativeCallPatch, 3> createFloorPatches_{};
     Imm32CallPatch floorTextureHashPatch1_{};
     Imm32CallPatch floorTextureHashPatch2_{};
@@ -3210,6 +3380,8 @@ private:
     InlineCallPatch wireWidthLookupPatch_{};
     VTableSlotPatch farDrawNetworkLinePatch_{}; // automatic FAR snapping; hold Shift for regular-only
     VTableSlotPatch onKeyDownPatch_{};         // Tab/Shift-Tab pole-style switch
+    VTableSlotPatch onMouseDownLPatch_{};      // SC4SIM: drag start (forget pending pole cells)
+    VTableSlotPatch onMouseUpLPatch_{};        // SC4SIM: drag end (dezone pending pole cells)
     bool styleUiValidated_ = false;            // OnKeyDown + FAR vtable slots byte-confirmed at install
     cRZAutoRefCount<cIGZCheatCodeManager> cheatManager_; // holds the keepwires cheat registration
 };
