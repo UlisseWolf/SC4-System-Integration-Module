@@ -118,7 +118,7 @@ of each lot is counted.
 
 | # | Hook | Behaviour for mixed lots |
 | --- | --- | --- |
-| 1 | vtable `0x00AB1A80` (slot 52) → `GetAvailableCapacity` | Same state test. The shared pool now counts only the types of the **same class**, so residents and jobs no longer compete. A negative share returns 0. |
+| 1 | vtable `0x00AB1A80` (slot 52) → `GetAvailableCapacity` | Same state test. The other class never reduces the room, so residents and jobs no longer compete. Within one class, the game's rule **without** joint occupancy applies: R$ / R$$ / R$$$ (or CS$ / CS$$ / …) stay exclusive, so the first to move in takes the building, as in the unmodified building. It returns the capacity or 0, so the 16-bit wrap cannot happen. |
 | 2 | vtable `0x00AB1AA4` (slot 61) → `GetOccupancy` | `Σ population / Σ capacity` of the primary class, at most 100%. |
 | 3 | `CALL` at `0x006A7475` and `0x006A74AB` → `PerformCensus` wrapper | Calls the original, then adds each secondary type with the formula of its own class: residential for R in a C building, job for C in an R building. |
 | 4 | `SimNewMonth` (`0x66956816`) and the `MixedOccupancy` cheat | For every occupied mixed lot and each secondary type: `SetPopulation(type, round(capacity × clamp(desirability × 0.01, 0, 1)))`. This is the `UpdatePopulation` formula without the random spread. |

@@ -115,8 +115,8 @@ Un edificio è misto se il suo exemplar ha:
 Gli altri edifici non cambiano. Esempio: Purpose Residence, Wealth 2, Capacity Satisfied `0x1020, 120, 0x3120, 30`.
 
 Per i lotti misti:
-- `GetAvailableCapacity` (slot 52 della vtable del lotto) rende indipendenti R e C; i tipi della stessa classe
-  dividono ancora la loro capacità come nel gioco;
+- `GetAvailableCapacity` (slot 52 della vtable del lotto) rende indipendenti R e C; dentro una classe i
+  livelli di ricchezza (es. R$ e R$$) restano esclusivi, come in un edificio senza occupazione congiunta;
 - `GetOccupancy` (slot 61) conta solo la classe principale;
 - ogni mese la popolazione secondaria viene impostata a capacità × desiderabilità (la formula di `UpdatePopulation`
   senza il fattore casuale);

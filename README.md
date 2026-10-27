@@ -138,8 +138,8 @@ For example, Purpose Residence, Wealth 2, Capacity Satisfied `0x1020, 120, 0x312
 30 CS$$ jobs above and below each other.
 
 **What changes, for mixed lots only:**
-- **Available capacity.** Residential and commercial capacities are independent; types of the same class still
-  share theirs, as in the game. A negative share no longer wraps to a huge number.
+- **Available capacity.** Residential and commercial capacities are independent. Within one class, the wealth
+  levels (for example R$ and R$$) stay exclusive, as in a building without joint occupancy.
 - **Occupancy.** It counts only the primary class, so the secondary class cannot make the building decline.
 - **Secondary population.** Every month, the DLL sets it to capacity × the desirability of that developer at the
   lot: the game's own growth formula, without its random spread.

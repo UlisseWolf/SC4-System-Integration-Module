@@ -9,7 +9,7 @@
 //
 // For mixed lots the module:
 //  1. replaces cSC4Lot::GetAvailableCapacity (vtable slot 52): residential and commercial capacities are
-//     independent; types of the same class still share their pool, as in the game;
+//     independent; within one class the wealth levels stay exclusive, as in a building without joint occupancy;
 //  2. replaces cSC4Lot::GetOccupancy (vtable slot 61): occupancy counts only the class of the building's
 //     own purpose, so it never exceeds 100% and the secondary class cannot make the building decline;
 //  3. once a month (and with the MixedOccupancy cheat) sets the population of the secondary types:
@@ -288,19 +288,19 @@ namespace
 			ForEachCapacity(*group, [&](uint32_t t, uint16_t c) { if (t == type) { found = true; capacity = c; } });
 			if (!found) continue;
 
-			// Joint occupancy only among types of the same class (R with R, C with C).
+			// The other class never reduces the room. Within one class the game's rule without joint occupancy
+			// applies: the wealth levels of a class (R$ / R$$ / R$$$, CS$ / CS$$ / ...) are exclusive, the first
+			// one to move in takes the building and the others see no room, as in the unmodified building.
 			const OccupantClass occupantClass = ClassOf(type);
-			float available = 1.0f;
+			bool taken = false;
 			ForEachCapacity(*group, [&](uint32_t t, uint16_t c)
 			{
-				if (t != type && c != 0 && ClassOf(t) == occupantClass)
+				if (t != type && c != 0 && ClassOf(t) == occupantClass && GetPopulation(lot, t) != 0)
 				{
-					available -= static_cast<float>(GetPopulation(lot, t)) / static_cast<float>(c);
+					taken = true;
 				}
 			});
-			if (available >= 1.0f) return capacity;
-			if (available <= 0.0f) return 0; // the game would wrap a negative share to a huge 16-bit value
-			return static_cast<uint16_t>(std::min(65535.0f, static_cast<float>(capacity) * available + 0.5f));
+			return taken ? 0 : capacity;
 		}
 		return 0;
 	}
