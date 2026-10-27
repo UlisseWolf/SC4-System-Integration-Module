@@ -98,6 +98,37 @@ di keepwires attivo così la linea non viene ridisegnata. I lotti con un edifici
 agricolo il gioco demolisce quel campo (non può togliere una sola casella a un lotto) e la fattoria ne fa crescere
 di nuovi intorno al traliccio. Impostazioni: `DezoneUnderPoles` e `DezoneFieldCells` (entrambe `true`).
 
+## Occupazione mista R + C (1.5.0)
+
+**Sperimentale: compilata e verificata staticamente, non ancora provata in gioco. Provarla su una copia della
+città.**
+
+Nel gioco base Allow Joint Occupancy fa solo dividere **una** capacità tra più tipi di occupanti. Il SIM permette a
+un edificio di avere residenti e posti di lavoro commerciali con capacità indipendenti (industria esclusa).
+
+Un edificio è misto se il suo exemplar ha:
+- `Allow Joint Occupancy` (0x27812836) = true;
+- `Purpose` = Residence, Services o Office (la classe principale);
+- un `Capacity Satisfied` con almeno un tipo R (R$, R$$, R$$$), almeno un tipo C (CS$, CS$$, CS$$$, CO$$, CO$$$)
+  e nessun tipo I.
+
+Gli altri edifici non cambiano. Esempio: Purpose Residence, Wealth 2, Capacity Satisfied `0x1020, 120, 0x3120, 30`.
+
+Per i lotti misti:
+- `GetAvailableCapacity` (slot 52 della vtable del lotto) rende indipendenti R e C; i tipi della stessa classe
+  dividono ancora la loro capacità come nel gioco;
+- `GetOccupancy` (slot 61) conta solo la classe principale;
+- ogni mese la popolazione secondaria viene impostata a capacità × desiderabilità (la formula di `UpdatePopulation`
+  senza il fattore casuale);
+- il censimento della domanda (`PerformCensus`, chiamate 0x006A7475 e 0x006A74AB) conta anche i tipi secondari.
+
+Il trucco `MixedOccupancy` scrive ogni lotto misto in `SC4SIM.log`. Limiti:
+- il traffico vede solo il tipo principale;
+- la finestra di query mostra solo la capacità principale;
+- senza la DLL torna la regola originale.
+
+Analisi completa in `docs/mixed-occupancy.md`. Impostazioni: `[MixedOccupancy] Enabled` e `DebugLog`.
+
 ## Advanced Water Management (1.2.0)
 
 Porting nel SC4SIM.dll di [sc4-advanced-water-management](https://github.com/0xC0000054/sc4-advanced-water-management)

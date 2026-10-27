@@ -1,7 +1,7 @@
 # SC4SIM — SC4 System Integration Module DLL for SimCity 4
 
 [![License: LGPL v3](https://img.shields.io/badge/License-LGPL_v3-blue.svg)](LICENSE)
-![Version](https://img.shields.io/badge/version-1.4.0-informational)
+![Version](https://img.shields.io/badge/version-1.5.0-informational)
 ![Game](https://img.shields.io/badge/SimCity_4-1.1.641-success)
 ![Platform](https://img.shields.io/badge/platform-Windows_x86-lightgrey)
 [![Build and release](https://github.com/UlisseWolf/SC4-System-Integration-Module/actions/workflows/build-release.yml/badge.svg?branch=master)](https://github.com/UlisseWolf/SC4-System-Integration-Module/actions/workflows/build-release.yml)
@@ -11,7 +11,7 @@
 SIM collects shared game systems that any mod can rely on, without forcing players to install a specific mod
 such as NEON.
 
-> **Status:** source release, version 1.4.0. Building with MSVC and in-game testing are the next steps.
+> **Status:** source release, version 1.5.0. Building with MSVC and in-game testing are the next steps.
 
 ---
 
@@ -22,6 +22,7 @@ such as NEON.
 - [Installation](#installation)
 - [Advisor rewards](#advisor-rewards)
 - [Advanced Water Management](#advanced-water-management)
+- [Mixed R + C occupancy](#mixed-r--c-occupancy)
 - [Custom power poles](#custom-power-poles)
 - [Configuration](#configuration)
 - [Building](#building)
@@ -38,6 +39,7 @@ such as NEON.
 | Custom power poles | 1.1.0 | Custom cable geometry, wire appearance, named pole styles switched with Tab, fractional-angle (FAR) power lines and the `keepwires` cheat. |
 | Power lines across zones | 1.3.0 | Power poles can stand on empty zones and farm fields, so lines are no longer cut by zones wider than the pole spacing. |
 | Dezoning under poles | 1.4.0 | The cell under every new pole loses its zone (optionally also on farm fields). |
+| Mixed R + C occupancy | 1.5.0 | Residents and commercial jobs in one building with independent capacities, census demand for both, and the `MixedOccupancy` cheat. *Experimental, not yet tested in game.* |
 | Advanced Water Management | 1.2.0 | The real efficiency of water buildings in the query dialog and tool tip, a monthly warning for fresh or salt water pumps that produce nothing, and the `ScanPumps` cheat. |
 
 ## Requirements
@@ -60,9 +62,10 @@ it and says so in the log:
    [Building](#building)).
 2. Copy `SC4SIM.dll` and, optionally, `SC4SIM.ini` to your SimCity 4 **Plugins** folder.
 3. Start the game. `SC4SIM.log`, created next to the DLL, should report:
-   - `SC4 SIM DLL 1.4.0`;
+   - `SC4 SIM DLL 1.5.0`;
    - `PowerPoleCustomization: installed N of N patches`;
-   - `AdvancedWater: installed the water building query UI hook`.
+   - `AdvancedWater: installed the water building query UI hook`;
+   - `MixedOccupancy: enabled (...)`.
 
 ## Advisor rewards
 
@@ -116,6 +119,41 @@ which improves the game's handling of water buildings that draw from fresh or sa
 - no dependency on the Windows Implementation Library.
 
 The game addresses and behaviour are unchanged.
+
+## Mixed R + C occupancy
+
+> **Experimental:** compiled and statically checked, not yet tested in game. Test it on a copy of a city.
+
+In the base game, Allow Joint Occupancy only lets several occupant types split **one** building's capacity. SC4SIM
+lets a building hold residents and commercial jobs with independent capacities. Industry is excluded.
+
+**Which buildings.** A building is mixed when its exemplar has all of the following; every other building is
+unchanged:
+- `Allow Joint Occupancy` (0x27812836) = true;
+- `Purpose` = Residence, Services or Office: this is the primary class;
+- a `Capacity Satisfied` (0x27812834) that lists at least one residential type (R$, R$$, R$$$) and at least one
+  commercial type (CS$, CS$$, CS$$$, CO$$, CO$$$), and no industrial type.
+
+For example, Purpose Residence, Wealth 2, Capacity Satisfied `0x1020, 120, 0x3120, 30`: 120 R$$ residents and
+30 CS$$ jobs above and below each other.
+
+**What changes, for mixed lots only:**
+- **Available capacity.** Residential and commercial capacities are independent; types of the same class still
+  share theirs, as in the game. A negative share no longer wraps to a huge number.
+- **Occupancy.** It counts only the primary class, so the secondary class cannot make the building decline.
+- **Secondary population.** Every month, the DLL sets it to capacity × the desirability of that developer at the
+  lot: the game's own growth formula, without its random spread.
+- **Demand.** The demand census also counts the secondary types, with the game's residential or job formula.
+- **`MixedOccupancy` cheat.** Writes every mixed lot, with the population and capacity of each type, to
+  `SC4SIM.log`.
+
+**Limits:**
+- secondary jobs get no commuters, and secondary residents do not commute, because the game's traffic code reads
+  only the primary type;
+- the query dialog shows the primary capacity only;
+- without the DLL, a saved city falls back to the game's shared-pool rule.
+
+The reverse-engineering notes are in [`docs/mixed-occupancy.md`](docs/mixed-occupancy.md).
 
 ## Custom power poles
 
@@ -177,6 +215,8 @@ The reverse-engineering notes behind every address are in [`docs/sc4-powerline-t
 | Section | Key | Default | Effect |
 | --- | --- | --- | --- |
 | `[AdvancedWaterManagement]` | `Enabled` | `true` | Turns Advanced Water Management on or off. |
+| `[MixedOccupancy]` | `Enabled` | `true` | Turns mixed R + C occupancy on or off. |
+| | `DebugLog` | `false` | Writes every secondary population change and a monthly summary to `SC4SIM.log`. |
 | `[SC4PowerPoleCustomization]` | `Enabled` | `true` | Turns the custom power poles on or off. |
 | | `CrossZones` | `true` | Lets poles stand on empty zones and farm fields. |
 | | `DezoneUnderPoles` | `true` | Removes the zone from the cell of every new pole when the drag ends. |
@@ -228,6 +268,7 @@ the zip of the current version's release instead.
 src/                 SC4SIM director, log and version
 src/powerpoles/      custom power-pole module (ported from sc4-render-services)
 src/water/           Advanced Water Management module (ported from sc4-advanced-water-management)
+src/mixed/           mixed R + C occupancy module
 lua/                 sim_advisor_rewards.lua (advisor reward creators)
 docs/                power-pole documentation and README.it.md (Italian notes)
 vendor/              gzcom-dll, mINI

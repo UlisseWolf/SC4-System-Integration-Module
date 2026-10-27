@@ -20,9 +20,14 @@
 //
 // Version 1.4.0:
 //  * Dezoning under new poles (PlacePoles hook, DezoneUnderPoles / DezoneFieldCells in SC4SIM.ini).
+//
+// Version 1.5.0:
+//  * Mixed residential + commercial occupancy (src/mixed, [MixedOccupancy] in SC4SIM.ini, MixedOccupancy cheat).
+//    See docs/mixed-occupancy.md.
 // The reward creators themselves are Lua (create_reward_utilities, ...): reward scripts call them while the game
 // compiles them, before any DLL can reach the city's Lua, so they live in the SIM Lua package 0x0151A000.
 #include "SimLog.h"
+#include "mixed/MixedOccupancy.h"
 #include "powerpoles/PowerPoleCustomization.h"
 #include "water/AdvancedWater.h"
 #include "version.h"
@@ -99,6 +104,7 @@ public:
 		SimLog::Write(SimLog::Level::Info, "SC4 SIM DLL " SIM_DLL_VERSION_STR);
 		PowerPoleCustomization::OnStart();
 		AdvancedWater::OnStart();
+		MixedOccupancy::OnStart();
 		cIGZFrameWork* const framework = pCOM->FrameWork();
 		if (framework->GetState() < cIGZFrameWork::kStatePreAppInit) framework->AddHook(this);
 		else PostAppInit();
@@ -126,8 +132,9 @@ public:
 
 		PowerPoleCustomization::PostAppInit(this);
 		AdvancedWater::PostAppInit();
+		MixedOccupancy::PostAppInit();
 
-		// Cheat codes (keepwires, ScanPumps) are registered by the modules; the notification is added once here.
+		// Cheat codes (keepwires, ScanPumps, MixedOccupancy) are registered by the modules; the notification is added once here.
 		cISC4AppPtr app;
 		if (app)
 		{
@@ -147,6 +154,7 @@ public:
 			cheatManager->RemoveNotification2(this, 0);
 			cheatManager.Reset();
 		}
+		MixedOccupancy::PostAppShutdown();
 		AdvancedWater::PostAppShutdown();
 		PowerPoleCustomization::PostAppShutdown(this);
 		return true;
@@ -159,15 +167,18 @@ public:
 		{
 			PostCityInit(static_cast<cISC4City*>(static_cast<cIGZMessage2Standard*>(message)->GetVoid1()));
 			AdvancedWater::DoMessage(message);
+			MixedOccupancy::DoMessage(message);
 		}
 		else if (type == kMsgPreCityShutdown || type == kMsgCheatIssued)
 		{
 			PowerPoleCustomization::DoMessage(message);
 			AdvancedWater::DoMessage(message);
+			MixedOccupancy::DoMessage(message);
 		}
 		else if (type == AdvancedWater::kMessageSimNewMonth)
 		{
 			AdvancedWater::DoMessage(message);
+			MixedOccupancy::DoMessage(message);
 		}
 		return true;
 	}
