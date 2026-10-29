@@ -1,6 +1,6 @@
 # Mixed residential + commercial occupancy (SC4SIM)
 
-SC4SIM 1.5.0 lets one building hold residents **and** commercial jobs with independent capacities. Industry is out
+SC4SIM 1.5.0 (updated in 1.5.1) lets one building hold residents **and** commercial jobs with independent capacities. Industry is out
 of scope. The analysis was done on the SimCity 4 1.1.641 executable (`SimCity 4.exe`, MD5
 `bfd49573d6588866344832b95069ce8f`). It starts from the "Allow Joint Occupancy" notes (26 October 2026), which this
 document checks and extends. Every address below was checked in the disassembly of that executable.
@@ -16,6 +16,10 @@ All of these must hold:
 - `Capacity Satisfied` (0x27812834) has at least one residential type (0x1010, 0x1020, 0x1030) and at least one
   commercial type (0x3110, 0x3120, 0x3130, 0x3320, 0x3330), each with a capacity above 0;
 - no industrial type (0x4xxx).
+
+The secondary types should have the building's own wealth (R$$ with CS$$, R$$$ with CS$$$ or CO$$$). The game only
+fills a lot from a developer of the lot's wealth (see UpdatePopulation below). The `MixedOccupancy` cheat flags a
+secondary type at another wealth.
 
 The Purpose decides the **primary** class: the zone the building grows in, the lot wealth, the jobs used by traffic
 and the abandonment rules. The other class is **secondary**. Every building that is not mixed keeps the game's code
@@ -89,8 +93,20 @@ For one growth developer and one tract:
 - the developer only fills lots whose `GetOccupantWealth()` equals its own wealth;
 - it calls `SetPopulation(type, round(GetAvailableCapacity(type) × factor))`.
 
-The caller is virtual and was not found statically. So the module does not rely on it to fill the secondary
-types: it fills them itself (below).
+**The caller** is `cSC4GrowthDeveloper::DoIdle` (`0x006B5F20`):
+- it gets the tract developer from the building development simulator (`call [edx+0x8C]` at `0x006B6946`);
+- for every tract of the map, it writes the developer's capacity grid;
+- it then calls slot 7 with the record {growth developer, tract x, tract z} (`call [edx+0x1C]` at `0x006B6A65`).
+
+The call runs for every growth developer type over every tract, and does not look at the lot's zone or purpose. So
+the CS$$ developer's pass reaches a mixed R$$ + CS$$ lot. It asks slot 52 for the CS$$ room and sets the CS$$
+population. With hook 1 that room is the independent capacity, so the game fills the secondary types itself, with
+its random spread and on its own schedule.
+
+1.5.0 also filled them once a month with a formula without the spread; 1.5.1 removes that pass. The caller was
+pointed out by the "SC4SIM mixed occupancy: the game already fills the secondary types" notes (27 October 2026),
+which were checked against the executable. The first static search had missed the call, because the tract
+developer is held in `ebp`, not `ecx`.
 
 ### UpdatePrimaryOccupantWealth (`0x006C1430`)
 
@@ -121,7 +137,7 @@ of each lot is counted.
 | 1 | vtable `0x00AB1A80` (slot 52) → `GetAvailableCapacity` | Same state test. The other class never reduces the room, so residents and jobs no longer compete. Within one class, the game's rule **without** joint occupancy applies: R$ / R$$ / R$$$ (or CS$ / CS$$ / …) stay exclusive, so the first to move in takes the building, as in the unmodified building. It returns the capacity or 0, so the 16-bit wrap cannot happen. |
 | 2 | vtable `0x00AB1AA4` (slot 61) → `GetOccupancy` | `Σ population / Σ capacity` of the primary class, at most 100%. |
 | 3 | `CALL` at `0x006A7475` and `0x006A74AB` → `PerformCensus` wrapper | Calls the original, then adds each secondary type with the formula of its own class: residential for R in a C building, job for C in an R building. |
-| 4 | `SimNewMonth` (`0x66956816`) and the `MixedOccupancy` cheat | For every occupied mixed lot and each secondary type: `SetPopulation(type, round(capacity × clamp(desirability × 0.01, 0, 1)))`. This is the `UpdatePopulation` formula without the random spread. |
+| – | `MixedOccupancy` cheat (and month starts with `DebugLog=true`) | Read only: writes every mixed lot, with the population and capacity of each type, and flags a secondary type whose wealth differs from the lot's. It sets no population (1.5.0 did; see UpdatePopulation above). |
 
 Before patching, the DLL checks that the game version is 641, that both vtable slots still point to the original
 functions and that both call sites are still `CALL 0x006A5A00`. If any check fails, nothing is installed.
@@ -133,7 +149,9 @@ functions and that both call sites are still `CALL 0x006A5A00`. If any check fai
   demand.
 - **Query tool.** The query dialog still shows the primary capacity only (`GetOccupantCapacity`, `0x004C4160`). The
   `MixedOccupancy` cheat writes every mixed lot to `SC4SIM.log`, with the population and capacity of each type.
-- **Timing.** Secondary populations are updated monthly, so a new building shows them from the next month.
+- **Wealth.** A secondary type at a wealth other than the lot's is never filled by the game. Filling it would need
+  a hook on `UpdatePopulation` (tract developer vtable slot 7, `0x00AB3134`) that fills the other wealth levels of
+  mixed lots in the same tract.
 - **Save games.** Lot populations are saved with the city. Without the DLL, the game's original shared-pool rule
   applies again, and the secondary types shrink or vanish when the game next updates them.
 
@@ -145,4 +163,6 @@ Enabled=true
 DebugLog=false
 ```
 
-`DebugLog=true` writes every population change and a monthly summary to `SC4SIM.log`.
+`DebugLog=true` writes the cheat's report to `SC4SIM.log` at the start of every month. To check the game's fill, let
+a mixed lot grow and compare the reports. The secondary population should change between month starts, with values
+that vary a little from `capacity × desirability`.

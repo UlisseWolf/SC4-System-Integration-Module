@@ -12,11 +12,15 @@
 //     independent; within one class the wealth levels stay exclusive, as in a building without joint occupancy;
 //  2. replaces cSC4Lot::GetOccupancy (vtable slot 61): occupancy counts only the class of the building's
 //     own purpose, so it never exceeds 100% and the secondary class cannot make the building decline;
-//  3. once a month (and with the MixedOccupancy cheat) sets the population of the secondary types:
-//     capacity x desirability of that developer at the lot, the game's own UpdatePopulation formula
-//     without its random spread;
-//  4. wraps cSC4DemandSimulator::PerformCensus (both call sites) and adds the secondary types to the
+//  3. wraps cSC4DemandSimulator::PerformCensus (both call sites) and adds the secondary types to the
 //     census with the game's residential or job formula, so they count towards the RCI demand.
+//
+// The secondary types are filled by the game itself: cSC4GrowthDeveloper::DoIdle (0x006B5F20) calls
+// cSC4TractDeveloper::UpdatePopulation (0x00706BC0, call at 0x006B6A65) for every growth developer and every
+// tract. UpdatePopulation fills any lot whose occupant wealth equals the developer's wealth, asking the room
+// through vtable slot 52, so hook 1 is enough for the CS$$ developer to fill the CS$$ jobs of an R$$ lot, with
+// the game's random spread and schedule. A secondary type therefore needs the building's own wealth.
+// The MixedOccupancy cheat (and, with DebugLog, every month start) only writes the mixed lots to the log.
 //
 // SimCity 4 1.1.641 only. Every address is checked against the expected original bytes before patching;
 // if one does not match, nothing is installed. The reverse-engineering notes are in docs/mixed-occupancy.md.
@@ -86,10 +90,10 @@ namespace
 	constexpr size_t kLotGetLocation = 21;
 	constexpr size_t kLotGetState = 33;
 	constexpr size_t kLotHasCapacity = 38;
+	constexpr size_t kLotGetOccupantWealth = 41;
 	constexpr size_t kLotGetBuildingType = 46;
 	constexpr size_t kLotGetCapacity = 50;            // (DeveloperType, bool)
 	constexpr size_t kLotGetPopulation = 53;
-	constexpr size_t kLotSetPopulation = 55;
 	// cSC4BuildingDevelopmentSimulator vtable slots.
 	constexpr size_t kBdsGetDeveloper = 32;           // (DeveloperType)
 	constexpr size_t kBdsGetBuildingProfile = 39;
@@ -407,22 +411,17 @@ namespace
 		});
 	}
 
-	// ---------------------------------------------------------------- monthly secondary population
+	// ---------------------------------------------------------------- log report (read only)
 
-	struct PassResult
+	// Writes every mixed lot with the population and capacity of each type. Nothing is changed: the game's
+	// UpdatePopulation fills the secondary types (see the header comment).
+	void ReportMixedLots(SimLog::Level level)
 	{
-		uint32_t mixedLots = 0;
-		uint32_t updates = 0;
-	};
-
-	PassResult UpdateSecondaryPopulations(bool report)
-	{
-		PassResult result;
 		void* const bds = BuildingDevelopmentSimulator();
 		cISC4LotManager* const lotManager = city ? city->GetLotManager() : nullptr;
 		if (!bds || !lotManager)
 		{
-			return result;
+			return;
 		}
 
 		const int32_t maxX = static_cast<int32_t>(city->CellCountX()) - 1;
@@ -430,6 +429,7 @@ namespace
 		SC4List<cISC4Lot*> lots;
 		VCall<bool>(lotManager, kLotManagerGetLotsInCellRect, &lots, 0, 0, maxX, maxZ, true);
 
+		uint32_t mixedLots = 0, filledSecondary = 0, emptySecondary = 0;
 		for (cISC4Lot* lot : lots)
 		{
 			const BuildingProfile* const profile = lot ? GetMixedProfile(lot, bds) : nullptr;
@@ -437,58 +437,35 @@ namespace
 			{
 				continue;
 			}
-			++result.mixedLots;
+			++mixedLots;
 
 			int32_t cellX = 0, cellZ = 0;
 			VCall<bool>(lot, kLotGetLocation, &cellX, &cellZ);
-			const uint8_t state = static_cast<uint8_t>(VCall<uint32_t>(lot, kLotGetState));
+			const uint32_t state = VCall<uint32_t>(lot, kLotGetState) & 0xFF;
+			const uint32_t lotWealth = VCall<uint32_t>(lot, kLotGetOccupantWealth) & 0xFF;
 			const OccupantClass primary = ClassOfPurpose(profile->purpose);
-
-			if (report)
-			{
-				SimLog::Write(SimLog::Level::Info, "MixedOccupancy: lot at (%d, %d), building 0x%08X, purpose %u, state %u:",
-					cellX, cellZ, VCall<uint32_t>(lot, kLotGetBuildingType, true), profile->purpose, state);
-			}
+			SimLog::Write(level, "MixedOccupancy: lot at (%d, %d), building 0x%08X, purpose %u, wealth %u, state %u:",
+				cellX, cellZ, VCall<uint32_t>(lot, kLotGetBuildingType, true), profile->purpose, lotWealth, state);
 
 			ForEachCapacity(*profile, [&](uint32_t type, uint16_t)
 			{
 				const OccupantClass occupantClass = ClassOf(type);
 				const uint16_t capacity = VCall<uint16_t>(lot, kLotGetCapacity, type, false);
 				const uint16_t population = GetPopulation(lot, type);
-
-				if (state == kLotStateOccupied && occupantClass != primary && capacity != 0)
+				const bool secondary = occupantClass != primary;
+				// UpdatePopulation only fills a lot whose occupant wealth equals the developer's wealth.
+				const bool wealthMatches = ((type >> 4) & 0xF) == lotWealth;
+				if (secondary)
 				{
-					float desirability = 0.0f;
-					if (GetDesirability(bds, type, cellX, cellZ, desirability))
-					{
-						const uint16_t target = static_cast<uint16_t>(static_cast<float>(capacity) * desirability + 0.5f);
-						if (target != population)
-						{
-							VCall<bool>(lot, kLotSetPopulation, type, target);
-							++result.updates;
-							if (debugLog)
-							{
-								SimLog::Write(SimLog::Level::Debug, "MixedOccupancy: (%d, %d) type 0x%04X population %u -> %u (capacity %u, desirability %.2f)",
-									cellX, cellZ, type, population, GetPopulation(lot, type), capacity, desirability);
-							}
-						}
-					}
+					++(population != 0 ? filledSecondary : emptySecondary);
 				}
-
-				if (report)
-				{
-					SimLog::Write(SimLog::Level::Info, "  type 0x%04X (%s): population %u / capacity %u",
-						type, occupantClass == primary ? "primary" : "secondary", GetPopulation(lot, type), capacity);
-				}
+				SimLog::Write(level, "  type 0x%04X (%s): population %u / capacity %u%s", type,
+					secondary ? "secondary" : "primary", population, capacity,
+					secondary && !wealthMatches ? " - wealth differs from the lot's: the game never fills it" : "");
 			});
 		}
-
-		if (report || debugLog)
-		{
-			SimLog::Write(report ? SimLog::Level::Info : SimLog::Level::Debug,
-				"MixedOccupancy: %u mixed lot(s), %u secondary population(s) updated.", result.mixedLots, result.updates);
-		}
-		return result;
+		SimLog::Write(level, "MixedOccupancy: %u mixed lot(s); secondary types with population: %u, empty: %u.",
+			mixedLots, filledSecondary, emptySecondary);
 	}
 
 	// ---------------------------------------------------------------- patching
@@ -646,12 +623,15 @@ void MixedOccupancy::DoMessage(cIGZMessage2* message)
 		city = nullptr;
 		break;
 	case kMessageSimNewMonth:
-		UpdateSecondaryPopulations(false);
+		if (debugLog)
+		{
+			ReportMixedLots(SimLog::Level::Debug);
+		}
 		break;
 	case kMessageCheatIssued:
 		if (static_cast<uint32_t>(standardMessage->GetData1()) == kMixedOccupancyCheatID)
 		{
-			UpdateSecondaryPopulations(true);
+			ReportMixedLots(SimLog::Level::Info);
 		}
 		break;
 	}

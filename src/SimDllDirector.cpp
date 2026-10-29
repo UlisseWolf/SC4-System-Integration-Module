@@ -24,6 +24,11 @@
 // Version 1.5.0:
 //  * Mixed residential + commercial occupancy (src/mixed, [MixedOccupancy] in SC4SIM.ini, MixedOccupancy cheat).
 //    See docs/mixed-occupancy.md.
+//
+// Version 1.5.1:
+//  * Mixed occupancy: the monthly fill of the secondary types is removed. The game's own growth code
+//    (cSC4GrowthDeveloper::DoIdle -> cSC4TractDeveloper::UpdatePopulation) already fills them through the
+//    GetAvailableCapacity hook. The MixedOccupancy cheat only writes the mixed lots to the log.
 // The reward creators themselves are Lua (create_reward_utilities, ...): reward scripts call them while the game
 // compiles them, before any DLL can reach the city's Lua, so they live in the SIM Lua package 0x0151A000.
 #include "SimLog.h"

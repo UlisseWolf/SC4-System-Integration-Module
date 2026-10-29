@@ -98,7 +98,7 @@ di keepwires attivo così la linea non viene ridisegnata. I lotti con un edifici
 agricolo il gioco demolisce quel campo (non può togliere una sola casella a un lotto) e la fattoria ne fa crescere
 di nuovi intorno al traliccio. Impostazioni: `DezoneUnderPoles` e `DezoneFieldCells` (entrambe `true`).
 
-## Occupazione mista R + C (1.5.0)
+## Occupazione mista R + C (1.5.0, aggiornata in 1.5.1)
 
 **Sperimentale: compilata e verificata staticamente, non ancora provata in gioco. Provarla su una copia della
 città.**
@@ -118,11 +118,15 @@ Per i lotti misti:
 - `GetAvailableCapacity` (slot 52 della vtable del lotto) rende indipendenti R e C; dentro una classe i
   livelli di ricchezza (es. R$ e R$$) restano esclusivi, come in un edificio senza occupazione congiunta;
 - `GetOccupancy` (slot 61) conta solo la classe principale;
-- ogni mese la popolazione secondaria viene impostata a capacità × desiderabilità (la formula di `UpdatePopulation`
-  senza il fattore casuale);
+- la popolazione secondaria la riempie il gioco stesso: `cSC4GrowthDeveloper::DoIdle` (0x006B5F20) chiama
+  `UpdatePopulation` (0x00706BC0) per ogni tipo di sviluppatore su ogni tratto, e lo sviluppatore CS$$ riempie anche i
+  lotti R$$ misti tramite lo slot 52. Per questo i tipi secondari devono avere la ricchezza dell'edificio (R$$ con
+  CS$$). La 1.5.0 li impostava una volta al mese; la 1.5.1 toglie questo passaggio;
 - il censimento della domanda (`PerformCensus`, chiamate 0x006A7475 e 0x006A74AB) conta anche i tipi secondari.
 
-Il trucco `MixedOccupancy` scrive ogni lotto misto in `SC4SIM.log`. Limiti:
+Il trucco `MixedOccupancy` scrive ogni lotto misto in `SC4SIM.log` e segnala i tipi secondari con una ricchezza
+diversa da quella del lotto (il gioco non li riempie); non cambia niente. Con `DebugLog=true` lo stesso resoconto
+viene scritto a ogni inizio mese. Limiti:
 - il traffico vede solo il tipo principale;
 - la finestra di query mostra solo la capacità principale;
 - senza la DLL torna la regola originale.

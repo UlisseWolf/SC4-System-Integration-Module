@@ -1,7 +1,7 @@
 # SC4SIM — SC4 System Integration Module DLL for SimCity 4
 
 [![License: LGPL v3](https://img.shields.io/badge/License-LGPL_v3-blue.svg)](LICENSE)
-![Version](https://img.shields.io/badge/version-1.5.0-informational)
+![Version](https://img.shields.io/badge/version-1.5.1-informational)
 ![Game](https://img.shields.io/badge/SimCity_4-1.1.641-success)
 ![Platform](https://img.shields.io/badge/platform-Windows_x86-lightgrey)
 [![Build and release](https://github.com/UlisseWolf/SC4-System-Integration-Module/actions/workflows/build-release.yml/badge.svg?branch=master)](https://github.com/UlisseWolf/SC4-System-Integration-Module/actions/workflows/build-release.yml)
@@ -11,7 +11,7 @@
 SIM collects shared game systems that any mod can rely on, without forcing players to install a specific mod
 such as NEON.
 
-> **Status:** source release, version 1.5.0. Building with MSVC and in-game testing are the next steps.
+> **Status:** source release, version 1.5.1. Building with MSVC and in-game testing are the next steps.
 
 ---
 
@@ -39,7 +39,7 @@ such as NEON.
 | Custom power poles | 1.1.0 | Custom cable geometry, wire appearance, named pole styles switched with Tab, fractional-angle (FAR) power lines and the `keepwires` cheat. |
 | Power lines across zones | 1.3.0 | Power poles can stand on empty zones and farm fields, so lines are no longer cut by zones wider than the pole spacing. |
 | Dezoning under poles | 1.4.0 | The cell under every new pole loses its zone (optionally also on farm fields). |
-| Mixed R + C occupancy | 1.5.0 | Residents and commercial jobs in one building with independent capacities, census demand for both, and the `MixedOccupancy` cheat. *Experimental, not yet tested in game.* |
+| Mixed R + C occupancy | 1.5.0 | Residents and commercial jobs in one building with independent capacities, census demand for both, and the `MixedOccupancy` cheat. 1.5.1: the game itself fills the secondary types. *Experimental, not yet tested in game.* |
 | Advanced Water Management | 1.2.0 | The real efficiency of water buildings in the query dialog and tool tip, a monthly warning for fresh or salt water pumps that produce nothing, and the `ScanPumps` cheat. |
 
 ## Requirements
@@ -62,7 +62,7 @@ it and says so in the log:
    [Building](#building)).
 2. Copy `SC4SIM.dll` and, optionally, `SC4SIM.ini` to your SimCity 4 **Plugins** folder.
 3. Start the game. `SC4SIM.log`, created next to the DLL, should report:
-   - `SC4 SIM DLL 1.5.0`;
+   - `SC4 SIM DLL 1.5.1`;
    - `PowerPoleCustomization: installed N of N patches`;
    - `AdvancedWater: installed the water building query UI hook`;
    - `MixedOccupancy: enabled (...)`.
@@ -141,11 +141,13 @@ For example, Purpose Residence, Wealth 2, Capacity Satisfied `0x1020, 120, 0x312
 - **Available capacity.** Residential and commercial capacities are independent. Within one class, the wealth
   levels (for example R$ and R$$) stay exclusive, as in a building without joint occupancy.
 - **Occupancy.** It counts only the primary class, so the secondary class cannot make the building decline.
-- **Secondary population.** Every month, the DLL sets it to capacity × the desirability of that developer at the
-  lot: the game's own growth formula, without its random spread.
+- **Secondary population.** The game's own growth code fills it, with its usual random spread and schedule. The
+  growth pass of each developer type reaches every lot whose wealth equals its own, and the capacity hook gives it
+  the room. So the secondary types must have the building's own wealth: R$$ with CS$$, for example.
 - **Demand.** The demand census also counts the secondary types, with the game's residential or job formula.
 - **`MixedOccupancy` cheat.** Writes every mixed lot, with the population and capacity of each type, to
-  `SC4SIM.log`.
+  `SC4SIM.log`. It also flags a secondary type whose wealth differs from the lot's, because the game never fills
+  it. It changes nothing.
 
 **Limits:**
 - secondary jobs get no commuters, and secondary residents do not commute, because the game's traffic code reads
@@ -216,7 +218,7 @@ The reverse-engineering notes behind every address are in [`docs/sc4-powerline-t
 | --- | --- | --- | --- |
 | `[AdvancedWaterManagement]` | `Enabled` | `true` | Turns Advanced Water Management on or off. |
 | `[MixedOccupancy]` | `Enabled` | `true` | Turns mixed R + C occupancy on or off. |
-| | `DebugLog` | `false` | Writes every secondary population change and a monthly summary to `SC4SIM.log`. |
+| | `DebugLog` | `false` | Writes the cheat's report of the mixed lots to `SC4SIM.log` at the start of every month. |
 | `[SC4PowerPoleCustomization]` | `Enabled` | `true` | Turns the custom power poles on or off. |
 | | `CrossZones` | `true` | Lets poles stand on empty zones and farm fields. |
 | | `DezoneUnderPoles` | `true` | Removes the zone from the cell of every new pole when the drag ends. |
