@@ -1,15 +1,15 @@
 ////////////////////////////////////////////////////////////////////////////
 //
-// SC4 SIM: mixed residential + commercial occupancy (R + C on one lot).
+// SC4 SIM: mixed occupancy (R, C and I on one lot: RC, RI, CI or RCI).
 //
 // A building is "mixed" when its exemplar has Allow Joint Occupancy (0x27812836) = true, its Purpose is
-// Residence, Services or Office, its Capacity Satisfied (0x27812834) lists at least one residential type
-// (R$, R$$, R$$$) and at least one commercial type (CS$, CS$$, CS$$$, CO$$, CO$$$), and no industrial type.
-// Every other building keeps the game's behaviour.
+// Residence, Services, Office, Agriculture, Processing, Manufacturing or High Tech, and its Capacity Satisfied
+// (0x27812834) lists types of at least two classes: residential (R$, R$$, R$$$), commercial (CS$, CS$$, CS$$$,
+// CO$$, CO$$$) and industrial (I-A, I-D, I-M, I-HT). Every other building keeps the game's behaviour.
 //
 // For mixed lots the module:
-//  1. replaces cSC4Lot::GetAvailableCapacity (vtable slot 52): residential and commercial capacities are
-//     independent; within one class the wealth levels stay exclusive, as in a building without joint occupancy;
+//  1. replaces cSC4Lot::GetAvailableCapacity (vtable slot 52): the capacities of the classes are independent;
+//     within one class the types stay exclusive, as in a building without joint occupancy;
 //  2. replaces cSC4Lot::GetOccupancy (vtable slot 61): occupancy counts only the class of the building's
 //     own purpose, so it never exceeds 100% and the secondary class cannot make the building decline;
 //  3. wraps cSC4DemandSimulator::PerformCensus (both call sites) and adds the secondary types to the
@@ -19,7 +19,8 @@
 // cSC4TractDeveloper::UpdatePopulation (0x00706BC0, call at 0x006B6A65) for every growth developer and every
 // tract. UpdatePopulation fills any lot whose occupant wealth equals the developer's wealth, asking the room
 // through vtable slot 52, so hook 1 is enough for the CS$$ developer to fill the CS$$ jobs of an R$$ lot, with
-// the game's random spread and schedule. A secondary type therefore needs the building's own wealth.
+// the game's random spread and schedule. A secondary type therefore needs the building's own wealth; the
+// wealth of an industrial type is fixed by the game (WealthOf below).
 // The MixedOccupancy cheat (and, with DebugLog, every month start) only writes the mixed lots to the log.
 //
 // SimCity 4 1.1.641 only. Every address is checked against the expected original bytes before patching;
@@ -185,14 +186,19 @@ namespace
 
 	enum class OccupantClass { None, Residential, Commercial, Industrial };
 
+	// Only the twelve developer types of the game (GetDeveloperType, 0x00695790) have a class.
 	OccupantClass ClassOf(uint32_t developerType)
 	{
-		switch (developerType & 0xF000)
+		switch (developerType)
 		{
-		case 0x1000: return OccupantClass::Residential;
-		case 0x3000: return OccupantClass::Commercial;
-		case 0x4000: return OccupantClass::Industrial;
-		default: return OccupantClass::None;
+		case 0x1010: case 0x1020: case 0x1030:
+			return OccupantClass::Residential;
+		case 0x3110: case 0x3120: case 0x3130: case 0x3320: case 0x3330:
+			return OccupantClass::Commercial;
+		case 0x4100: case 0x4200: case 0x4300: case 0x4400:
+			return OccupantClass::Industrial;
+		default:
+			return OccupantClass::None;
 		}
 	}
 
@@ -200,19 +206,33 @@ namespace
 	{
 		switch (purpose)
 		{
-		case 1: return OccupantClass::Residential;        // Residence
-		case 2: case 3: return OccupantClass::Commercial; // Services, Office
-		default: return OccupantClass::None;
+		case 1: return OccupantClass::Residential;                        // Residence
+		case 2: case 3: return OccupantClass::Commercial;                 // Services, Office
+		case 5: case 6: case 7: case 8: return OccupantClass::Industrial; // Agriculture, Processing, Manufacturing, High Tech
+		default: return OccupantClass::None;                              // Tourism, Other
 		}
 	}
 
+	// The wealth the game gives a developer type (0x00695840): the nibble for R and C; fixed for industry.
+	uint32_t WealthOf(uint32_t developerType)
+	{
+		switch (developerType)
+		{
+		case 0x4100: return 1;           // agriculture
+		case 0x4200: case 0x4300: return 2; // processing (dirty), manufacturing
+		case 0x4400: return 3;           // high tech
+		default: return (developerType >> 4) & 0xF;
+		}
+	}
+
+	// At least two classes among R, C and I, nothing else, and a purpose of one of those classes.
 	bool IsMixed(const BuildingProfile& profile)
 	{
 		if (!profile.allowJointOccupancy || ClassOfPurpose(profile.purpose) == OccupantClass::None)
 		{
 			return false;
 		}
-		bool residential = false, commercial = false, industrial = false;
+		bool residential = false, commercial = false, industrial = false, other = false;
 		ForEachCapacity(profile, [&](uint32_t type, uint16_t capacity)
 		{
 			if (capacity == 0) return;
@@ -221,10 +241,10 @@ namespace
 			case OccupantClass::Residential: residential = true; break;
 			case OccupantClass::Commercial: commercial = true; break;
 			case OccupantClass::Industrial: industrial = true; break;
-			default: break;
+			default: other = true; break;
 			}
 		});
-		return residential && commercial && !industrial;
+		return !other && (int(residential) + int(commercial) + int(industrial)) >= 2;
 	}
 
 	void* BuildingDevelopmentSimulator()
@@ -387,9 +407,9 @@ namespace
 			const uint16_t capacity = VCall<uint16_t>(lot, kLotGetCapacity, type, false);
 			const float weighted = static_cast<float>(capacity) * desirability;
 
-			if (occupantClass == OccupantClass::Commercial)
+			if (occupantClass == OccupantClass::Commercial || occupantClass == OccupantClass::Industrial)
 			{
-				// Job branch: census[developer type + 1] += capacity x desirability.
+				// Job branch (Services, Office and the four industries): census[developer type + 1] += capacity x desirability.
 				AddToCensus(demandSimulator, type + 1, weighted);
 			}
 			else if (occupantClass == OccupantClass::Residential)
@@ -403,7 +423,7 @@ namespace
 				const uint8_t bandByte = static_cast<uint8_t>(static_cast<int32_t>(bandValue));
 				const float bandScale = *reinterpret_cast<const float*>(kResidentialBandScale);
 				const int32_t band = std::clamp(static_cast<int32_t>(bandByte * bandScale + 1.0f), 1, 4);
-				const uint32_t wealth = (type >> 4) & 0xF; // 0x1010 -> 1, 0x1020 -> 2, 0x1030 -> 3
+				const uint32_t wealth = WealthOf(type); // 0x1010 -> 1, 0x1020 -> 2, 0x1030 -> 3
 
 				AddToCensus(demandSimulator, ((wealth + 0x210) << 4) + band, weighted * (share ? *share : 0.0f));
 				AddToCensus(demandSimulator, (wealth << 4) + 0x1001, weighted);
@@ -454,7 +474,7 @@ namespace
 				const uint16_t population = GetPopulation(lot, type);
 				const bool secondary = occupantClass != primary;
 				// UpdatePopulation only fills a lot whose occupant wealth equals the developer's wealth.
-				const bool wealthMatches = ((type >> 4) & 0xF) == lotWealth;
+				const bool wealthMatches = WealthOf(type) == lotWealth;
 				if (secondary)
 				{
 					++(population != 0 ? filledSecondary : emptySecondary);
@@ -588,7 +608,7 @@ void MixedOccupancy::PostAppInit()
 		}
 	}
 	SimLog::Write(SimLog::Level::Info,
-		"MixedOccupancy: enabled (R + C joint occupancy: lot capacity, occupancy and census hooks, MixedOccupancy cheat).");
+		"MixedOccupancy: enabled (R, C and I joint occupancy: lot capacity, occupancy and census hooks, MixedOccupancy cheat).");
 }
 
 void MixedOccupancy::PostAppShutdown()

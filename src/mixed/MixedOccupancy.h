@@ -1,4 +1,4 @@
-// SC4 SIM: mixed residential + commercial occupancy (R + C on one lot).
+// SC4 SIM: mixed occupancy (R, C and I on one lot: RC, RI, CI or RCI).
 // Driven by SimDllDirector: SC4SIM.dll has a single GZCOM director, which forwards these calls.
 // Reverse-engineering notes: docs/mixed-occupancy.md.
 #pragma once

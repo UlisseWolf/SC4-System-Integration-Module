@@ -1,7 +1,7 @@
-# Mixed residential + commercial occupancy (SC4SIM)
+# Mixed residential, commercial and industrial occupancy (SC4SIM)
 
-SC4SIM 1.5.0 (updated in 1.5.1) lets one building hold residents **and** commercial jobs with independent capacities. Industry is out
-of scope. The analysis was done on the SimCity 4 1.1.641 executable (`SimCity 4.exe`, MD5
+SC4SIM 1.5.0 (updated in 1.5.1 and 1.6.0) lets one building hold residents, commercial jobs and industrial jobs, with
+independent capacities. Any two classes work (RC, RI, CI), and so do all three (RCI). Industry was added in 1.6.0. The analysis was done on the SimCity 4 1.1.641 executable (`SimCity 4.exe`, MD5
 `bfd49573d6588866344832b95069ce8f`). It starts from the "Allow Joint Occupancy" notes (26 October 2026), which this
 document checks and extends. Every address below was checked in the disassembly of that executable.
 
@@ -12,20 +12,34 @@ document checks and extends. Every address below was checked in the disassembly 
 All of these must hold:
 
 - `Allow Joint Occupancy` (0x27812836) = true;
-- `Purpose` (0x27812833) = Residence (1), Services (2) or Office (3);
-- `Capacity Satisfied` (0x27812834) has at least one residential type (0x1010, 0x1020, 0x1030) and at least one
-  commercial type (0x3110, 0x3120, 0x3130, 0x3320, 0x3330), each with a capacity above 0;
-- no industrial type (0x4xxx).
+- `Purpose` (0x27812833) = Residence (1), Services (2), Office (3), Agriculture (5), Processing (6),
+  Manufacturing (7) or High Tech (8). Tourism (4) and Other (9) are never mixed;
+- `Capacity Satisfied` (0x27812834) lists types of at least two classes, each with a capacity above 0:
+  - residential: 0x1010, 0x1020, 0x1030;
+  - commercial: 0x3110, 0x3120, 0x3130, 0x3320, 0x3330;
+  - industrial: 0x4100, 0x4200, 0x4300, 0x4400;
+- no other type. Only the twelve developer types of `GetDeveloperType` (`0x00695790`) count.
 
-The secondary types should have the building's own wealth (R$$ with CS$$, R$$$ with CS$$$ or CO$$$). The game only
-fills a lot from a developer of the lot's wealth (see UpdatePopulation below). The `MixedOccupancy` cheat flags a
-secondary type at another wealth.
+The secondary types should have the building's own wealth. The game only fills a lot from a developer of the lot's
+wealth (see UpdatePopulation below). The game's `GetWealth(DeveloperType)` (`0x00695840`) gives:
+
+| Type | Game wealth |
+| --- | --- |
+| R$, CS$, I-A (0x4100) | 1 |
+| R$$, CS$$, CO$$, I-D (0x4200), I-M (0x4300) | 2 |
+| R$$$, CS$$$, CO$$$, I-HT (0x4400) | 3 |
+
+For industrial purposes, `GetDeveloperType(purpose, wealth)` returns the same type whatever the wealth. The lot's
+wealth is the exemplar's Wealth: an I-M building needs Wealth 2 for the game to fill it. The `MixedOccupancy` cheat
+flags a secondary type at another wealth.
 
 The Purpose decides the **primary** class: the zone the building grows in, the lot wealth, the jobs used by traffic
-and the abandonment rules. The other class is **secondary**. Every building that is not mixed keeps the game's code
+and the abandonment rules. The other classes are **secondary**. Every building that is not mixed keeps the game's code
 path: each hook first checks the profile and otherwise calls the original function.
 
-Example exemplar: an apartment block with shops on the ground floor.
+Examples: RC (flats and shops), IC (Purpose Manufacturing, `0x4300, 80, 0x3120, 10`) and RCI (Purpose Residence,
+`0x1020, 120, 0x3120, 20, 0x4300, 15`). The table shows the RC one, an apartment block with shops on the ground
+floor.
 
 | Property | Value |
 | --- | --- |
@@ -134,9 +148,9 @@ of each lot is counted.
 
 | # | Hook | Behaviour for mixed lots |
 | --- | --- | --- |
-| 1 | vtable `0x00AB1A80` (slot 52) → `GetAvailableCapacity` | Same state test. The other class never reduces the room, so residents and jobs no longer compete. Within one class, the game's rule **without** joint occupancy applies: R$ / R$$ / R$$$ (or CS$ / CS$$ / …) stay exclusive, so the first to move in takes the building, as in the unmodified building. It returns the capacity or 0, so the 16-bit wrap cannot happen. |
+| 1 | vtable `0x00AB1A80` (slot 52) → `GetAvailableCapacity` | Same state test. Another class never reduces the room, so residents, shops and industry no longer compete. Within one class, the game's rule **without** joint occupancy applies: R$ / R$$ / R$$$ (or CS$ / CS$$ / …, or I-D / I-M / …) stay exclusive, so the first to move in takes the building, as in the unmodified building. It returns the capacity or 0, so the 16-bit wrap cannot happen. |
 | 2 | vtable `0x00AB1AA4` (slot 61) → `GetOccupancy` | `Σ population / Σ capacity` of the primary class, at most 100%. |
-| 3 | `CALL` at `0x006A7475` and `0x006A74AB` → `PerformCensus` wrapper | Calls the original, then adds each secondary type with the formula of its own class: residential for R in a C building, job for C in an R building. |
+| 3 | `CALL` at `0x006A7475` and `0x006A74AB` → `PerformCensus` wrapper | Calls the original, then adds each secondary type with the formula of its own class: residential for R, job (`census[t + 1]`) for C and I. |
 | – | `MixedOccupancy` cheat (and month starts with `DebugLog=true`) | Read only: writes every mixed lot, with the population and capacity of each type, and flags a secondary type whose wealth differs from the lot's. It sets no population (1.5.0 did; see UpdatePopulation above). |
 
 Before patching, the DLL checks that the game version is 641, that both vtable slots still point to the original
@@ -145,8 +159,10 @@ functions and that both call sites are still `CALL 0x006A5A00`. If any check fai
 ## Limits
 
 - **Traffic.** `GetJobs` (slot 64) and the travel code use only the primary developer type. Secondary jobs get no
-  commuters, and secondary residents do not commute. Both still count as capacity, population and census
-  demand.
+  commuters, and secondary residents do not commute. Secondary industry produces no freight trips. All of them
+  still count as capacity, population and census demand.
+- **Agriculture.** A farm lot holds only the farm building; the fields are separate lots. Secondary residents or
+  shops on a farm sit on the building's lot.
 - **Query tool.** The query dialog still shows the primary capacity only (`GetOccupantCapacity`, `0x004C4160`). The
   `MixedOccupancy` cheat writes every mixed lot to `SC4SIM.log`, with the population and capacity of each type.
 - **Wealth.** A secondary type at a wealth other than the lot's is never filled by the game. Filling it would need

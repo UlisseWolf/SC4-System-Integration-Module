@@ -98,25 +98,35 @@ di keepwires attivo così la linea non viene ridisegnata. I lotti con un edifici
 agricolo il gioco demolisce quel campo (non può togliere una sola casella a un lotto) e la fattoria ne fa crescere
 di nuovi intorno al traliccio. Impostazioni: `DezoneUnderPoles` e `DezoneFieldCells` (entrambe `true`).
 
-## Occupazione mista R + C (1.5.0, aggiornata in 1.5.1)
+## Occupazione mista R, C e I (1.5.0, aggiornata in 1.5.1 e 1.6.0)
 
 **Sperimentale: compilata e verificata staticamente, non ancora provata in gioco. Provarla su una copia della
 città.**
 
 Nel gioco base Allow Joint Occupancy fa solo dividere **una** capacità tra più tipi di occupanti. Il SIM permette a
-un edificio di avere residenti e posti di lavoro commerciali con capacità indipendenti (industria esclusa).
+un edificio di avere residenti, posti di lavoro commerciali e industriali con capacità indipendenti: due classi
+(RC, RI, CI) o tutte e tre (RCI). L'industria è supportata dalla 1.6.0.
 
 Un edificio è misto se il suo exemplar ha:
 - `Allow Joint Occupancy` (0x27812836) = true;
-- `Purpose` = Residence, Services o Office (la classe principale);
-- un `Capacity Satisfied` con almeno un tipo R (R$, R$$, R$$$), almeno un tipo C (CS$, CS$$, CS$$$, CO$$, CO$$$)
-  e nessun tipo I.
+- `Purpose` = Residence, Services, Office, Agriculture, Processing, Manufacturing o High Tech (la classe
+  principale, cioè la zona in cui cresce);
+- un `Capacity Satisfied` con tipi di almeno due classi e nessun altro tipo:
+  - R: R$, R$$, R$$$;
+  - C: CS$, CS$$, CS$$$, CO$$, CO$$$;
+  - I: I-A 0x4100, I-D 0x4200, I-M 0x4300, I-HT 0x4400.
 
-Gli altri edifici non cambiano. Esempio: Purpose Residence, Wealth 2, Capacity Satisfied `0x1020, 120, 0x3120, 30`.
+Gli altri edifici non cambiano. Esempi:
+- RC: Purpose Residence, Wealth 2, `0x1020, 120, 0x3120, 30`;
+- IC: Purpose Manufacturing, Wealth 2, `0x4300, 80, 0x3120, 10` (cresce nelle zone industriali);
+- RCI: Purpose Residence, Wealth 2, `0x1020, 120, 0x3120, 20, 0x4300, 15`.
+
+I tipi secondari devono avere la ricchezza dell'edificio. L'industria ha una ricchezza fissa nel gioco: I-A 1,
+I-D 2, I-M 2, I-HT 3.
 
 Per i lotti misti:
-- `GetAvailableCapacity` (slot 52 della vtable del lotto) rende indipendenti R e C; dentro una classe i
-  livelli di ricchezza (es. R$ e R$$) restano esclusivi, come in un edificio senza occupazione congiunta;
+- `GetAvailableCapacity` (slot 52 della vtable del lotto) rende indipendenti le classi; dentro una classe
+  i tipi (es. R$ e R$$, o I-D e I-M) restano esclusivi, come in un edificio senza occupazione congiunta;
 - `GetOccupancy` (slot 61) conta solo la classe principale;
 - la popolazione secondaria la riempie il gioco stesso: `cSC4GrowthDeveloper::DoIdle` (0x006B5F20) chiama
   `UpdatePopulation` (0x00706BC0) per ogni tipo di sviluppatore su ogni tratto, e lo sviluppatore CS$$ riempie anche i
@@ -127,7 +137,7 @@ Per i lotti misti:
 Il trucco `MixedOccupancy` scrive ogni lotto misto in `SC4SIM.log` e segnala i tipi secondari con una ricchezza
 diversa da quella del lotto (il gioco non li riempie); non cambia niente. Con `DebugLog=true` lo stesso resoconto
 viene scritto a ogni inizio mese. Limiti:
-- il traffico vede solo il tipo principale;
+- il traffico vede solo il tipo principale (l'industria secondaria non genera trasporto merci);
 - la finestra di query mostra solo la capacità principale;
 - senza la DLL torna la regola originale.
 

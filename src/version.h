@@ -1,2 +1,2 @@
 #pragma once
-#define SIM_DLL_VERSION_STR "1.5.1"
+#define SIM_DLL_VERSION_STR "1.6.0"
