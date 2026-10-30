@@ -48,6 +48,11 @@ the slot at run time instead of relying on an exemplar override:
 | Cursor | zone tool cursor table 0x00A92C40, read by the tool's constructor (0x004DAE80) | The slot's entry (0x02E43524, the high density residential cursor) becomes `Cursor`. |
 | Parcels | `cmp eax, 9; jg` at 0x0072DBA8, in 0x0072DB60 (end of `DoParcellization`) | Zones 7-9 skip the residential and commercial parcel pass; the upper bound becomes the slot. Only zones that pass `IsRCIZone` reach this code. |
 
+| Lot zone list | `cSC4LotConfiguration::IsCompatibleWithZoneType` (0x00477D00), vtable entry 0x00A8CEF4 | The growth path checks each lot's Zone Types against the cell's zone (0x0070654F, WrongZone if false). A lot whose Purpose Types include I-M and that fits zone 8 or 9 also fits the slot, so the game's and IRM's I-M lots grow in the I-M zone without editing them. Active only with the I-M redirect. |
+
+This answers the open question of the decompilation notes: the lot's zone list **is** checked on the growth path.
+Without this patch only lots that list the slot in 0x88EDC793 could grow in the I-M zone.
+
 `DoParcellization` (0x00733F30) only parcels zones for which `IsRCIZone` is true, which the `IsRCIZone` hook gives
 the slot; its parcel layout already sends every zone above 7 to the industrial algorithm (0x0072E9B0 with 6).
 

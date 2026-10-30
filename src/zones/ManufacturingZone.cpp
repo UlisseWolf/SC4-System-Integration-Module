@@ -26,7 +26,10 @@
 //  7. Zone tool cursor (table 0x00A92C40): the slot's cursor becomes the I-M cursor of SC4SIM_ManufacturingZone.dat
 //     instead of the high density residential one (Cursor).
 //  8. Parcels (0x0072DBA8): the slot skips the residential/commercial parcel pass, like industrial zones 7-9.
-// 6-8 are patched at application start; 1-5 when the first city opens.
+//  9. Lot zone list (IsCompatibleWithZoneType, lot configuration vtable 0x00A8CEF4): the growth path checks each
+//     lot's Zone Types (0x0070654F); an I-M lot that fits zone 8 or 9 also fits the slot, so the game's and IRM's
+//     I-M lots grow there unchanged.
+// 6-9 are patched at application start (9 acts once the I-M redirect is installed); 1-5 when the first city opens.
 //
 // How the code stays safe without the game's bytes:
 //  * virtual functions are found by scanning the object's vtable for the address of the notes; when it is not
@@ -146,6 +149,15 @@ namespace
 	// Parcellization (0x0072DB60, called at the end of DoParcellization): zones 7-9 skip the residential and
 	// commercial parcel pass ("cmp eax, 9; jg" at 0x0072DBA8). Raising the 9 to the slot makes the slot parcel like
 	// industry. Only zones that pass IsRCIZone reach this code, so slots 10-12 are not affected.
+	// Lot zone list: the tract developer checks the lot configuration's Zone Types against the cell's zone on the
+	// growth path (0x0070654F: GetZoneType, then IsCompatibleWithZoneType; WrongZone, reason 6, if false). The game's
+	// and IRM's I-M lots list zones 8 and 9 only. cSC4LotConfiguration vtable 0x00A8CEB8: slot 15
+	// IsCompatibleWithZoneType (0x00477D00), slot 17 IsCompatibleWithPurposeType (0x00477DA0), both __thiscall(int).
+	constexpr uintptr_t kLotConfigZoneEntry = 0x00A8CEF4;
+	constexpr uintptr_t kLotConfigIsCompatibleWithZone = 0x00477D00;
+	constexpr uintptr_t kLotConfigPurposeEntry = 0x00A8CEFC;
+	constexpr uintptr_t kLotConfigIsCompatibleWithPurpose = 0x00477DA0;
+
 	constexpr uintptr_t kParcelIndustrialMax = 0x0072DBA8;
 	constexpr uint8_t kParcelIndustrialMaxBytes[] = { 0x83, 0xF8, 0x09, 0x7F, 0x05 };
 
@@ -603,6 +615,23 @@ namespace
 		}
 	};
 
+	// A manufacturing lot (Purpose Types includes I-M) that fits medium or dense industry also fits the slot, so the
+	// game's and other mods' I-M lots grow in the I-M zone without editing their Zone Types. Other lots are unchanged.
+	using LotConfigTestFn = bool(__thiscall*)(void* lotConfiguration, int32_t value);
+	bool lotZoneHookActive = false;
+
+	bool __fastcall Hook_IsCompatibleWithZoneType(void* lotConfiguration, void* /*edx*/, int32_t zone)
+	{
+		const auto test = reinterpret_cast<LotConfigTestFn>(kLotConfigIsCompatibleWithZone);
+		if (test(lotConfiguration, zone)) return true;
+		if (!lotZoneHookActive || zone != static_cast<int32_t>(settings.slot)) return false;
+		const auto purpose = reinterpret_cast<LotConfigTestFn>(kLotConfigIsCompatibleWithPurpose);
+		return purpose(lotConfiguration, static_cast<int32_t>(PurposeType::Manufacturing))
+			&& (test(lotConfiguration, static_cast<int32_t>(ZoneType::IndustrialMediumDensity))
+				|| test(lotConfiguration, static_cast<int32_t>(ZoneType::IndustrialHighDensity)));
+	}
+
+	VtableEntry lotZoneEntry;
 	CallPatch zoneTuningCall;
 	uint32_t originalSlotCursor = 0;
 	bool cursorPatched = false;
@@ -620,6 +649,10 @@ namespace
 			cursorPatched = WriteBytes(cursorEntry, &settings.cursor, sizeof(uint32_t));
 		}
 
+		const bool lotZone = *reinterpret_cast<const uint32_t*>(kLotConfigZoneEntry) == kLotConfigIsCompatibleWithZone
+			&& *reinterpret_cast<const uint32_t*>(kLotConfigPurposeEntry) == kLotConfigIsCompatibleWithPurpose
+			&& lotZoneEntry.Install(kLotConfigZoneEntry, reinterpret_cast<const void*>(&Hook_IsCompatibleWithZoneType));
+
 		if (std::memcmp(reinterpret_cast<const void*>(kParcelIndustrialMax), kParcelIndustrialMaxBytes, sizeof(kParcelIndustrialMaxBytes)) == 0)
 		{
 			const uint8_t maxZone = static_cast<uint8_t>(settings.slot);
@@ -627,15 +660,19 @@ namespace
 		}
 
 		SimLog::Write(tuning && parcelPatched ? SimLog::Level::Info : SimLog::Level::Warning,
-			"ManufacturingZone: zone tuning %s (texture 0x%08X, drag colour 0x%08X%s), cursor %s, industrial parcels %s.",
+			"ManufacturingZone: zone tuning %s (texture 0x%08X, drag colour 0x%08X%s), cursor %s, industrial parcels %s, "
+			"I-M lots of zones 8/9 in the slot %s.",
 			tuning ? "on" : "NOT installed (the call site differs)", settings.zoneTexture, settings.dragColour,
 			settings.industrialTuning ? ", sizes and costs of medium industry" : "",
 			cursorPatched ? "on" : (settings.cursor ? "NOT installed (the table differs)" : "off"),
-			parcelPatched ? "on" : "NOT installed (the code differs)");
+			parcelPatched ? "on" : "NOT installed (the code differs)",
+			lotZone ? "on" : "NOT installed (the lot configuration vtable differs)");
 	}
 
 	void UninstallStaticPatches()
 	{
+		lotZoneHookActive = false;
+		lotZoneEntry.Uninstall();
 		zoneTuningCall.Uninstall();
 		if (cursorPatched)
 		{
@@ -677,6 +714,7 @@ namespace
 		if (stage && InstallConstructionInfoHook(bds))
 		{
 			redirectInstalled = true;
+			lotZoneHookActive = true;   // only with the redirect does the slot hold I-M
 			rci = settings.rciZoneHook && InstallRCIZoneHook(zoneManager);
 			InstallBrushHook(zoneManager);
 		}
@@ -701,6 +739,7 @@ namespace
 		stageJump.Uninstall();
 		rciJump.Uninstall();
 		redirectInstalled = false;
+		lotZoneHookActive = false;
 	}
 
 	// ---------------------------------------------------------------- cheats
