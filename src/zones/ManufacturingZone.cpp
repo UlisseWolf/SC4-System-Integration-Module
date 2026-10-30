@@ -29,7 +29,9 @@
 //  9. Lot zone list (IsCompatibleWithZoneType, lot configuration vtable 0x00A8CEF4): the growth path checks each
 //     lot's Zone Types (0x0070654F); an I-M lot that fits zone 8 or 9 also fits the slot, so the game's and IRM's
 //     I-M lots grow there unchanged.
-// 6-9 are patched at application start (9 acts once the I-M redirect is installed); 1-5 when the first city opens.
+// 10. Industrial checks (0x004E34BF, 0x004E38A5, 0x004E3989, 0x004E3A75, 0x00467827, 0x006CCA12, 0x006CD409): the slot
+//     takes every "zone 7-9" path of the lot and zone code, so it is not split into parcels with arrows.
+// 6-10 are patched at application start (9 acts once the I-M redirect is installed); 1-5 when the first city opens.
 //
 // How the code stays safe without the game's bytes:
 //  * virtual functions are found by scanning the object's vtable for the address of the notes; when it is not
@@ -631,6 +633,112 @@ namespace
 				|| test(lotConfiguration, static_cast<int32_t>(ZoneType::IndustrialHighDensity)));
 	}
 
+	// ---- industrial zone checks in the lot and zone code
+	//
+	// The game tests "is this an industrial zone" with inline compare chains on zones 7-9. Each site below is replaced
+	// by a call to a small generated thunk that sets ZF when its register holds 7, 8, 9 or the slot, followed by the
+	// site's own branch, so the slot takes every industrial path: lot orientation and road access (0x006CCA12,
+	// 0x006CD409), the 1x1 zone lots left after demolition (0x00467827) and the lot and cell queries at
+	// 0x004E34BF, 0x004E38A5, 0x004E3989 and 0x004E3A75. Every site is checked byte for byte before patching.
+
+	enum Reg : uint8_t { kEax = 0, kEcx = 1, kEdi = 7 };
+
+	struct IndustrialSite
+	{
+		uintptr_t address;
+		std::array<uint8_t, 18> original;
+		uint8_t length;
+		Reg reg;
+		uint8_t prefix;       // bytes kept before the call (0x006CCA12 keeps its "mov byte [esp+0x11], 1")
+		uint8_t branch;       // 0x74 je / 0x75 jne (rel8), or 0x85 for jne rel32
+		uintptr_t target;     // where the branch goes
+	};
+
+	const IndustrialSite kIndustrialSites[] = {
+		{ 0x004E38A5, { 0x83,0xF8,0x07,0x74,0x0A,0x83,0xF8,0x08,0x74,0x05,0x83,0xF8,0x09,0x75,0x25 }, 15, kEax, 0, 0x75, 0x004E38D9 },
+		{ 0x004E3989, { 0x83,0xF8,0x07,0x74,0x0A,0x83,0xF8,0x08,0x74,0x05,0x83,0xF8,0x09,0x75,0x2A }, 15, kEax, 0, 0x75, 0x004E39C2 },
+		{ 0x004E3A75, { 0x83,0xF8,0x07,0x74,0x0A,0x83,0xF8,0x08,0x74,0x05,0x83,0xF8,0x09,0x75,0x25 }, 15, kEax, 0, 0x75, 0x004E3AA9 },
+		{ 0x004E34BF, { 0x83,0xF8,0x07,0x74,0x1C,0x83,0xF8,0x08,0x74,0x17,0x83,0xF8,0x09,0x74,0x12 }, 15, kEax, 0, 0x74, 0x004E34E0 },
+		{ 0x006CD409, { 0x83,0xF8,0x07,0x7C,0x0D,0x83,0xF8,0x09,0x7F,0x08 }, 10, kEax, 0, 0x75, 0x006CD41B },
+		{ 0x00467827, { 0x83,0xF9,0x07,0x0F,0x8C,0x96,0x00,0x00,0x00,0x83,0xF9,0x09,0x0F,0x8F,0x8D,0x00,0x00,0x00 }, 18, kEcx, 0, 0x85, 0x004678C6 },
+		{ 0x006CCA12, { 0x83,0xFF,0x07,0xC6,0x44,0x24,0x11,0x01,0x7C,0x29,0x83,0xFF,0x09,0x7F,0x24 }, 15, kEdi, 5, 0x75, 0x006CCA45 },
+	};
+	constexpr size_t kIndustrialSiteCount = std::size(kIndustrialSites);
+	bool industrialSitePatched[kIndustrialSiteCount] = {};
+	uint8_t* industrialThunks = nullptr;   // one 32-byte thunk per register (eax, ecx, edi)
+
+	// cmp r,7 / je ok / cmp r,8 / je ok / cmp r,9 / je ok / cmp r,slot / ok: ret  (ZF = industrial)
+	void WriteThunk(uint8_t* at, Reg reg, uint8_t slot)
+	{
+		const uint8_t modrm = static_cast<uint8_t>(0xF8 + reg);
+		const uint8_t code[] = { 0x83, modrm, 0x07, 0x74, 0x0D, 0x83, modrm, 0x08, 0x74, 0x08, 0x83, modrm, 0x09, 0x74, 0x03,
+			0x83, modrm, slot, 0xC3 };
+		std::memcpy(at, code, sizeof(code));
+	}
+
+	uint8_t* ThunkFor(Reg reg)
+	{
+		return industrialThunks + 32 * (reg == kEax ? 0 : reg == kEcx ? 1 : 2);
+	}
+
+	uint32_t InstallIndustrialSites()
+	{
+		industrialThunks = static_cast<uint8_t*>(VirtualAlloc(nullptr, 96, MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE));
+		if (!industrialThunks) return 0;
+		for (Reg reg : { kEax, kEcx, kEdi }) WriteThunk(ThunkFor(reg), reg, static_cast<uint8_t>(settings.slot));
+		FlushInstructionCache(GetCurrentProcess(), industrialThunks, 96);
+
+		uint32_t patched = 0;
+		for (size_t i = 0; i < kIndustrialSiteCount; ++i)
+		{
+			const IndustrialSite& site = kIndustrialSites[i];
+			if (std::memcmp(reinterpret_cast<const void*>(site.address), site.original.data(), site.length) != 0) continue;
+
+			std::array<uint8_t, 18> code{};
+			std::fill(code.begin(), code.end(), static_cast<uint8_t>(0x90));
+			size_t n = 0;
+			for (; n < site.prefix; ++n) code[n] = site.original[3 + n];   // the kept instruction follows the first cmp
+			const uintptr_t callAt = site.address + n;
+			const int32_t callRel = static_cast<int32_t>(reinterpret_cast<uintptr_t>(ThunkFor(site.reg)) - (callAt + 5));
+			code[n++] = 0xE8;
+			std::memcpy(&code[n], &callRel, 4);
+			n += 4;
+			if (site.branch == 0x85)
+			{
+				const int32_t rel = static_cast<int32_t>(site.target - (site.address + n + 6));
+				code[n++] = 0x0F;
+				code[n++] = 0x85;
+				std::memcpy(&code[n], &rel, 4);
+				n += 4;
+			}
+			else
+			{
+				const int32_t rel = static_cast<int32_t>(site.target - (site.address + n + 2));
+				if (rel < -128 || rel > 127) continue;
+				code[n++] = site.branch;
+				code[n++] = static_cast<uint8_t>(static_cast<int8_t>(rel));
+			}
+			if (n > site.length) continue;
+			if (WriteBytes(site.address, code.data(), site.length))
+			{
+				industrialSitePatched[i] = true;
+				++patched;
+			}
+		}
+		return patched;
+	}
+
+	void UninstallIndustrialSites()
+	{
+		for (size_t i = 0; i < kIndustrialSiteCount; ++i)
+		{
+			if (!industrialSitePatched[i]) continue;
+			WriteBytes(kIndustrialSites[i].address, kIndustrialSites[i].original.data(), kIndustrialSites[i].length);
+			industrialSitePatched[i] = false;
+		}
+		// The thunks stay allocated: another thread could still be returning through one of them.
+	}
+
 	VtableEntry lotZoneEntry;
 	CallPatch zoneTuningCall;
 	uint32_t originalSlotCursor = 0;
@@ -653,6 +761,8 @@ namespace
 			&& *reinterpret_cast<const uint32_t*>(kLotConfigPurposeEntry) == kLotConfigIsCompatibleWithPurpose
 			&& lotZoneEntry.Install(kLotConfigZoneEntry, reinterpret_cast<const void*>(&Hook_IsCompatibleWithZoneType));
 
+		const uint32_t industrialSites = InstallIndustrialSites();
+
 		if (std::memcmp(reinterpret_cast<const void*>(kParcelIndustrialMax), kParcelIndustrialMaxBytes, sizeof(kParcelIndustrialMaxBytes)) == 0)
 		{
 			const uint8_t maxZone = static_cast<uint8_t>(settings.slot);
@@ -661,18 +771,20 @@ namespace
 
 		SimLog::Write(tuning && parcelPatched ? SimLog::Level::Info : SimLog::Level::Warning,
 			"ManufacturingZone: zone tuning %s (texture 0x%08X, drag colour 0x%08X%s), cursor %s, industrial parcels %s, "
-			"I-M lots of zones 8/9 in the slot %s.",
+			"I-M lots of zones 8/9 in the slot %s, industrial checks %u of %u.",
 			tuning ? "on" : "NOT installed (the call site differs)", settings.zoneTexture, settings.dragColour,
 			settings.industrialTuning ? ", sizes and costs of medium industry" : "",
 			cursorPatched ? "on" : (settings.cursor ? "NOT installed (the table differs)" : "off"),
 			parcelPatched ? "on" : "NOT installed (the code differs)",
-			lotZone ? "on" : "NOT installed (the lot configuration vtable differs)");
+			lotZone ? "on" : "NOT installed (the lot configuration vtable differs)",
+			industrialSites, static_cast<uint32_t>(kIndustrialSiteCount));
 	}
 
 	void UninstallStaticPatches()
 	{
 		lotZoneHookActive = false;
 		lotZoneEntry.Uninstall();
+		UninstallIndustrialSites();
 		zoneTuningCall.Uninstall();
 		if (cursorPatched)
 		{

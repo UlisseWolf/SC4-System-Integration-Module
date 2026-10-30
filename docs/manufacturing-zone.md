@@ -50,6 +50,8 @@ the slot at run time instead of relying on an exemplar override:
 
 | Lot zone list | `cSC4LotConfiguration::IsCompatibleWithZoneType` (0x00477D00), vtable entry 0x00A8CEF4 | The growth path checks each lot's Zone Types against the cell's zone (0x0070654F, WrongZone if false). A lot whose Purpose Types include I-M and that fits zone 8 or 9 also fits the slot, so the game's and IRM's I-M lots grow in the I-M zone without editing them. Active only with the I-M redirect. |
 
+| Industrial checks | inline "zone 7-9" tests at 0x004E34BF, 0x004E38A5, 0x004E3989, 0x004E3A75 (lot and cell queries), 0x00467827 (1x1 zone lots after demolition), 0x006CCA12 and 0x006CD409 (lot orientation and road access) | Each test is replaced by a call to a generated thunk that also accepts the slot, then the site's own branch. The slot takes every industrial path, so it is not split into R/C-style parcels with arrows. Every site is compared byte for byte before patching and restored on exit. |
+
 This answers the open question of the decompilation notes: the lot's zone list **is** checked on the growth path.
 Without this patch only lots that list the slot in 0x88EDC793 could grow in the I-M zone.
 
