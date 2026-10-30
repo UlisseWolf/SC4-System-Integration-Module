@@ -116,7 +116,7 @@ namespace
 		bool ignoreLandValue = true;
 		bool industrialTuning = true;      // the slot gets the medium industrial zone's sizes and costs
 		uint32_t zoneTexture = 0x5C4D0D10; // SC4SIM_ManufacturingZone.dat, 0 = medium industrial texture
-		uint32_t dragColour = 0x9646C8FF;  // RRGGBBAA, violet
+		uint32_t dragColour = 0xDE681CFF;  // RRGGBBAA, burnt orange (Maxis industry: 0xFFB233FF medium, 0xCE901FFF dense)
 		uint32_t cursor = 0x5C4D0D20;      // SC4SIM_ManufacturingZone.dat, 0 = game cursor
 		uint32_t zoneName = 0x5C4D0D04;    // LTEXT 0x2026960B-0xEA5524EB-<id> in SC4SIM_ManufacturingZone.dat, 0 = game name
 	} settings;

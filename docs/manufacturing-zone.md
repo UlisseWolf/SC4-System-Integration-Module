@@ -62,7 +62,7 @@ Without this patch only lots that list the slot in 0x88EDC793 could grow in the 
 `DoParcellization` (0x00733F30) only parcels zones for which `IsRCIZone` is true, which the `IsRCIZone` hook gives
 the slot; its parcel layout already sends every zone above 7 to the industrial algorithm (0x0072E9B0 with 6).
 
-`SC4SIM_ManufacturingZone.dat` holds the menu item, its icon and texts, the violet zone texture
+`SC4SIM_ManufacturingZone.dat` holds the menu item, its icon and texts, the burnt-orange zone texture
 (`7AB50E44-1ABE787D-5C4D0D10`, 8x8 DXT1 like the game's zone textures) and the I-M cursor (`AA5C3144`, groups 1, 4, 8
 and 0x32, instance `5C4D0D20`, the medium industrial cursor recoloured). It no longer overrides the Zone Manager
 exemplar.
@@ -164,8 +164,8 @@ StageHook=true       ; required for the redirect: without it the module changes 
 RCIZoneHook=true     ; IsRCIZone true for the slot
 IgnoreLandValue=true ; no land-value wealth test in the slot, as in zones 7-9
 IndustrialTuning=true ; sizes and costs of medium industry
-ZoneTexture=0x5C4D0D10 ; violet texture in SC4SIM_ManufacturingZone.dat (0 = medium industrial texture)
-DragColour=0x9646C8FF ; RRGGBBAA
+ZoneTexture=0x5C4D0D10 ; burnt-orange texture in SC4SIM_ManufacturingZone.dat (0 = medium industrial texture)
+DragColour=0xDE681CFF ; RRGGBBAA
 Cursor=0x5C4D0D20     ; I-M cursor in SC4SIM_ManufacturingZone.dat (0 = game cursor)
 ZoneName=0x5C4D0D04   ; tooltip name, LTEXT in group 0xEA5524EB (0 = game name)
 ```

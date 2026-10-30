@@ -278,8 +278,8 @@ The reverse-engineering notes behind every address are in [`docs/sc4-powerline-t
 | | `RCIZoneHook` | `true` | `IsRCIZone` answers true for the slot. |
 | | `IgnoreLandValue` | `true` | No land-value wealth test in the slot. |
 | | `IndustrialTuning` | `true` | The slot gets the zone sizes and costs of medium industry. |
-| | `ZoneTexture` | `0x5C4D0D10` | Zone colour texture (violet, in `SC4SIM_ManufacturingZone.dat`); `0` = medium industrial. |
-| | `DragColour` | `0x9646C8FF` | Drag colour, RRGGBBAA. |
+| | `ZoneTexture` | `0x5C4D0D10` | Zone colour texture (burnt orange, in `SC4SIM_ManufacturingZone.dat`); `0` = medium industrial. |
+| | `DragColour` | `0xDE681CFF` | Drag colour, RRGGBBAA. |
 | | `Cursor` | `0x5C4D0D20` | Zone tool cursor (in `SC4SIM_ManufacturingZone.dat`); `0` = game cursor. |
 | | `ZoneName` | `0x5C4D0D04` | Zone name in the hover tooltip (LTEXT in group `0xEA5524EB`); `0` = the slot's game name. |
 | `[SC4PowerPoleCustomization]` | `Enabled` | `true` | Turns the custom power poles on or off. |
