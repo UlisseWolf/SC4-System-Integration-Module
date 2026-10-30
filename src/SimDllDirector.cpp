@@ -37,6 +37,10 @@
 // Version 1.7.0:
 //  * Mixed traffic: lots whose travel population has a class other than their zone's make commuter and freight
 //    trips for it (UpdateTrafficVolume hook, MixedTraffic in SC4SIM.ini).
+//
+// Version 1.7.1:
+//  * Commute destinations: GetJobs also counts the secondary commercial and industrial jobs of mixed lots, so they
+//    reach the lot's maximum trip capacity and commuters can end their trips there.
 // The reward creators themselves are Lua (create_reward_utilities, ...): reward scripts call them while the game
 // compiles them, before any DLL can reach the city's Lua, so they live in the SIM Lua package 0x0151A000.
 #include "SimLog.h"

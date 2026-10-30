@@ -1,6 +1,6 @@
 # Mixed residential, commercial and industrial occupancy (SC4SIM)
 
-SC4SIM 1.5.0 (updated in 1.5.1, 1.6.0 and 1.7.0) lets one building hold residents, commercial jobs and industrial jobs, with
+SC4SIM 1.5.0 (updated in 1.5.1, 1.6.0, 1.7.0 and 1.7.1) lets one building hold residents, commercial jobs and industrial jobs, with
 independent capacities. Any two classes work (RC, RI, CI), and so do all three (RCI). Industry was added in 1.6.0. The analysis was done on the SimCity 4 1.1.641 executable (`SimCity 4.exe`, MD5
 `bfd49573d6588866344832b95069ce8f`). It starts from the "Allow Joint Occupancy" notes (26 October 2026), which this
 document checks and extends. Every address below was checked in the disassembly of that executable.
@@ -192,9 +192,29 @@ The list helpers are `0x006C1E10` (push front with a copy), `0x006C0FA0` (erase)
 So the travel population of a mixed lot already holds the secondary residents and industry, but the zone decides
 the single trip type. A C-zone lot never makes trips, and an R-zone lot never ships freight.
 
-**Destinations.** The traffic simulator (vtable `0x00AB33D0`) counts the reachable occupants of each sub-network
-from `GetPopulations` (`0x00716180`, all types). So secondary jobs count as reachable jobs. How the pathfinder
-(vtable `0x00AB2150`) picks the destination lot of a single trip was not traced.
+**Destinations.** These are from the "commuters never see the secondary jobs" notes (29 October 2026). The
+traffic simulator's own pieces were checked against the executable.
+
+- `cSC4TrafficSimulator::SetupTrip` (`0x0070EC40`) gives a commute the commuter's wealth bit as its destination
+  flag.
+- `WorkOnRefreshCommuteMap` (`0x0070F6E0`) marks the cells of each lot whose **maximum trip capacity** for that
+  wealth is not 0.
+- `cSC4PathFinder::AtGoal` (`0x006D7960`) and `CheckDestinationCapacity` (`0x006D5D80`) accept a marked lot while
+  `max - used > 0`.
+- The capacities are lot property `0x8A0B4100`: indices 0-3 hold the maximum, 4-7 the used count, 8-11 last
+  cycle's used count.
+
+The maximum is written by `cSC4Lot::UpdateJobs` (`0x006BF6A0`, checked here). For each of the three wealths, it
+calls `SetMaxTripCapacity` (traffic simulator slot 19) with the lot's travel jobs (`lot+0x6C..0x74`), when they
+changed by more than 10%. The travel jobs are the sum of `GetJobs` over the lots of the designate. `GetJobs`
+(`0x006BF800`) reads only the primary type:
+
+`jobs[1..3] = CalculateJobsPerUnitOfDemand(type + 1, 0) × GetPopulation(type)`
+
+`CalculateJobsPerUnitOfDemand` is demand simulator slot 8, `0x006A23A0`. It reads property `0x47BB3F30` of the
+demand exemplar and writes `jobs[1..3]` from its keys `0x2010 + 0x10 × wealth`. So secondary jobs never reached
+the trip capacity. The traffic simulator's connected-occupant counts (`0x00716180`) use `GetPopulations` and
+include them, but they are not used to choose destinations.
 
 ## What SC4SIM changes
 
@@ -204,17 +224,24 @@ from `GetPopulations` (`0x00716180`, all types). So secondary jobs count as reac
 | 2 | vtable `0x00AB1AA4` (slot 61) → `GetOccupancy` | `Σ population / Σ capacity` of the primary class, at most 100%. |
 | 3 | `CALL` at `0x006A7475` and `0x006A74AB` → `PerformCensus` wrapper | Calls the original, then adds each secondary type with the formula of its own class: residential for R, job (`census[t + 1]`) for C and I. |
 | 4 | traffic-source vtable `0x00AB1924` (slot 4) → `UpdateTrafficVolume` | Only for lots whose travel population has a class other than their zone's (residents outside R zones, industry outside I zones). Commuters and freight use the game's formulas whatever the zone. The list is reconciled per trip type with the game's algorithm and list helpers, without erasing the other type, so a lot can hold commuters **and** freight. Every other lot calls the original. `MixedTraffic=false` turns it off. |
+| 5 | vtable `0x00AB1AB0` (slot 64) → `GetJobs` | Calls the original, then, for mixed lots, adds `CalculateJobsPerUnitOfDemand(type + 1, 0) × GetPopulation(type)` for each secondary C or I type. Secondary residents add nothing, because they are commuters, not jobs. The jobs then reach the maximum trip capacity through `AddTravelPopulation` and `UpdateJobs`, so commuters can end their trips at them. `MixedTraffic=false` turns it off. |
 | – | `MixedOccupancy` cheat (and month starts with `DebugLog=true`) | Read only: writes every mixed lot, with the population and capacity of each type, and flags a secondary type whose wealth differs from the lot's. It sets no population (1.5.0 did; see UpdatePopulation above). |
 
-Before patching, the DLL checks that the game version is 641, that the three vtable slots still point to the
+Before patching, the DLL checks that the game version is 641, that the four vtable slots still point to the
 original functions and that both call sites are still `CALL 0x006A5A00`. If any check fails, nothing is installed.
 
 ## Limits
 
-- **Traffic destinations.** Since 1.7.0 secondary residents commute and secondary industry ships freight (hook 4).
-  How a commuter picks the job lot it drives to was not traced. The traffic simulator counts secondary jobs as
-  reachable occupants, but it is not verified that the pathfinder ends trips at them.
-- **Travel jobs.** `GetJobs` (slot 64) and so the travel jobs at `lot+0x6C..0x74` still hold the primary type only.
+- **Traffic.**
+  - Secondary residents commute and secondary industry ships freight (hook 4, 1.7.0). Secondary jobs count in the
+    trip capacity, so they are destinations (hook 5, 1.7.1).
+  - `UpdateJobs` only refreshes the maximum when the jobs change by more than 10%, so new secondary jobs may show
+    with a delay.
+  - The pathfinder's search loops (`FindPath` `0x006D91B0`, `FindNearestStandardDest` `0x006D7E50`) were not
+    traced.
+  - To check in game, read lot property `0x8A0B4100`:
+    - indices 0-2 should rise when the secondary jobs fill;
+    - indices 8-10 should become non-zero once commuters arrive.
 - **Agriculture.** A farm lot holds only the farm building; the fields are separate lots. Secondary residents or
   shops on a farm sit on the building's lot.
 - **Query tool.** The query dialog still shows the primary capacity only (`GetOccupantCapacity`, `0x004C4160`). The

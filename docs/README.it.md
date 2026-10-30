@@ -98,7 +98,7 @@ di keepwires attivo così la linea non viene ridisegnata. I lotti con un edifici
 agricolo il gioco demolisce quel campo (non può togliere una sola casella a un lotto) e la fattoria ne fa crescere
 di nuovi intorno al traliccio. Impostazioni: `DezoneUnderPoles` e `DezoneFieldCells` (entrambe `true`).
 
-## Occupazione mista R, C e I (1.5.0, aggiornata in 1.5.1, 1.6.0 e 1.7.0)
+## Occupazione mista R, C e I (1.5.0, aggiornata in 1.5.1, 1.6.0, 1.7.0 e 1.7.1)
 
 **Sperimentale: compilata e verificata staticamente, non ancora provata in gioco. Provarla su una copia della
 città.**
@@ -140,8 +140,10 @@ viene scritto a ogni inizio mese. Limiti:
 - viaggi (1.7.0): il gioco crea i viaggi solo in base alla zona del lotto (pendolari in zona R, merci in zona I,
   niente in zona C) e lascia a ogni lotto un solo tipo di viaggio. L'hook di `UpdateTrafficVolume` (0x006C27E0)
   fa fare il pendolarismo anche ai residenti secondari e la consegna merci anche all'industria secondaria, con le
-  formule del gioco; un lotto può avere sia pendolari sia merci. `MixedTraffic=false` lo disattiva. Non è
-  verificato che i pendolari scelgano come destinazione i posti di lavoro secondari;
+  formule del gioco; un lotto può avere sia pendolari sia merci. Dalla 1.7.1 l'hook di `GetJobs` (slot 64)
+  aggiunge i posti di lavoro secondari C e I alla capacità di viaggio del lotto (proprietà 0x8A0B4100, scritta da
+  `UpdateJobs` 0x006BF6A0), che è ciò che il pathfinder controlla per scegliere la destinazione: i pendolari
+  possono quindi lavorare nei negozi e nell'industria secondaria. `MixedTraffic=false` disattiva entrambe le cose;
 - la finestra di query mostra solo la capacità principale;
 - senza la DLL torna la regola originale.
 

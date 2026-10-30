@@ -16,7 +16,10 @@
 //     census with the game's residential or job formula, so they count towards the RCI demand;
 //  4. replaces cISC4TrafficSource::UpdateTrafficVolume of the lot (vtable 0x00AB1914, slot 4) for lots whose
 //     travel population has a class other than their zone's: residents commute and industry ships freight
-//     whatever the zone (see "hook 4" below). MixedTraffic=false in SC4SIM.ini keeps the game's trips.
+//     whatever the zone (see "hook 4" below);
+//  5. extends cSC4Lot::GetJobs (vtable slot 64) with the secondary commercial and industrial jobs, so they reach
+//     the lot's maximum trip capacity and commuters can end their trips there (see "hook 5" below).
+// MixedTraffic=false in SC4SIM.ini turns 4 and 5 off and keeps the game's trips.
 //
 // The secondary types are filled by the game itself: cSC4GrowthDeveloper::DoIdle (0x006B5F20) calls
 // cSC4TractDeveloper::UpdatePopulation (0x00706BC0, call at 0x006B6A65) for every growth developer and every
@@ -760,6 +763,55 @@ namespace
 		return originalUpdateTrafficVolume(trafficSource);
 	}
 
+	// ---------------------------------------------------------------- hook 5: GetJobs (commute destinations)
+	//
+	// A lot is a commute destination only while its maximum trip capacity (lot property 0x8A0B4100, indices 0-3)
+	// has room for the commuter's wealth (cSC4PathFinder::AtGoal 0x006D7960, CheckDestinationCapacity 0x006D5D80).
+	// cSC4Lot::UpdateJobs (0x006BF6A0) copies the lot's travel jobs into that maximum with the traffic simulator's
+	// SetMaxTripCapacity, and the travel jobs come from cSC4Lot::GetJobs (vtable slot 64, 0x006BF800), which reads
+	// the primary type only:
+	//   jobs[1..3] = CalculateJobsPerUnitOfDemand(primary type + 1) x GetPopulation(primary type)
+	// For mixed lots the hook calls the original, then adds the same product for each secondary commercial or
+	// industrial type, so commuters can end their trips at the secondary jobs. Secondary residents add nothing:
+	// they are commuters, not jobs (hook 4 makes their trips).
+
+	constexpr uintptr_t kLotVtableGetJobs = 0x00AB1AB0;
+	constexpr uintptr_t kOriginalGetJobs = 0x006BF800;
+	constexpr uintptr_t kDemandSimulatorPtr = 0x00B43D74;
+	constexpr size_t kDemandCalculateJobsPerUnit = 8;  // (float jobs[4], demand ID, demand index): writes jobs[1..3]
+
+	using GetJobsFn = bool(__thiscall*)(void* lot, float* jobs);
+	GetJobsFn originalGetJobs = nullptr;
+
+	bool __fastcall Hook_GetJobs(void* lot, void* /*edx*/, float* jobs)
+	{
+		const bool result = originalGetJobs(lot, jobs);
+		if (!mixedTraffic || !jobs) return result;
+
+		const BuildingProfile* const profile = GetMixedProfile(lot, BuildingDevelopmentSimulator());
+		void* const demand = *reinterpret_cast<void**>(kDemandSimulatorPtr);
+		if (!profile || !demand) return result;
+
+		const OccupantClass primary = ClassOfPurpose(profile->purpose);
+		ForEachCapacity(*profile, [&](uint32_t type, uint16_t)
+		{
+			const OccupantClass occupantClass = ClassOf(type);
+			if (occupantClass == primary || occupantClass == OccupantClass::Residential || occupantClass == OccupantClass::None)
+			{
+				return;
+			}
+			const uint16_t population = GetPopulation(lot, type);
+			if (population == 0) return;
+			float perUnit[4] = {};
+			VCall<void>(demand, kDemandCalculateJobsPerUnit, perUnit, type + 1, 0u);
+			for (int i = 1; i <= 3; ++i)
+			{
+				jobs[i] += perUnit[i] * static_cast<float>(population);
+			}
+		});
+		return result;
+	}
+
 	// ---------------------------------------------------------------- log report (read only)
 
 	// Writes every mixed lot with the population and capacity of each type. Nothing is changed: the game's
@@ -857,7 +909,8 @@ namespace
 		// Every site must still hold the game's original code: another DLL may have patched it.
 		bool ok = *reinterpret_cast<const uint32_t*>(kLotVtableGetAvailableCapacity) == kOriginalGetAvailableCapacity
 			&& *reinterpret_cast<const uint32_t*>(kLotVtableGetOccupancy) == kOriginalGetOccupancy
-			&& *reinterpret_cast<const uint32_t*>(kTrafficSourceVtableUpdateTrafficVolume) == kOriginalUpdateTrafficVolume;
+			&& *reinterpret_cast<const uint32_t*>(kTrafficSourceVtableUpdateTrafficVolume) == kOriginalUpdateTrafficVolume
+			&& *reinterpret_cast<const uint32_t*>(kLotVtableGetJobs) == kOriginalGetJobs;
 		for (uintptr_t site : kPerformCensusCallSites)
 		{
 			ok = ok && IsCallTo(site, kPerformCensus);
@@ -872,9 +925,11 @@ namespace
 		originalGetAvailableCapacity = reinterpret_cast<GetAvailableCapacityFn>(kOriginalGetAvailableCapacity);
 		originalGetOccupancy = reinterpret_cast<GetOccupancyFn>(kOriginalGetOccupancy);
 		originalUpdateTrafficVolume = reinterpret_cast<UpdateTrafficVolumeFn>(kOriginalUpdateTrafficVolume);
+		originalGetJobs = reinterpret_cast<GetJobsFn>(kOriginalGetJobs);
 		ok = WriteDword(kLotVtableGetAvailableCapacity, reinterpret_cast<uint32_t>(&Hook_GetAvailableCapacity))
 			&& WriteDword(kLotVtableGetOccupancy, reinterpret_cast<uint32_t>(&Hook_GetOccupancy))
-			&& WriteDword(kTrafficSourceVtableUpdateTrafficVolume, reinterpret_cast<uint32_t>(&Hook_UpdateTrafficVolume));
+			&& WriteDword(kTrafficSourceVtableUpdateTrafficVolume, reinterpret_cast<uint32_t>(&Hook_UpdateTrafficVolume))
+			&& WriteDword(kLotVtableGetJobs, reinterpret_cast<uint32_t>(&Hook_GetJobs));
 		for (uintptr_t site : kPerformCensusCallSites)
 		{
 			ok = ok && PatchCall(site, reinterpret_cast<const void*>(&Hook_PerformCensus));
@@ -891,6 +946,7 @@ namespace
 		WriteDword(kLotVtableGetAvailableCapacity, kOriginalGetAvailableCapacity);
 		WriteDword(kLotVtableGetOccupancy, kOriginalGetOccupancy);
 		WriteDword(kTrafficSourceVtableUpdateTrafficVolume, kOriginalUpdateTrafficVolume);
+		WriteDword(kLotVtableGetJobs, kOriginalGetJobs);
 		for (uintptr_t site : kPerformCensusCallSites)
 		{
 			PatchCall(site, reinterpret_cast<const void*>(kPerformCensus));
