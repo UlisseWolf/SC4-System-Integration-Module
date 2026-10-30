@@ -1,5 +1,6 @@
 # Builds SC4SIM.dll on every push to staging and keeps it as a build artifact (SC4SIM.dll, SC4SIM.ini and the license
-# files). It publishes nothing: releases come only from master (build-release.yml).
+# files). The same zip is attached to the DRAFT release "staging-build", which is replaced on every push and is not
+# public. Real releases come only from master (build-release.yml).
 name: Build SC4SIM.dll (staging)
 
 on:
@@ -8,7 +9,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 concurrency:
   group: build-staging
@@ -49,3 +50,15 @@ jobs:
           name: SC4SIM-staging-${{ github.sha }}
           path: package/
           if-no-files-found: error
+
+      - name: Update the staging-build draft release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          Compress-Archive -Path package/* -DestinationPath SC4SIM-staging.zip -Force
+          gh release delete staging-build --yes 2>$null
+          $global:LASTEXITCODE = 0
+          gh release create staging-build SC4SIM-staging.zip --draft --target '${{ github.sha }}' `
+            --title 'SC4SIM.dll staging build' `
+            --notes "Test build of staging at ${{ github.sha }}. Draft, replaced on every push to staging."
