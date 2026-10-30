@@ -185,8 +185,8 @@ The reverse-engineering notes are in [`docs/mixed-occupancy.md`](docs/mixed-occu
 
 ## Manufacturing (I-M) zone
 
-> **Experimental, off by default:** compiled and statically checked, not yet tested in game. Test it on a copy of a
-> region.
+> **Experimental, off by default:** compiled and checked against the 1.1.641 executable, not yet tested in game.
+> Test it on a copy of a region.
 
 In the base game the I-D, I-M and I-HT developers all ask for the same zone, so dirty, manufacturing and high-tech
 industry mix freely. SC4SIM can give manufacturing a zone of its own. The game has exactly 16 zone types and the

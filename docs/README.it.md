@@ -151,7 +151,8 @@ Analisi completa in `docs/mixed-occupancy.md`. Impostazioni: `[MixedOccupancy] E
 
 ## Zona industriale manifatturiera I-M (1.8.0)
 
-**Sperimentale e disattivata di default: compilata e verificata staticamente, non ancora provata in gioco. Provarla
+**Sperimentale e disattivata di default: compilata, verificata sull'eseguibile 1.1.641 (disassemblato ed emulato),
+non ancora provata in gioco. Provarla
 su una copia della regione.**
 
 Nel gioco base gli sviluppatori I-D, I-M e I-HT chiedono tutti la zona 8, e la zona 9 accetta gli edifici della zona 8:
@@ -163,8 +164,10 @@ Cosa cambia (indirizzi della 1.1.641, dalle note di decompilazione):
   lì; I-D e I-HT chiedono ancora la zona 8 e non ci entrano mai;
 - `GrowthStageFitsInZone` (0x00695340): ogni stadio va bene nello slot (altrimenti ogni lotto fallisce con il
   motivo 6, WrongZone). Senza questo hook il modulo non cambia niente;
-- `IsSuitableForConstruction` (0x00695430): niente controllo di ricchezza sul valore del terreno nello slot, come
-  nelle zone 7, 8 e 9 (`IgnoreLandValue`);
+- niente controllo di ricchezza sul valore del terreno nello slot, come nelle zone 7, 8 e 9 (`IgnoreLandValue`):
+  `IsSuitableForConstruction` (0x00695430) fa quel controllo solo se il profilo non ha un intervallo di valore del
+  terreno, quindi il reindirizzamento dà al profilo I-M l'intervallo 0-255. Non si sovrascrive il risultato, perché
+  dopo il valore del terreno c'è ancora un controllo sullo stato del lotto;
 - `IsRCIZone` (0x004DC300): vero anche per lo slot (`RCIZoneHook`);
 - `PlaceZone` (vtable del gestore zone): con il pennello `IMZone` attivo lo strumento Industria densa piazza la zona I-M.
 
@@ -174,6 +177,10 @@ chiama per ogni ingresso possibile, confronta le risposte con le regole delle no
 e l'ordine degli argomenti, e la sostituta risponde dalla tabella registrata aggiungendo solo lo slot. Il campo della
 zona nel profilo di costruzione si trova chiamando l'originale per sviluppatori con zona nota. Se qualcosa non torna,
 non viene installato niente e il log spiega perché.
+
+Verifica sull'eseguibile: `GrowthStageFitsInZone` è `__cdecl (stadio, zona)`, `GetConstructionInfo` scrive la zona
+a +0x00 ed è lo slot 9 della vtable dello sviluppatore, `IsRCIZone` e `PlaceZone` sono gli slot 13 e 11 della vtable
+del gestore zone, senza chiamate dirette. Dettagli in `docs/manufacturing-zone.md`.
 
 Trucchi: `IMZone` attiva/disattiva il pennello, `IMZoneConvert` converte in zona I-M ogni casella vuota di industria
 densa, `IMZoneInfo` scrive stato e contatori in `SC4SIM.log`.

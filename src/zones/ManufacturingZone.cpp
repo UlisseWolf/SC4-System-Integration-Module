@@ -13,8 +13,10 @@
 //     longer in zones 8 and 9; I-D and I-HT still ask for zone 8 and never fit the new zone.
 //  2. GrowthStageFitsInZone (0x00695340): every stage fits the new zone (the game says "never" for slots 10-15, and
 //     every lot would fail with reason 6, WrongZone).
-//  3. IsSuitableForConstruction (0x00695430, building development simulator vtable): the land-value wealth test is
-//     skipped in the new zone, as the game does in zones 7, 8 and 9 (IgnoreLandValue).
+//  3. No land-value wealth test in the new zone, as the game does in zones 7, 8 and 9 (IgnoreLandValue).
+//     IsSuitableForConstruction (0x00695430) runs the wealth test only when the construction profile has no land
+//     value range (bytes +0x10 and +0x11 both 0); the redirect gives the I-M profile the full range 0-255, so the
+//     test becomes "land value 0-255", always true, and the checks after it still run.
 //  4. IsRCIZone (0x004DC300): true for the new zone (RCIZoneHook).
 //  5. PlaceZone (zone manager vtable): with the IMZone brush on, the Dense Industrial zone tool places the new zone.
 //     IMZoneConvert turns every empty dense industrial cell of the city into the new zone.
@@ -33,7 +35,15 @@
 // The I-M redirect (1) is installed only together with the stage hook (2): without it every I-M lot in the new
 // zone would fail, and I-M would grow nowhere. Without the redirect the game is unchanged.
 //
-// SimCity 4 1.1.641 only. Experimental: statically checked, not tested in game.
+// Checked against the SimCity 4 1.1.641 executable (SHA-256 1189720d...0f9c), see docs/manufacturing-zone.md:
+//  * GetConstructionInfo is slot 9 of the growth developer vtable (0x00AB1488) and writes the zone at +0x00;
+//    the tract developer calls it through that slot before every BuildingFitsInZone, so the redirect reaches the
+//    whole growth path;
+//  * GrowthStageFitsInZone is __cdecl (stage, zone), called directly at 0x007084F4, 0x00708FEA and 0x007098BC;
+//  * IsRCIZone is __thiscall (zone), slot 13 of the zone manager vtable (0x00A92E00), with no direct callers;
+//  * PlaceZone is slot 11 of the same vtable (0x004DD780, 10 arguments), with no direct callers.
+// The run-time measurements below stay as a guard against other versions and other DLLs.
+// Experimental: not yet tested in game.
 //
 ////////////////////////////////////////////////////////////////////////////
 
@@ -100,12 +110,13 @@ namespace
 
 	constexpr uintptr_t kGetConstructionInfo = 0x006B38E0;
 	constexpr uintptr_t kGrowthStageFitsInZone = 0x00695340;
-	constexpr uintptr_t kIsSuitableForConstruction = 0x00695430;
 	constexpr uintptr_t kIsRCIZone = 0x004DC300;
+	constexpr uintptr_t kPlaceZone = 0x004DD780;
 
 	constexpr size_t kVtableScanSlots = 96;
-	constexpr int32_t kReasonWrongLandValue = 22;   // cISC4TractDeveloper::Outcome
-	constexpr int32_t kReasonSuccess = 27;
+	// Construction profile fields read by IsSuitableForConstruction: land value range (min, max).
+	constexpr size_t kProfileLandValueMin = 0x10;
+	constexpr size_t kProfileLandValueMax = 0x11;
 	constexpr size_t kProfileProbeSize = 0x100;     // larger than any construction profile
 
 	// The gzcom-dll interface order gives these slots; the scan confirms them against the addresses above.
@@ -194,14 +205,6 @@ namespace
 		return reinterpret_cast<uintptr_t>(*static_cast<const uint32_t* const*>(object) + slot);
 	}
 
-	bool IsInGameImage(uintptr_t address)
-	{
-		const auto base = reinterpret_cast<uintptr_t>(GetModuleHandleW(nullptr));
-		const auto* dos = reinterpret_cast<const IMAGE_DOS_HEADER*>(base);
-		const auto* nt = reinterpret_cast<const IMAGE_NT_HEADERS32*>(base + dos->e_lfanew);
-		return address >= base && address < base + nt->OptionalHeader.SizeOfImage;
-	}
-
 	// An entry the module may patch: not already a jump, call or breakpoint left by another DLL or a debugger.
 	bool IsUnpatchedEntry(uintptr_t address)
 	{
@@ -256,7 +259,8 @@ namespace
 		return zone >= 1 && zone <= 9;
 	}
 
-	bool NotesStageFits(uint32_t zone, uint32_t stage)
+	// The game compares the stage as a signed int and the zone as an unsigned one.
+	bool NotesStageFits(uint32_t zone, int32_t stage)
 	{
 		switch (zone)
 		{
@@ -314,14 +318,14 @@ namespace
 
 	bool StageFits(uint32_t zone, uint32_t stage)
 	{
-		zone &= 0xFF;
-		stage &= 0xFF;
 		if (zone == settings.slot)
 		{
 			++stageSlotHits;
 			return true;
 		}
-		return zone < stageTable.size() ? stageTable[zone][stage] : false;
+		// The callers pass a byte stage and a zone from GetZoneType, so the table covers every real call.
+		if (zone < stageTable.size() && stage < 256) return stageTable[zone][stage];
+		return NotesStageFits(zone, static_cast<int32_t>(stage));
 	}
 
 	// One replacement per measured calling convention and argument order.
@@ -352,8 +356,8 @@ namespace
 					SimLog::Write(SimLog::Level::Error, "ManufacturingZone: GrowthStageFitsInZone pops %u bytes: unknown calling convention, hook not installed.", popped);
 					return false;
 				}
-				if (b >= 1 && result != NotesStageFits(a, b)) ++mismatchZoneStage;   // (zone, stage)
-				if (a >= 1 && result != NotesStageFits(b, a)) ++mismatchStageZone;   // (stage, zone)
+				if (b >= 1 && result != NotesStageFits(a, static_cast<int32_t>(b))) ++mismatchZoneStage;   // (zone, stage)
+				if (a >= 1 && result != NotesStageFits(b, static_cast<int32_t>(a))) ++mismatchStageZone;   // (stage, zone)
 			}
 		}
 		const bool zoneFirst = mismatchZoneStage == 0;
@@ -409,6 +413,11 @@ namespace
 			if (zoneFieldWidth == 1) profile[zoneFieldOffset] = static_cast<uint8_t>(settings.slot);
 			else std::memcpy(profile + zoneFieldOffset, &settings.slot, sizeof(uint32_t));
 			++redirects;
+			// No range (0, 0) means "land value type must equal the wealth"; 0-255 accepts every land value.
+			if (settings.ignoreLandValue && profile[kProfileLandValueMin] == 0 && profile[kProfileLandValueMax] == 0)
+			{
+				profile[kProfileLandValueMax] = 0xFF;
+			}
 		}
 	}
 
@@ -472,40 +481,6 @@ namespace
 		return constructionInfoEntry.Install(VtableEntryAddress(developer, slot), reinterpret_cast<const void*>(&Hook_GetConstructionInfo));
 	}
 
-	// ---------------------------------------------------------------- hook: IsSuitableForConstruction
-
-	// gzcom-dll declares the profile as `intptr_t const&`; the module reads it as a pointer to the construction
-	// profile. If it were a pointer to a pointer, the read lands on the caller's stack and simply does not match.
-	using IsSuitableFn = bool(__thiscall*)(void* bds, const uint8_t* profile, int32_t* reason);
-	VtableEntry suitableEntry;
-	uint32_t landValueSkips = 0;
-
-	// Land value is the last test of the original (zone, lot, power, land value): when only it failed in the new
-	// zone, the building is suitable, as in zones 7, 8 and 9.
-	bool __fastcall Hook_IsSuitableForConstruction(void* bds, void* /*edx*/, const uint8_t* profile, int32_t* reason)
-	{
-		const bool ok = reinterpret_cast<IsSuitableFn>(kIsSuitableForConstruction)(bds, profile, reason);
-		if (!ok && reason && *reason == kReasonWrongLandValue && profile
-			&& ReadField(profile, zoneFieldOffset, zoneFieldWidth) == settings.slot)
-		{
-			*reason = kReasonSuccess;
-			++landValueSkips;
-			return true;
-		}
-		return ok;
-	}
-
-	bool InstallLandValueHook(cISC4BuildingDevelopmentSimulator* bds)
-	{
-		const size_t slot = FindVtableSlot(bds, kIsSuitableForConstruction);
-		if (slot == SIZE_MAX)
-		{
-			SimLog::Write(SimLog::Level::Warning, "ManufacturingZone: IsSuitableForConstruction not found: the new zone keeps the land-value wealth test.");
-			return false;
-		}
-		return suitableEntry.Install(VtableEntryAddress(bds, slot), reinterpret_cast<const void*>(&Hook_IsSuitableForConstruction));
-	}
-
 	// ---------------------------------------------------------------- hook: PlaceZone (IMZone brush)
 
 	using PlaceZoneFn = bool(__thiscall*)(void*, SC4CellRegion<int32_t>*, int32_t, bool, bool, bool, bool, bool, int64_t*, int32_t*, intptr_t);
@@ -527,12 +502,12 @@ namespace
 
 	bool InstallBrushHook(cISC4ZoneManager* zoneManager)
 	{
-		const uintptr_t entry = VtableEntryAddress(zoneManager, kZoneManagerPlaceZoneSlot);
-		if (!IsInGameImage(*reinterpret_cast<const uint32_t*>(entry)))
+		if (FindVtableSlot(zoneManager, kPlaceZone) != kZoneManagerPlaceZoneSlot)
 		{
-			SimLog::Write(SimLog::Level::Error, "ManufacturingZone: PlaceZone is already hooked by another DLL: IMZone brush not installed.");
+			SimLog::Write(SimLog::Level::Error, "ManufacturingZone: PlaceZone is not at 0x%08X in the zone manager (another DLL?): IMZone brush not installed.", kPlaceZone);
 			return false;
 		}
+		const uintptr_t entry = VtableEntryAddress(zoneManager, kZoneManagerPlaceZoneSlot);
 		return placeZoneEntry.Install(entry, reinterpret_cast<const void*>(&Hook_PlaceZone));
 	}
 
@@ -564,7 +539,6 @@ namespace
 		{
 			redirectInstalled = true;
 			rci = settings.rciZoneHook && InstallRCIZoneHook(zoneManager);
-			if (settings.ignoreLandValue) InstallLandValueHook(bds);
 			InstallBrushHook(zoneManager);
 		}
 		else
@@ -576,15 +550,14 @@ namespace
 		}
 
 		SimLog::Write(SimLog::Level::Info,
-			"ManufacturingZone: zone slot %u. I-M redirect %s, stage hook %s, IsRCIZone %s, land value skip %s, IMZone brush %s.",
+			"ManufacturingZone: zone slot %u. I-M redirect %s, stage hook %s, IsRCIZone %s, land value range %s, IMZone brush %s.",
 			settings.slot, redirectInstalled ? "on" : "OFF", stageJump.installed ? "on" : "off", rci ? "on" : "off",
-			suitableEntry.installed ? "on" : "off", placeZoneEntry.installed ? "on" : "off");
+			redirectInstalled && settings.ignoreLandValue ? "0-255" : "off", placeZoneEntry.installed ? "on" : "off");
 	}
 
 	void Uninstall()
 	{
 		placeZoneEntry.Uninstall();
-		suitableEntry.Uninstall();
 		constructionInfoEntry.Uninstall();
 		stageJump.Uninstall();
 		rciJump.Uninstall();
@@ -645,8 +618,8 @@ namespace
 		SimLog::Write(SimLog::Level::Info, "ManufacturingZone: slot %u, I-M redirect %s, brush %s.", settings.slot,
 			redirectInstalled ? "on" : "OFF", brushOn ? "on" : "off");
 		SimLog::Write(SimLog::Level::Info,
-			"ManufacturingZone: I-M construction profiles redirected %u, stage checks passed in the slot %u, land value skips %u, brush placements %u.",
-			redirects, stageSlotHits, landValueSkips, brushPlacements);
+			"ManufacturingZone: I-M construction profiles redirected %u, stage checks passed in the slot %u, brush placements %u.",
+			redirects, stageSlotHits, brushPlacements);
 		if (cISC4ZoneManager* const zoneManager = city ? city->GetZoneManager() : nullptr)
 		{
 			const auto slot = static_cast<ZoneType>(settings.slot);
