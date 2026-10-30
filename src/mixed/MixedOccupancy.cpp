@@ -47,7 +47,6 @@
 #include "cRZAutoRefCount.h"
 #include "cRZBaseString.h"
 #include "GZServPtrs.h"
-#include "SC4List.h"
 
 #include <Windows.h>
 #include <algorithm>
@@ -55,6 +54,7 @@
 #include <cwctype>
 #include <filesystem>
 #include <string>
+#include <vector>
 
 EXTERN_C IMAGE_DOS_HEADER __ImageBase;
 
@@ -109,7 +109,6 @@ namespace
 	constexpr size_t kGrowthDevGetDesirabilityMap = 13;
 	constexpr size_t kGridGetCellValue = 7;
 	constexpr size_t kLotManagerGetLot = 6;           // (cellX, cellZ, bool)
-	constexpr size_t kLotManagerGetLotsInCellRect = 7;
 	// Object at cSC4DemandSimulator + 0x4C, used by the residential branch of PerformCensus.
 	constexpr size_t kResidentialShareSlot = 30;      // SC4Percentage (cellX, cellZ), returned by hidden pointer
 	constexpr size_t kResidentialBandSlot = 35;       // float (cellX, cellZ)
@@ -825,10 +824,22 @@ namespace
 			return;
 		}
 
-		const int32_t maxX = static_cast<int32_t>(city->CellCountX()) - 1;
-		const int32_t maxZ = static_cast<int32_t>(city->CellCountZ()) - 1;
-		SC4List<cISC4Lot*> lots;
-		VCall<bool>(lotManager, kLotManagerGetLotsInCellRect, &lots, 0, 0, maxX, maxZ, true);
+		// The lots are collected cell by cell with GetLot, which hands out the game's pointer without a reference.
+		// Up to 1.8.0 this used GetLotsInCellRect with a DLL-side SC4List: the list's destructor freed the nodes the
+		// game had allocated and released every lot of the city, which corrupted the game's 16-byte allocator pool
+		// and crashed the game (0x005E16F5) soon after the monthly DebugLog report.
+		const int32_t sizeX = static_cast<int32_t>(city->CellCountX());
+		const int32_t sizeZ = static_cast<int32_t>(city->CellCountZ());
+		std::vector<cISC4Lot*> lots;
+		for (int32_t x = 0; x < sizeX; ++x)
+		{
+			for (int32_t z = 0; z < sizeZ; ++z)
+			{
+				if (cISC4Lot* const lot = lotManager->GetLot(x, z, false)) lots.push_back(lot);
+			}
+		}
+		std::sort(lots.begin(), lots.end());
+		lots.erase(std::unique(lots.begin(), lots.end()), lots.end());
 
 		uint32_t mixedLots = 0, filledSecondary = 0, emptySecondary = 0;
 		for (cISC4Lot* lot : lots)
