@@ -20,6 +20,13 @@
 //  4. IsRCIZone (0x004DC300): true for the new zone (RCIZoneHook).
 //  5. PlaceZone (zone manager vtable): with the IMZone brush on, the Dense Industrial zone tool places the new zone.
 //     IMZoneConvert turns every empty dense industrial cell of the city into the new zone.
+//  6. Zone tuning (ReadSimulatorTunableValues, call at 0x004DE192): after the game reads the Zone Manager exemplar,
+//     the slot gets the sizes and costs of medium industry and its own texture and drag colour, so a zoning mod that
+//     overrides the exemplar does not undo them (IndustrialTuning, ZoneTexture, DragColour).
+//  7. Zone tool cursor (table 0x00A92C40): the slot's cursor becomes the I-M cursor of SC4SIM_ManufacturingZone.dat
+//     instead of the high density residential one (Cursor).
+//  8. Parcels (0x0072DBA8): the slot skips the residential/commercial parcel pass, like industrial zones 7-9.
+// 6-8 are patched at application start; 1-5 when the first city opens.
 //
 // How the code stays safe without the game's bytes:
 //  * virtual functions are found by scanning the object's vtable for the address of the notes; when it is not
@@ -69,6 +76,7 @@
 #include <Windows.h>
 #include <array>
 #include <cstring>
+#include <cwchar>
 #include <cwctype>
 #include <filesystem>
 #include <iterator>
@@ -99,6 +107,10 @@ namespace
 		bool stageHook = true;
 		bool rciZoneHook = true;
 		bool ignoreLandValue = true;
+		bool industrialTuning = true;      // the slot gets the medium industrial zone's sizes and costs
+		uint32_t zoneTexture = 0x5C4D0D10; // SC4SIM_ManufacturingZone.dat, 0 = medium industrial texture
+		uint32_t dragColour = 0x9646C8FF;  // RRGGBBAA, violet
+		uint32_t cursor = 0x5C4D0D20;      // SC4SIM_ManufacturingZone.dat, 0 = game cursor
 	} settings;
 
 	bool installAttempted = false;
@@ -112,6 +124,30 @@ namespace
 	constexpr uintptr_t kGrowthStageFitsInZone = 0x00695340;
 	constexpr uintptr_t kIsRCIZone = 0x004DC300;
 	constexpr uintptr_t kPlaceZone = 0x004DD780;
+
+	// Zone tuning: cSC4ZoneManager::Init (0x004DE170) calls ReadSimulatorTunableValues (0x004DC460, __thiscall, no
+	// arguments) at 0x004DE192. It fills these zone manager fields, 16 entries each, from the Zone Manager exemplar.
+	constexpr uintptr_t kReadZoneTuning = 0x004DC460;
+	constexpr uintptr_t kReadZoneTuningCallSite = 0x004DE192;
+	constexpr size_t kZmMinZoneSize = 0x11C;   // int32  (0xE94825B2)
+	constexpr size_t kZmMaxZoneSize = 0x15C;   // int32  (0xE94825B3)
+	constexpr size_t kZmTuningFloats = 0x1A0;  // float  (0xE94825B9)
+	constexpr size_t kZmZoneCost = 0x1E0;      // sint64 (0xE94825B4)
+	constexpr size_t kZmZoneCost2 = 0x260;     // sint64 (0xE94825B5)
+	constexpr size_t kZmTexture = 0x2E0;       // uint32 FSH instance, group 0x1ABE787D (0xE94825B6)
+	constexpr size_t kZmDragColour = 0x320;    // uint32 RRGGBBAA (0xE94825B8)
+	constexpr uint32_t kReferenceZone = 8;     // medium (light) industrial
+
+	// Zone tool cursor: the tool's constructor (0x004DAE80) takes its cursor from this 16-entry table, indexed by
+	// zone type. Slots 10 and 13 use the high density residential cursor 0x02E43524.
+	constexpr uintptr_t kZoneCursorTable = 0x00A92C40;
+	constexpr uint32_t kGameSlotCursor = 0x02E43524;
+
+	// Parcellization (0x0072DB60, called at the end of DoParcellization): zones 7-9 skip the residential and
+	// commercial parcel pass ("cmp eax, 9; jg" at 0x0072DBA8). Raising the 9 to the slot makes the slot parcel like
+	// industry. Only zones that pass IsRCIZone reach this code, so slots 10-12 are not affected.
+	constexpr uintptr_t kParcelIndustrialMax = 0x0072DBA8;
+	constexpr uint8_t kParcelIndustrialMaxBytes[] = { 0x83, 0xF8, 0x09, 0x7F, 0x05 };
 
 	constexpr size_t kVtableScanSlots = 96;
 	// Construction profile fields read by IsSuitableForConstruction: land value range (min, max).
@@ -511,6 +547,109 @@ namespace
 		return placeZoneEntry.Install(entry, reinterpret_cast<const void*>(&Hook_PlaceZone));
 	}
 
+	// ---------------------------------------------------------------- static patches (installed at application start)
+
+	template <typename T>
+	T& ZoneField(void* zoneManager, size_t offset, uint32_t zone)
+	{
+		return reinterpret_cast<T*>(static_cast<uint8_t*>(zoneManager) + offset)[zone];
+	}
+
+	using ReadZoneTuningFn = void(__thiscall*)(void* zoneManager);
+
+	// After the game has read the Zone Manager exemplar (Maxis or a zoning mod), the slot gets the reference industrial
+	// zone's sizes and costs and its own texture and drag colour, whatever the exemplar says about the slot.
+	void __fastcall Hook_ReadZoneTuning(void* zoneManager, void* /*edx*/)
+	{
+		reinterpret_cast<ReadZoneTuningFn>(kReadZoneTuning)(zoneManager);
+		const uint32_t slot = settings.slot;
+		if (settings.industrialTuning)
+		{
+			ZoneField<int32_t>(zoneManager, kZmMinZoneSize, slot) = ZoneField<int32_t>(zoneManager, kZmMinZoneSize, kReferenceZone);
+			ZoneField<int32_t>(zoneManager, kZmMaxZoneSize, slot) = ZoneField<int32_t>(zoneManager, kZmMaxZoneSize, kReferenceZone);
+			ZoneField<float>(zoneManager, kZmTuningFloats, slot) = ZoneField<float>(zoneManager, kZmTuningFloats, kReferenceZone);
+			ZoneField<int64_t>(zoneManager, kZmZoneCost, slot) = ZoneField<int64_t>(zoneManager, kZmZoneCost, kReferenceZone);
+			ZoneField<int64_t>(zoneManager, kZmZoneCost2, slot) = ZoneField<int64_t>(zoneManager, kZmZoneCost2, kReferenceZone);
+		}
+		ZoneField<uint32_t>(zoneManager, kZmTexture, slot) = settings.zoneTexture
+			? settings.zoneTexture : ZoneField<uint32_t>(zoneManager, kZmTexture, kReferenceZone);
+		ZoneField<uint32_t>(zoneManager, kZmDragColour, slot) = settings.dragColour;
+	}
+
+	struct CallPatch
+	{
+		uintptr_t site = 0;
+		uint32_t originalTarget = 0;
+		bool installed = false;
+
+		bool Install(uintptr_t at, uintptr_t expectedTarget, const void* hook)
+		{
+			const auto* code = reinterpret_cast<const uint8_t*>(at);
+			const uint32_t target = static_cast<uint32_t>(at + 5 + *reinterpret_cast<const int32_t*>(at + 1));
+			if (code[0] != 0xE8 || target != expectedTarget) return false;
+			site = at;
+			originalTarget = target;
+			const int32_t rel = static_cast<int32_t>(reinterpret_cast<uintptr_t>(hook) - (at + 5));
+			installed = WriteBytes(at + 1, &rel, sizeof(rel));
+			return installed;
+		}
+
+		void Uninstall()
+		{
+			if (!installed) return;
+			const int32_t rel = static_cast<int32_t>(originalTarget - (site + 5));
+			WriteBytes(site + 1, &rel, sizeof(rel));
+			installed = false;
+		}
+	};
+
+	CallPatch zoneTuningCall;
+	uint32_t originalSlotCursor = 0;
+	bool cursorPatched = false;
+	bool parcelPatched = false;
+
+	void InstallStaticPatches()
+	{
+		const bool tuning = zoneTuningCall.Install(kReadZoneTuningCallSite, kReadZoneTuning,
+			reinterpret_cast<const void*>(&Hook_ReadZoneTuning));
+
+		const uintptr_t cursorEntry = kZoneCursorTable + 4 * settings.slot;
+		if (settings.cursor && *reinterpret_cast<const uint32_t*>(cursorEntry) == kGameSlotCursor)
+		{
+			originalSlotCursor = kGameSlotCursor;
+			cursorPatched = WriteBytes(cursorEntry, &settings.cursor, sizeof(uint32_t));
+		}
+
+		if (std::memcmp(reinterpret_cast<const void*>(kParcelIndustrialMax), kParcelIndustrialMaxBytes, sizeof(kParcelIndustrialMaxBytes)) == 0)
+		{
+			const uint8_t maxZone = static_cast<uint8_t>(settings.slot);
+			parcelPatched = WriteBytes(kParcelIndustrialMax + 2, &maxZone, 1);
+		}
+
+		SimLog::Write(tuning && parcelPatched ? SimLog::Level::Info : SimLog::Level::Warning,
+			"ManufacturingZone: zone tuning %s (texture 0x%08X, drag colour 0x%08X%s), cursor %s, industrial parcels %s.",
+			tuning ? "on" : "NOT installed (the call site differs)", settings.zoneTexture, settings.dragColour,
+			settings.industrialTuning ? ", sizes and costs of medium industry" : "",
+			cursorPatched ? "on" : (settings.cursor ? "NOT installed (the table differs)" : "off"),
+			parcelPatched ? "on" : "NOT installed (the code differs)");
+	}
+
+	void UninstallStaticPatches()
+	{
+		zoneTuningCall.Uninstall();
+		if (cursorPatched)
+		{
+			WriteBytes(kZoneCursorTable + 4 * settings.slot, &originalSlotCursor, sizeof(uint32_t));
+			cursorPatched = false;
+		}
+		if (parcelPatched)
+		{
+			const uint8_t original = kParcelIndustrialMaxBytes[2];
+			WriteBytes(kParcelIndustrialMax + 2, &original, 1);
+			parcelPatched = false;
+		}
+	}
+
 	// ---------------------------------------------------------------- install
 
 	bool redirectInstalled = false;
@@ -642,6 +781,15 @@ namespace
 		return result;
 	}
 
+	uint32_t ReadHex(const std::filesystem::path& ini, const wchar_t* key, uint32_t fallback)
+	{
+		const std::wstring value = ReadIni(ini, key, L"");
+		if (value.empty()) return fallback;
+		wchar_t* end = nullptr;
+		const unsigned long result = std::wcstoul(value.c_str(), &end, 0);
+		return end && *end == L'\0' ? static_cast<uint32_t>(result) : fallback;
+	}
+
 	bool ParseBool(const std::wstring& value, bool fallback)
 	{
 		if (value == L"true" || value == L"1" || value == L"yes" || value == L"on") return true;
@@ -660,6 +808,10 @@ void ManufacturingZone::OnStart()
 	settings.stageHook = ParseBool(ReadIni(ini, L"StageHook", L"true"), true);
 	settings.rciZoneHook = ParseBool(ReadIni(ini, L"RCIZoneHook", L"true"), true);
 	settings.ignoreLandValue = ParseBool(ReadIni(ini, L"IgnoreLandValue", L"true"), true);
+	settings.industrialTuning = ParseBool(ReadIni(ini, L"IndustrialTuning", L"true"), true);
+	settings.zoneTexture = ReadHex(ini, L"ZoneTexture", settings.zoneTexture);
+	settings.dragColour = ReadHex(ini, L"DragColour", settings.dragColour);
+	settings.cursor = ReadHex(ini, L"Cursor", settings.cursor);
 	const uint32_t slot = static_cast<uint32_t>(GetPrivateProfileIntW(L"ManufacturingZone", L"ZoneSlot", 13, ini.c_str()));
 	if (slot >= 10 && slot <= 13)
 	{
@@ -684,6 +836,12 @@ void ManufacturingZone::PostAppInit()
 			settings.slot, settings.slot == 11 ? "Airport" : "Seaport");
 	}
 
+	if (VersionDetection::GetInstance().GetGameVersion() == 641)
+	{
+		// Zone tuning, cursor and parcels are code and data of the executable: patched once, before any city loads.
+		InstallStaticPatches();
+	}
+
 	cISC4AppPtr app;
 	if (cIGZCheatCodeManager* cheats = app ? app->GetCheatCodeManager() : nullptr)
 	{
@@ -706,6 +864,7 @@ void ManufacturingZone::PostAppShutdown()
 		cheatManager.Reset();
 	}
 	Uninstall();
+	UninstallStaticPatches();
 	city = nullptr;
 }
 

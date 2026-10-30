@@ -36,6 +36,26 @@ slot, I-D and I-HT (still asking for zone 8) never fit it, and I-M no longer gro
 exclusive to its zone.** Letting I-M also grow in zones 8 and 9 would need a `BuildingFitsInZone` hook as well; it
 is not part of this version.
 
+## Zone colour, cursor and parcels (1.8.0, second pass)
+
+Tested in game with the Zoning Mod (`scoty_ZManag_maxis.dat`), which overrides the Zone Manager exemplar: the slot
+kept the Spaceport values, so the zone had no colour and parcels did not behave like industry. The DLL now sets
+the slot at run time instead of relying on an exemplar override:
+
+| Patch | Where (1.1.641) | Effect |
+| --- | --- | --- |
+| Zone tuning | call to `ReadSimulatorTunableValues` (0x004DC460) at 0x004DE192, in `cSC4ZoneManager::Init` | After the game has read the exemplar (Maxis or a zoning mod), the slot gets the medium industrial zone's minimum and maximum zone size (+0x11C, +0x15C), tuning float (+0x1A0) and both costs (+0x1E0, +0x260), its own texture (+0x2E0, `ZoneTexture`) and drag colour (+0x320, `DragColour`). |
+| Cursor | zone tool cursor table 0x00A92C40, read by the tool's constructor (0x004DAE80) | The slot's entry (0x02E43524, the high density residential cursor) becomes `Cursor`. |
+| Parcels | `cmp eax, 9; jg` at 0x0072DBA8, in 0x0072DB60 (end of `DoParcellization`) | Zones 7-9 skip the residential and commercial parcel pass; the upper bound becomes the slot. Only zones that pass `IsRCIZone` reach this code. |
+
+`DoParcellization` (0x00733F30) only parcels zones for which `IsRCIZone` is true, which the `IsRCIZone` hook gives
+the slot; its parcel layout already sends every zone above 7 to the industrial algorithm (0x0072E9B0 with 6).
+
+`SC4SIM_ManufacturingZone.dat` holds the menu item, its icon and texts, the violet zone texture
+(`7AB50E44-1ABE787D-5C4D0D10`, 8x8 DXT1 like the game's zone textures) and the I-M cursor (`AA5C3144`, groups 1, 4, 8
+and 0x32, instance `5C4D0D20`, the medium industrial cursor recoloured). It no longer overrides the Zone Manager
+exemplar.
+
 ## Checked against the executable
 
 `SimCity 4.exe` 1.1.641 (FileVersion 1.1.641.0, SHA-256
@@ -98,10 +118,7 @@ simulator); one install serves every later city.
 
 ## Data the DLL does not provide
 
-- **Zone tuning exemplar** (type 0x6534284A, group 0xE7E2C2DB, instance 0xE9482490): the slot's minimum and maximum
-  zone size, costs, zone texture and drag colour. Without a modded entry the slot keeps the Spaceport (or Military)
-  values, so the brush may be refused (zone size) or show an unexpected colour. `IMZoneConvert` skips the zone size
-  check. The exemplar holds 16-entry arrays for all zones, so an override must carry every original value.
+- **Zone tuning:** set by the DLL at run time (see above), no exemplar needed.
 - **Lots.** I-M lots may list the slot in their Zone Types (0x88EDC793). The notes have not found where the growth path
   reads this list; if it does, IRM's I-M lots need the slot added. IRM's files cannot be redistributed modified: this
   needs IRM's permission or a tool that edits the player's own copy.
@@ -119,7 +136,8 @@ nothing grows. Keep a copy of the region before trying it.
   volume (0x006C27E0) and the daily pollution sum (0x006E7FD0). The slot may behave there like Spaceport, not like
   industry: check pollution, freight trips and crime around I-M lots.
 - **`IsRCIZone` callers** have not all been traced: watch the RCI demand, data views and abandonment.
-- **The zone tool's interface** is not mapped, so there is no I-M button; the brush borrows the Dense Industrial tool.
+- **Menu:** `SC4SIM_ManufacturingZone.dat` adds "Manufacturing Industrial" to the industrial zone menu; the brush is
+  still there as a fallback.
 - The land value range 0-255 is set only when the I-M developer has no range of its own. Whether other code reads
   the profile's range (for example to pick lots) has not been traced: if I-M picks odd lots, try
   `IgnoreLandValue=false`.
@@ -134,4 +152,8 @@ ZoneSlot=13          ; 13 Spaceport (default) or 10 Military
 StageHook=true       ; required for the redirect: without it the module changes nothing
 RCIZoneHook=true     ; IsRCIZone true for the slot
 IgnoreLandValue=true ; no land-value wealth test in the slot, as in zones 7-9
+IndustrialTuning=true ; sizes and costs of medium industry
+ZoneTexture=0x5C4D0D10 ; violet texture in SC4SIM_ManufacturingZone.dat (0 = medium industrial texture)
+DragColour=0x9646C8FF ; RRGGBBAA
+Cursor=0x5C4D0D20     ; I-M cursor in SC4SIM_ManufacturingZone.dat (0 = game cursor)
 ```

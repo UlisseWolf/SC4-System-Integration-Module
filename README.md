@@ -201,8 +201,8 @@ save format is sized for them, so the new zone **reuses a slot**: Spaceport (13)
   argument order, the answers of the original rule functions) and installs nothing it cannot confirm.
 
 **Limits:**
-- the zone keeps the slot's tuning (texture, drag colour, size, costs) until a data mod changes it;
-- there is no I-M button: the brush borrows the Dense Industrial tool;
+- the zone colour, cursor and menu item need `SC4SIM_ManufacturingZone.dat`; the DLL gives the slot the sizes and
+  costs of medium industry, also with zoning mods that override the Zone Manager exemplar;
 - a city saved with I-M zones and opened without the module sees them as Spaceport (or Military);
 - pollution, traffic and crime may treat the zone like the slot's original type: this is what the in-game test has
   to check.
@@ -277,6 +277,10 @@ The reverse-engineering notes behind every address are in [`docs/sc4-powerline-t
 | | `StageHook` | `true` | Every growth stage fits the slot; required for the I-M redirect. |
 | | `RCIZoneHook` | `true` | `IsRCIZone` answers true for the slot. |
 | | `IgnoreLandValue` | `true` | No land-value wealth test in the slot. |
+| | `IndustrialTuning` | `true` | The slot gets the zone sizes and costs of medium industry. |
+| | `ZoneTexture` | `0x5C4D0D10` | Zone colour texture (violet, in `SC4SIM_ManufacturingZone.dat`); `0` = medium industrial. |
+| | `DragColour` | `0x9646C8FF` | Drag colour, RRGGBBAA. |
+| | `Cursor` | `0x5C4D0D20` | Zone tool cursor (in `SC4SIM_ManufacturingZone.dat`); `0` = game cursor. |
 | `[SC4PowerPoleCustomization]` | `Enabled` | `true` | Turns the custom power poles on or off. |
 | | `CrossZones` | `true` | Lets poles stand on empty zones and farm fields. |
 | | `DezoneUnderPoles` | `true` | Removes the zone from the cell of every new pole when the drag ends. |
