@@ -31,7 +31,9 @@
 //     I-M lots grow there unchanged.
 // 10. Industrial checks (0x004E34BF, 0x004E38A5, 0x004E3989, 0x004E3A75, 0x00467827, 0x006CCA12, 0x006CD409): the slot
 //     takes every "zone 7-9" path of the lot and zone code, so it is not split into parcels with arrows.
-// 6-10 are patched at application start (9 acts once the I-M redirect is installed); 1-5 when the first city opens.
+// 11. Zone hover tooltip: the slot's name comes from the LTEXT settings.zoneName (0x004D6C70 case table), and its extra
+//     lines are those of dense industry, freight trips and crime (0x004D5586).
+// 6-11 are patched at application start (9 acts once the I-M redirect is installed); 1-5 when the first city opens.
 //
 // How the code stays safe without the game's bytes:
 //  * virtual functions are found by scanning the object's vtable for the address of the notes; when it is not
@@ -116,6 +118,7 @@ namespace
 		uint32_t zoneTexture = 0x5C4D0D10; // SC4SIM_ManufacturingZone.dat, 0 = medium industrial texture
 		uint32_t dragColour = 0x9646C8FF;  // RRGGBBAA, violet
 		uint32_t cursor = 0x5C4D0D20;      // SC4SIM_ManufacturingZone.dat, 0 = game cursor
+		uint32_t zoneName = 0x5C4D0D04;    // LTEXT 0x2026960B-0xEA5524EB-<id> in SC4SIM_ManufacturingZone.dat, 0 = game name
 	} settings;
 
 	bool installAttempted = false;
@@ -665,7 +668,23 @@ namespace
 	};
 	constexpr size_t kIndustrialSiteCount = std::size(kIndustrialSites);
 	bool industrialSitePatched[kIndustrialSiteCount] = {};
-	uint8_t* industrialThunks = nullptr;   // one 32-byte thunk per register (eax, ecx, edi)
+	uint8_t* industrialThunks = nullptr;   // one 32-byte thunk per register (eax, ecx, edi), then the tooltip thunk
+
+	// Zone hover tooltip (0x004D4FD0): the zone type read at 0x004D5063 ([esp+0x10]) chooses the extra lines with
+	// "dec eax; cmp eax,8; ja; movzx edx,[eax+0x4D5C78]" (zones 1-3 commute, 4-6 none, 7-9 freight and crime).
+	// "mov eax,[esp+0x10]; dec eax" at 0x004D5586 becomes a call to a thunk that reads the zone and turns the slot
+	// into 9 (dense industry), so the slot gets the same lines as industry.
+	constexpr uintptr_t kTooltipZoneSite = 0x004D5586;
+	constexpr uint8_t kTooltipZoneSiteBytes[] = { 0x8B, 0x44, 0x24, 0x10, 0x48 };
+	constexpr size_t kTooltipThunkOffset = 96;
+	bool tooltipLinesPatched = false;
+
+	// Zone hover tooltip name (0x004D6C70): "jmp [edi*4+0x4D7120]" picks one case per zone, each "push 1; push <LTEXT
+	// instance>; push 0xEA5524EB". The slot's case loads the slot's game name (Spaceport); its LTEXT instance becomes
+	// settings.zoneName.
+	constexpr uintptr_t kTooltipNameTable = 0x004D7120;
+	uintptr_t tooltipNameImmediate = 0;
+	uint32_t tooltipNameOriginal = 0;
 
 	// cmp r,7 / je ok / cmp r,8 / je ok / cmp r,9 / je ok / cmp r,slot / ok: ret  (ZF = industrial)
 	void WriteThunk(uint8_t* at, Reg reg, uint8_t slot)
@@ -683,10 +702,38 @@ namespace
 
 	uint32_t InstallIndustrialSites()
 	{
-		industrialThunks = static_cast<uint8_t*>(VirtualAlloc(nullptr, 96, MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE));
+		industrialThunks = static_cast<uint8_t*>(VirtualAlloc(nullptr, 128, MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE));
 		if (!industrialThunks) return 0;
 		for (Reg reg : { kEax, kEcx, kEdi }) WriteThunk(ThunkFor(reg), reg, static_cast<uint8_t>(settings.slot));
-		FlushInstructionCache(GetCurrentProcess(), industrialThunks, 96);
+		{
+			// mov eax,[esp+0x14] (0x10 + the return address); cmp eax,slot; jne +5; mov eax,9; dec eax; ret
+			const uint8_t tooltip[] = { 0x8B, 0x44, 0x24, 0x14, 0x83, 0xF8, static_cast<uint8_t>(settings.slot), 0x75, 0x05,
+				0xB8, 0x09, 0x00, 0x00, 0x00, 0x48, 0xC3 };
+			std::memcpy(industrialThunks + kTooltipThunkOffset, tooltip, sizeof(tooltip));
+		}
+		FlushInstructionCache(GetCurrentProcess(), industrialThunks, 128);
+
+		if (std::memcmp(reinterpret_cast<const void*>(kTooltipZoneSite), kTooltipZoneSiteBytes, sizeof(kTooltipZoneSiteBytes)) == 0)
+		{
+			uint8_t call[5] = { 0xE8 };
+			const int32_t rel = static_cast<int32_t>(reinterpret_cast<uintptr_t>(industrialThunks + kTooltipThunkOffset)
+				- (kTooltipZoneSite + 5));
+			std::memcpy(call + 1, &rel, 4);
+			tooltipLinesPatched = WriteBytes(kTooltipZoneSite, call, sizeof(call));
+		}
+
+		if (settings.zoneName)
+		{
+			const uintptr_t caseAddress = *reinterpret_cast<const uint32_t*>(kTooltipNameTable + 4 * settings.slot);
+			const auto* code = reinterpret_cast<const uint8_t*>(caseAddress);
+			if (caseAddress > kTooltipNameTable - 0x1000 && caseAddress < kTooltipNameTable
+				&& code[0] == 0x6A && code[1] == 0x01 && code[2] == 0x68)
+			{
+				tooltipNameImmediate = caseAddress + 3;
+				tooltipNameOriginal = *reinterpret_cast<const uint32_t*>(tooltipNameImmediate);
+				if (!WriteBytes(tooltipNameImmediate, &settings.zoneName, sizeof(uint32_t))) tooltipNameImmediate = 0;
+			}
+		}
 
 		uint32_t patched = 0;
 		for (size_t i = 0; i < kIndustrialSiteCount; ++i)
@@ -736,6 +783,16 @@ namespace
 			WriteBytes(kIndustrialSites[i].address, kIndustrialSites[i].original.data(), kIndustrialSites[i].length);
 			industrialSitePatched[i] = false;
 		}
+		if (tooltipLinesPatched)
+		{
+			WriteBytes(kTooltipZoneSite, kTooltipZoneSiteBytes, sizeof(kTooltipZoneSiteBytes));
+			tooltipLinesPatched = false;
+		}
+		if (tooltipNameImmediate)
+		{
+			WriteBytes(tooltipNameImmediate, &tooltipNameOriginal, sizeof(uint32_t));
+			tooltipNameImmediate = 0;
+		}
 		// The thunks stay allocated: another thread could still be returning through one of them.
 	}
 
@@ -771,13 +828,14 @@ namespace
 
 		SimLog::Write(tuning && parcelPatched ? SimLog::Level::Info : SimLog::Level::Warning,
 			"ManufacturingZone: zone tuning %s (texture 0x%08X, drag colour 0x%08X%s), cursor %s, industrial parcels %s, "
-			"I-M lots of zones 8/9 in the slot %s, industrial checks %u of %u.",
+			"I-M lots of zones 8/9 in the slot %s, industrial checks %u of %u, tooltip lines %s, tooltip name %s.",
 			tuning ? "on" : "NOT installed (the call site differs)", settings.zoneTexture, settings.dragColour,
 			settings.industrialTuning ? ", sizes and costs of medium industry" : "",
 			cursorPatched ? "on" : (settings.cursor ? "NOT installed (the table differs)" : "off"),
 			parcelPatched ? "on" : "NOT installed (the code differs)",
 			lotZone ? "on" : "NOT installed (the lot configuration vtable differs)",
-			industrialSites, static_cast<uint32_t>(kIndustrialSiteCount));
+			industrialSites, static_cast<uint32_t>(kIndustrialSiteCount),
+			tooltipLinesPatched ? "on" : "NOT installed", tooltipNameImmediate ? "on" : (settings.zoneName ? "NOT installed" : "off"));
 	}
 
 	void UninstallStaticPatches()
@@ -963,6 +1021,7 @@ void ManufacturingZone::OnStart()
 	settings.zoneTexture = ReadHex(ini, L"ZoneTexture", settings.zoneTexture);
 	settings.dragColour = ReadHex(ini, L"DragColour", settings.dragColour);
 	settings.cursor = ReadHex(ini, L"Cursor", settings.cursor);
+	settings.zoneName = ReadHex(ini, L"ZoneName", settings.zoneName);
 	const uint32_t slot = static_cast<uint32_t>(GetPrivateProfileIntW(L"ManufacturingZone", L"ZoneSlot", 13, ini.c_str()));
 	if (slot >= 10 && slot <= 13)
 	{
