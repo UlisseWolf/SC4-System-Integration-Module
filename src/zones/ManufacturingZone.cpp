@@ -679,6 +679,15 @@ namespace
 	constexpr size_t kTooltipThunkOffset = 96;
 	bool tooltipLinesPatched = false;
 
+	// Before that, 0x004D32D0 picks the influences listed for an empty zoned cell with "lea eax,[ebx-1]; cmp eax,8; ja"
+	// (ebx = zone): any zone outside 1-9 gets nothing, and the tooltip skips every extra line. Those 6 bytes at
+	// 0x004D3370 become "call thunk; nop", the thunk maps the slot to case 8 (dense industry) and ends with the same
+	// compare, so the "ja" that follows is unchanged.
+	constexpr uintptr_t kTooltipGateSite = 0x004D3370;
+	constexpr uint8_t kTooltipGateSiteBytes[] = { 0x8D, 0x43, 0xFF, 0x83, 0xF8, 0x08 };
+	constexpr size_t kTooltipGateThunkOffset = 112;
+	bool tooltipGatePatched = false;
+
 	// Zone hover tooltip name (0x004D6C70): "jmp [edi*4+0x4D7120]" picks one case per zone, each "push 1; push <LTEXT
 	// instance>; push 0xEA5524EB". The slot's case loads the slot's game name (Spaceport); its LTEXT instance becomes
 	// settings.zoneName.
@@ -702,7 +711,7 @@ namespace
 
 	uint32_t InstallIndustrialSites()
 	{
-		industrialThunks = static_cast<uint8_t*>(VirtualAlloc(nullptr, 128, MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE));
+		industrialThunks = static_cast<uint8_t*>(VirtualAlloc(nullptr, 160, MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE));
 		if (!industrialThunks) return 0;
 		for (Reg reg : { kEax, kEcx, kEdi }) WriteThunk(ThunkFor(reg), reg, static_cast<uint8_t>(settings.slot));
 		{
@@ -710,8 +719,12 @@ namespace
 			const uint8_t tooltip[] = { 0x8B, 0x44, 0x24, 0x14, 0x83, 0xF8, static_cast<uint8_t>(settings.slot), 0x75, 0x05,
 				0xB8, 0x09, 0x00, 0x00, 0x00, 0x48, 0xC3 };
 			std::memcpy(industrialThunks + kTooltipThunkOffset, tooltip, sizeof(tooltip));
+			// lea eax,[ebx-1]; cmp ebx,slot; jne +5; mov eax,8; cmp eax,8; ret
+			const uint8_t gate[] = { 0x8D, 0x43, 0xFF, 0x83, 0xFB, static_cast<uint8_t>(settings.slot), 0x75, 0x05,
+				0xB8, 0x08, 0x00, 0x00, 0x00, 0x83, 0xF8, 0x08, 0xC3 };
+			std::memcpy(industrialThunks + kTooltipGateThunkOffset, gate, sizeof(gate));
 		}
-		FlushInstructionCache(GetCurrentProcess(), industrialThunks, 128);
+		FlushInstructionCache(GetCurrentProcess(), industrialThunks, 160);
 
 		if (std::memcmp(reinterpret_cast<const void*>(kTooltipZoneSite), kTooltipZoneSiteBytes, sizeof(kTooltipZoneSiteBytes)) == 0)
 		{
@@ -720,6 +733,14 @@ namespace
 				- (kTooltipZoneSite + 5));
 			std::memcpy(call + 1, &rel, 4);
 			tooltipLinesPatched = WriteBytes(kTooltipZoneSite, call, sizeof(call));
+		}
+		if (std::memcmp(reinterpret_cast<const void*>(kTooltipGateSite), kTooltipGateSiteBytes, sizeof(kTooltipGateSiteBytes)) == 0)
+		{
+			uint8_t call[6] = { 0xE8, 0, 0, 0, 0, 0x90 };
+			const int32_t rel = static_cast<int32_t>(reinterpret_cast<uintptr_t>(industrialThunks + kTooltipGateThunkOffset)
+				- (kTooltipGateSite + 5));
+			std::memcpy(call + 1, &rel, 4);
+			tooltipGatePatched = WriteBytes(kTooltipGateSite, call, sizeof(call));
 		}
 
 		if (settings.zoneName)
@@ -783,6 +804,11 @@ namespace
 			WriteBytes(kIndustrialSites[i].address, kIndustrialSites[i].original.data(), kIndustrialSites[i].length);
 			industrialSitePatched[i] = false;
 		}
+		if (tooltipGatePatched)
+		{
+			WriteBytes(kTooltipGateSite, kTooltipGateSiteBytes, sizeof(kTooltipGateSiteBytes));
+			tooltipGatePatched = false;
+		}
 		if (tooltipLinesPatched)
 		{
 			WriteBytes(kTooltipZoneSite, kTooltipZoneSiteBytes, sizeof(kTooltipZoneSiteBytes));
@@ -835,7 +861,7 @@ namespace
 			parcelPatched ? "on" : "NOT installed (the code differs)",
 			lotZone ? "on" : "NOT installed (the lot configuration vtable differs)",
 			industrialSites, static_cast<uint32_t>(kIndustrialSiteCount),
-			tooltipLinesPatched ? "on" : "NOT installed", tooltipNameImmediate ? "on" : (settings.zoneName ? "NOT installed" : "off"));
+			tooltipLinesPatched && tooltipGatePatched ? "on" : "NOT installed", tooltipNameImmediate ? "on" : (settings.zoneName ? "NOT installed" : "off"));
 	}
 
 	void UninstallStaticPatches()

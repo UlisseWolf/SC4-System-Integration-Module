@@ -53,6 +53,7 @@ the slot at run time instead of relying on an exemplar override:
 | Industrial checks | inline "zone 7-9" tests at 0x004E34BF, 0x004E38A5, 0x004E3989, 0x004E3A75 (lot and cell queries), 0x00467827 (1x1 zone lots after demolition), 0x006CCA12 and 0x006CD409 (lot orientation and road access) | Each test is replaced by a call to a generated thunk that also accepts the slot, then the site's own branch. The slot takes every industrial path, so it is not split into R/C-style parcels with arrows. Every site is compared byte for byte before patching and restored on exit. |
 
 | Hover tooltip lines | `mov eax,[esp+0x10]; dec eax` at 0x004D5586, in the zone tooltip builder 0x004D4FD0 | The zone picks the extra lines (1-3 commute, 7-9 freight trips and crime). A thunk turns the slot into 9, so the I-M zone shows the dense industrial lines. |
+| Hover tooltip gate | `lea eax,[ebx-1]; cmp eax,8` at 0x004D3370, in 0x004D32D0 | For an empty zoned cell this picks the influences to list (zones 1-9); any other zone returned nothing and the tooltip skipped every line. A thunk maps the slot to the dense industrial case. |
 | Hover tooltip name | the slot's case of the jump table 0x004D7120 in 0x004D6C70 | The LTEXT instance of the case (Spaceport, `EA5524EB-CA5BBE78`) becomes `ZoneName` (`EA5524EB-5C4D0D04`, "Manufacturing Industrial" in `SC4SIM_ManufacturingZone.dat`). |
 
 This answers the open question of the decompilation notes: the lot's zone list **is** checked on the growth path.
