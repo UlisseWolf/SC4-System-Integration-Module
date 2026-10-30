@@ -13,7 +13,10 @@
 //  2. replaces cSC4Lot::GetOccupancy (vtable slot 61): occupancy counts only the class of the building's
 //     own purpose, so it never exceeds 100% and the secondary class cannot make the building decline;
 //  3. wraps cSC4DemandSimulator::PerformCensus (both call sites) and adds the secondary types to the
-//     census with the game's residential or job formula, so they count towards the RCI demand.
+//     census with the game's residential or job formula, so they count towards the RCI demand;
+//  4. replaces cISC4TrafficSource::UpdateTrafficVolume of the lot (vtable 0x00AB1914, slot 4) for lots whose
+//     travel population has a class other than their zone's: residents commute and industry ships freight
+//     whatever the zone (see "hook 4" below). MixedTraffic=false in SC4SIM.ini keeps the game's trips.
 //
 // The secondary types are filled by the game itself: cSC4GrowthDeveloper::DoIdle (0x006B5F20) calls
 // cSC4TractDeveloper::UpdatePopulation (0x00706BC0, call at 0x006B6A65) for every growth developer and every
@@ -45,6 +48,7 @@
 
 #include <Windows.h>
 #include <algorithm>
+#include <cmath>
 #include <cwctype>
 #include <filesystem>
 #include <string>
@@ -431,6 +435,331 @@ namespace
 		});
 	}
 
+	// ---------------------------------------------------------------- hook 4: UpdateTrafficVolume (trips)
+	//
+	// cSC4Lot implements cISC4TrafficSource at lot + 0x1C (vtable 0x00AB1914). Slot 4, UpdateTrafficVolume
+	// (0x006C27E0), turns the lot's travel population into trips, and chooses the trips by the lot's ZONE:
+	//  * residential zone: commuters (trip type 0, 1 or 2 = R$, R$$, R$$$) from the travel population of the first
+	//    R type that has one, n = max(1, floor(population x share)), spread over the 3 job wealths;
+	//  * industrial zone: freight (trip type 3), n = ceil((I-A + I-D + I-M + I-HT) x freight factor), only with road
+	//    access and without a travel designate;
+	//  * commercial zone: no trips.
+	// A lot keeps trips of one type only: the update erases the other types. The travel population itself
+	// (cSC4Lot::AddTravelPopulation, 0x006C0BA0) already holds every type of the lot, secondary ones included.
+	//
+	// The hook keeps the original for every lot whose travel population only has the class of its zone. For the
+	// others (residents in a C or I lot, industry in an R or C lot, or a designate that collects them) it builds
+	// commuters and freight with the game's formulas and reconciles the trip list per trip type, with the game's
+	// algorithm, without erasing the other type.
+
+	constexpr uintptr_t kTrafficSourceVtableUpdateTrafficVolume = 0x00AB1924;
+	constexpr uintptr_t kOriginalUpdateTrafficVolume = 0x006C27E0;
+	constexpr uintptr_t kGameOperatorNew = 0x0090CF54;      // cdecl void* (size_t)
+	constexpr uintptr_t kGameOperatorDelete = 0x0090CF63;   // cdecl void (void*)
+	constexpr uintptr_t kTripListPushFront = 0x006C1E10;    // thiscall (list*, const cSC4TripData*), copies the data
+	constexpr uintptr_t kTripListErase = 0x006C0FA0;        // thiscall (list*, node** out, node* it): *out = next
+	constexpr uintptr_t kTripListClear = 0x006C0FF0;        // thiscall (list*)
+	constexpr uintptr_t kCommuteShareSimPtr = 0x00B43DA4;   // object whose slot 30 gives the commuting share of a cell
+	constexpr uintptr_t kTripRatesSimPtr = 0x00B43DA8;      // slot 26: job wealth split; slot 27: freight factor
+	constexpr uintptr_t kPercentScale = 0x00A80AA0;         // 100.0
+
+	constexpr size_t kTrafficSourceOffsetInLot = 0x1C;
+	constexpr size_t kTrafficSourceTripList = 0x68;          // SC4List<cSC4TripData> (lot + 0x84)
+	constexpr size_t kTrafficSourceRandomByte = 0x6C;        // per-lot byte used to pick one job wealth (lot + 0x88)
+
+	constexpr size_t kLotHasRoadAccess = 28;
+	constexpr size_t kLotGetZoneType = 31;
+	constexpr size_t kLotIsInLivableState = 37;
+	constexpr size_t kLotGetTravelPopulation = 56;
+	constexpr size_t kLotGetTravelDesignate = 59;
+	constexpr size_t kCommuteShareSlot = 30;                 // SC4Percentage (cellX, cellZ), hidden result pointer
+	constexpr size_t kJobWealthSplitSlot = 26;               // (wealth 1..3, vector<float>* of 3)
+	constexpr size_t kFreightFactorSlot = 27;                // float ()
+
+	constexpr uint8_t kTripTypeFreight = 3;
+	constexpr uint8_t kTripFlagPlaceholder = 2;             // cSC4TripData + 0x1E
+	constexpr uint8_t kTripStatePending = 4;                // cSC4TripData + 0x1F
+	constexpr uint8_t kTripStatePending2 = 5;
+
+	// cSC4TripData (0x2C bytes): two vectors, then the trip fields. The list node is {next, prev, data}.
+	struct TripData
+	{
+		uint32_t vector1[3];
+		uint32_t vector2[3];
+		uint32_t count;     // + 0x18
+		uint8_t type;       // + 0x1C: 0..2 commuters of R$..R$$$, 3 freight
+		uint8_t wealth;     // + 0x1D: job wealth index 0..2
+		uint8_t flags;      // + 0x1E
+		uint8_t state;      // + 0x1F
+		uint16_t word20;
+		uint16_t word22;
+		uint32_t dword24;
+		uint32_t dword28;
+	};
+	static_assert(sizeof(TripData) == 0x2C);
+
+	struct TripNode
+	{
+		TripNode* next;
+		TripNode* prev;
+		TripData data;
+	};
+
+	struct TripList
+	{
+		TripNode* header;
+	};
+
+	using UpdateTrafficVolumeFn = bool(__thiscall*)(void* trafficSource);
+	UpdateTrafficVolumeFn originalUpdateTrafficVolume = nullptr;
+	bool mixedTraffic = true;
+
+	void* GameNew(size_t size) { return reinterpret_cast<void*(__cdecl*)(size_t)>(kGameOperatorNew)(size); }
+	void GameDelete(void* p) { reinterpret_cast<void(__cdecl*)(void*)>(kGameOperatorDelete)(p); }
+
+	TripNode* EraseTrip(TripList* list, TripNode* node)
+	{
+		TripNode* next = nullptr;
+		reinterpret_cast<TripNode**(__thiscall*)(TripList*, TripNode**, TripNode*)>(kTripListErase)(list, &next, node);
+		return next;
+	}
+
+	void AddTrip(TripList* list, uint8_t type, uint8_t wealth, uint32_t count, uint8_t flags, uint8_t state)
+	{
+		TripData data{};
+		data.count = count;
+		data.type = type;
+		data.wealth = wealth;
+		data.flags = flags;
+		data.state = state;
+		reinterpret_cast<void(__thiscall*)(TripList*, const TripData*)>(kTripListPushFront)(list, &data);
+	}
+
+	uint16_t TravelPopulation(void* lot, uint32_t type)
+	{
+		return VCall<uint16_t>(lot, kLotGetTravelPopulation, type);
+	}
+
+	// The game's job wealth split for commuters of `residentWealth` (1..3): three fractions.
+	void GetJobWealthSplit(uint32_t residentWealth, float split[3])
+	{
+		split[0] = split[1] = split[2] = 0.0f;
+		void* const rates = *reinterpret_cast<void**>(kTripRatesSimPtr);
+		if (!rates) return;
+		// A game vector<float> of three zeros, allocated with the game's allocator like the original.
+		struct { float* begin; float* end; float* capacity; } vec{};
+		vec.begin = static_cast<float*>(GameNew(3 * sizeof(float)));
+		if (!vec.begin) return;
+		vec.begin[0] = vec.begin[1] = vec.begin[2] = 0.0f;
+		vec.end = vec.capacity = vec.begin + 3;
+		VCall<void>(rates, kJobWealthSplitSlot, residentWealth, static_cast<void*>(&vec));
+		if (vec.begin && vec.end - vec.begin >= 3)
+		{
+			split[0] = vec.begin[0];
+			split[1] = vec.begin[1];
+			split[2] = vec.begin[2];
+		}
+		if (vec.begin) GameDelete(vec.begin);
+	}
+
+	// Commuter trips per job wealth, as UpdateTrafficVolume computes them. Returns the trip type (0..2) or -1.
+	int ComputeCommuters(void* lot, void* trafficSource, uint16_t trips[3])
+	{
+		static constexpr uint32_t kResidentTypes[3] = { 0x1010, 0x1020, 0x1030 };
+		uint16_t population = 0;
+		int tripType = -1;
+		for (int i = 0; i < 3 && population == 0; ++i)
+		{
+			population = TravelPopulation(lot, kResidentTypes[i]);
+			if (population != 0) tripType = i;
+		}
+		if (tripType < 0) return -1;
+
+		void* const shareSim = *reinterpret_cast<void**>(kCommuteShareSimPtr);
+		if (!shareSim) return -1;
+		int32_t cellX = 0, cellZ = 0;
+		VCall<bool>(lot, kLotGetLocation, &cellX, &cellZ);
+		float shareStorage = 0.0f;
+		const float* const share = VCall<float*>(shareSim, kCommuteShareSlot, &shareStorage, cellX, cellZ);
+		const double commuters = static_cast<double>(population) * (share ? *share : 0.0f);
+		const uint32_t n = std::max<uint32_t>(1, static_cast<uint32_t>(std::floor(commuters)));
+		const uint16_t count = static_cast<uint16_t>(std::min<uint32_t>(n, 0xFFFF));
+
+		float split[3];
+		GetJobWealthSplit(static_cast<uint32_t>(tripType + 1), split);
+		if (count < 50)
+		{
+			// Few commuters: all of them to one job wealth, picked with the lot's own random byte.
+			const uint8_t pick = *(static_cast<uint8_t*>(trafficSource) + kTrafficSourceRandomByte);
+			const float scale = *reinterpret_cast<const float*>(kPercentScale);
+			uint8_t cumulative = 1;
+			for (int i = 0; i < 3; ++i)
+			{
+				cumulative = static_cast<uint8_t>(cumulative + static_cast<uint8_t>(std::lround(split[i] * scale)));
+				if (pick < cumulative)
+				{
+					trips[i] = count;
+					break;
+				}
+			}
+		}
+		else
+		{
+			for (int i = 0; i < 3; ++i)
+			{
+				trips[i] = static_cast<uint16_t>(std::lround(static_cast<double>(count) * split[i]));
+			}
+		}
+		return tripType;
+	}
+
+	// Freight trips, as UpdateTrafficVolume computes them for an industrial lot (all on job wealth index 2).
+	bool ComputeFreight(void* lot, uint16_t trips[3])
+	{
+		if (!VCall<bool>(lot, kLotHasRoadAccess) || VCall<void*>(lot, kLotGetTravelDesignate) != nullptr)
+		{
+			return false;
+		}
+		const uint32_t industry = TravelPopulation(lot, 0x4400) + TravelPopulation(lot, 0x4300)
+			+ TravelPopulation(lot, 0x4200) + TravelPopulation(lot, 0x4100);
+		if (industry == 0) return false;
+		void* const rates = *reinterpret_cast<void**>(kTripRatesSimPtr);
+		if (!rates) return false;
+		const float factor = VCall<float>(rates, kFreightFactorSlot);
+		const double freight = std::ceil(static_cast<double>(industry) * factor);
+		trips[2] = static_cast<uint16_t>(std::clamp(freight, 0.0, 65535.0));
+		return trips[2] != 0;
+	}
+
+	// The reconcile step of UpdateTrafficVolume for one trip type, leaving the other types alone.
+	void ReconcileTrips(TripList* list, uint8_t type, const uint16_t trips[3])
+	{
+		TripNode* const end = list->header;
+		for (uint8_t wealth = 0; wealth < 3; ++wealth)
+		{
+			const uint32_t wanted = trips[wealth];
+			uint32_t have = 0;
+			for (TripNode* node = end->next; node != end; node = node->next)
+			{
+				if (node->data.type == type && node->data.wealth == wealth) have += node->data.count;
+			}
+
+			if (have < wanted)
+			{
+				uint32_t missing = wanted - have;
+				bool found = false;
+				for (TripNode* node = end->next; node != end && missing != 0; node = node->next)
+				{
+					if (node->data.type != type || node->data.wealth != wealth) continue;
+					found = true;
+					if (node->data.state == kTripStatePending || node->data.state == kTripStatePending2)
+					{
+						node->data.count += missing;
+						missing = 0;
+					}
+				}
+				if (missing != 0)
+				{
+					AddTrip(list, type, wealth, missing, 0, found ? kTripStatePending : 0);
+				}
+			}
+			else if (have > wanted)
+			{
+				uint32_t excess = have - wanted;
+				// First the trips that wait for a route (state 4), then any trip of this wealth.
+				for (int pass = 0; pass < 2 && excess != 0; ++pass)
+				{
+					for (TripNode* node = end->next; node != end && excess != 0;)
+					{
+						if (node->data.type != type || node->data.wealth != wealth
+							|| (pass == 0 && node->data.state != kTripStatePending))
+						{
+							node = node->next;
+							continue;
+						}
+						if (node->data.count > excess)
+						{
+							node->data.count -= excess;
+							excess = 0;
+							node = node->next;
+						}
+						else
+						{
+							excess -= node->data.count;
+							node = EraseTrip(list, node);
+						}
+					}
+				}
+			}
+		}
+	}
+
+	void UpdateMixedTraffic(void* lot, void* trafficSource, bool residentialZone)
+	{
+		TripList* const list = reinterpret_cast<TripList*>(static_cast<uint8_t*>(trafficSource) + kTrafficSourceTripList);
+		if (!list->header) return;
+
+		uint16_t commuters[3] = {}, freight[3] = {};
+		int commuterType = -1;
+		bool hasFreight = false;
+		if (VCall<bool>(lot, kLotIsInLivableState))
+		{
+			commuterType = ComputeCommuters(lot, trafficSource, commuters);
+			hasFreight = ComputeFreight(lot, freight);
+		}
+		const bool anyCommuters = commuterType >= 0 && (commuters[0] | commuters[1] | commuters[2]) != 0;
+
+		if (!anyCommuters && !hasFreight)
+		{
+			// No trips: the game keeps a single placeholder trip.
+			TripNode* const first = list->header->next;
+			if (first != list->header && (first->data.flags & kTripFlagPlaceholder))
+			{
+				return;
+			}
+			reinterpret_cast<void(__thiscall*)(TripList*)>(kTripListClear)(list);
+			AddTrip(list, residentialZone ? 0 : kTripTypeFreight, 0, 1, kTripFlagPlaceholder, 0);
+			return;
+		}
+
+		// Drop the placeholder and the trip types this lot no longer makes.
+		for (TripNode* node = list->header->next; node != list->header;)
+		{
+			const uint8_t type = node->data.type;
+			const bool keep = !(node->data.flags & kTripFlagPlaceholder)
+				&& ((anyCommuters && type == commuterType) || (hasFreight && type == kTripTypeFreight));
+			node = keep ? node->next : EraseTrip(list, node);
+		}
+		if (anyCommuters) ReconcileTrips(list, static_cast<uint8_t>(commuterType), commuters);
+		if (hasFreight) ReconcileTrips(list, kTripTypeFreight, freight);
+	}
+
+	bool __fastcall Hook_UpdateTrafficVolume(void* trafficSource, void* /*edx*/)
+	{
+		void* const lot = static_cast<uint8_t*>(trafficSource) - kTrafficSourceOffsetInLot;
+		if (mixedTraffic)
+		{
+			// Zone types 1-3 residential, 4-6 commercial, 7-9 industrial (byte table at 0x006C2E20).
+			const uint32_t zone = VCall<uint32_t>(lot, kLotGetZoneType);
+			const bool residentialZone = zone >= 1 && zone <= 3;
+			const bool industrialZone = zone >= 7 && zone <= 9;
+			if (residentialZone || industrialZone || (zone >= 4 && zone <= 6))
+			{
+				const bool residents = TravelPopulation(lot, 0x1010) || TravelPopulation(lot, 0x1020) || TravelPopulation(lot, 0x1030);
+				const bool industry = TravelPopulation(lot, 0x4100) || TravelPopulation(lot, 0x4200)
+					|| TravelPopulation(lot, 0x4300) || TravelPopulation(lot, 0x4400);
+				// The game handles the class of the zone; anything else needs the mixed update.
+				const bool extra = (residents && !residentialZone) || (industry && !industrialZone);
+				if (extra)
+				{
+					UpdateMixedTraffic(lot, trafficSource, residentialZone);
+					return true;
+				}
+			}
+		}
+		return originalUpdateTrafficVolume(trafficSource);
+	}
+
 	// ---------------------------------------------------------------- log report (read only)
 
 	// Writes every mixed lot with the population and capacity of each type. Nothing is changed: the game's
@@ -527,7 +856,8 @@ namespace
 
 		// Every site must still hold the game's original code: another DLL may have patched it.
 		bool ok = *reinterpret_cast<const uint32_t*>(kLotVtableGetAvailableCapacity) == kOriginalGetAvailableCapacity
-			&& *reinterpret_cast<const uint32_t*>(kLotVtableGetOccupancy) == kOriginalGetOccupancy;
+			&& *reinterpret_cast<const uint32_t*>(kLotVtableGetOccupancy) == kOriginalGetOccupancy
+			&& *reinterpret_cast<const uint32_t*>(kTrafficSourceVtableUpdateTrafficVolume) == kOriginalUpdateTrafficVolume;
 		for (uintptr_t site : kPerformCensusCallSites)
 		{
 			ok = ok && IsCallTo(site, kPerformCensus);
@@ -541,8 +871,10 @@ namespace
 
 		originalGetAvailableCapacity = reinterpret_cast<GetAvailableCapacityFn>(kOriginalGetAvailableCapacity);
 		originalGetOccupancy = reinterpret_cast<GetOccupancyFn>(kOriginalGetOccupancy);
+		originalUpdateTrafficVolume = reinterpret_cast<UpdateTrafficVolumeFn>(kOriginalUpdateTrafficVolume);
 		ok = WriteDword(kLotVtableGetAvailableCapacity, reinterpret_cast<uint32_t>(&Hook_GetAvailableCapacity))
-			&& WriteDword(kLotVtableGetOccupancy, reinterpret_cast<uint32_t>(&Hook_GetOccupancy));
+			&& WriteDword(kLotVtableGetOccupancy, reinterpret_cast<uint32_t>(&Hook_GetOccupancy))
+			&& WriteDword(kTrafficSourceVtableUpdateTrafficVolume, reinterpret_cast<uint32_t>(&Hook_UpdateTrafficVolume));
 		for (uintptr_t site : kPerformCensusCallSites)
 		{
 			ok = ok && PatchCall(site, reinterpret_cast<const void*>(&Hook_PerformCensus));
@@ -558,6 +890,7 @@ namespace
 	{
 		WriteDword(kLotVtableGetAvailableCapacity, kOriginalGetAvailableCapacity);
 		WriteDword(kLotVtableGetOccupancy, kOriginalGetOccupancy);
+		WriteDword(kTrafficSourceVtableUpdateTrafficVolume, kOriginalUpdateTrafficVolume);
 		for (uintptr_t site : kPerformCensusCallSites)
 		{
 			PatchCall(site, reinterpret_cast<const void*>(kPerformCensus));
@@ -584,6 +917,8 @@ void MixedOccupancy::OnStart()
 	enabled = ParseBool(value, true);
 	GetPrivateProfileStringW(L"MixedOccupancy", L"DebugLog", L"false", value, 32, ini.c_str());
 	debugLog = ParseBool(value, false);
+	GetPrivateProfileStringW(L"MixedOccupancy", L"MixedTraffic", L"true", value, 32, ini.c_str());
+	mixedTraffic = ParseBool(value, true);
 }
 
 void MixedOccupancy::PostAppInit()
@@ -608,7 +943,8 @@ void MixedOccupancy::PostAppInit()
 		}
 	}
 	SimLog::Write(SimLog::Level::Info,
-		"MixedOccupancy: enabled (R, C and I joint occupancy: lot capacity, occupancy and census hooks, MixedOccupancy cheat).");
+		"MixedOccupancy: enabled (R, C and I joint occupancy: lot capacity, occupancy, census and traffic hooks, "
+		"MixedOccupancy cheat). Mixed traffic: %s.", mixedTraffic ? "on" : "off (MixedTraffic=false)");
 }
 
 void MixedOccupancy::PostAppShutdown()

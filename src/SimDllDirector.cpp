@@ -33,6 +33,10 @@
 // Version 1.6.0:
 //  * Mixed occupancy with industry: any two or three of R, C and I on one lot (RC, RI, CI, RCI); industrial
 //    purposes can be the primary class.
+//
+// Version 1.7.0:
+//  * Mixed traffic: lots whose travel population has a class other than their zone's make commuter and freight
+//    trips for it (UpdateTrafficVolume hook, MixedTraffic in SC4SIM.ini).
 // The reward creators themselves are Lua (create_reward_utilities, ...): reward scripts call them while the game
 // compiles them, before any DLL can reach the city's Lua, so they live in the SIM Lua package 0x0151A000.
 #include "SimLog.h"

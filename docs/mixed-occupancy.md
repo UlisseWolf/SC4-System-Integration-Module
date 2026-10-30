@@ -1,6 +1,6 @@
 # Mixed residential, commercial and industrial occupancy (SC4SIM)
 
-SC4SIM 1.5.0 (updated in 1.5.1 and 1.6.0) lets one building hold residents, commercial jobs and industrial jobs, with
+SC4SIM 1.5.0 (updated in 1.5.1, 1.6.0 and 1.7.0) lets one building hold residents, commercial jobs and industrial jobs, with
 independent capacities. Any two classes work (RC, RI, CI), and so do all three (RCI). Industry was added in 1.6.0. The analysis was done on the SimCity 4 1.1.641 executable (`SimCity 4.exe`, MD5
 `bfd49573d6588866344832b95069ce8f`). It starts from the "Allow Joint Occupancy" notes (26 October 2026), which this
 document checks and extends. Every address below was checked in the disassembly of that executable.
@@ -144,6 +144,58 @@ primary. That is what we want: the lot stays an R lot (or a C lot) for the game.
 `census` is the `map<uint32_t, float>` at `this+0x1C`; its `operator[]` is `0x006A3170`. Only the primary type
 of each lot is counted.
 
+### Trips: travel population and UpdateTrafficVolume
+
+**Travel population.** `cSC4LotDeveloper::UpdateTravelPopulations` (lot developer vtable `0x00AB1B98`, slot 35,
+`0x006C6340`) works over the lots of a business unit:
+- it resets every lot's travel population;
+- it calls `designate->AddTravelPopulation(lot)` on the lot's travel designate, or on the lot itself
+  (`0x006C0BA0`).
+
+`AddTravelPopulation` adds two things:
+- **every** type of `GetPopulations()`, secondary types included, to the map at `lot+0x60`;
+- `GetJobs()` (primary type only) to the floats at `lot+0x6C..0x74`.
+
+**Trips.** `cSC4Lot` implements `cISC4TrafficSource` at `lot+0x1C` (vtable `0x00AB1914`). Its slot 4,
+`UpdateTrafficVolume` (`0x006C27E0`), turns the travel population into trips (`cSC4TripData`, list at `lot+0x84`).
+It chooses the trips from the lot's **zone** (`GetZoneType`, slot 31; byte table `0x006C2E20`: zones 1-3 → R,
+4-6 → C, 7-9 → I):
+
+- **R zone, commuters.** The trip type is 0, 1 or 2, from the first R type with a travel population (R$, then R$$,
+  then R$$$).
+  - `n = max(1, floor(population × share))`, where `share` comes from slot 30 of `[0x00B43DA4]` at the lot's cell.
+  - Under 50 commuters, all of them go to one job wealth, picked with the per-lot byte at `lot+0x88` against the
+    split from slot 26 of `[0x00B43DA8]`. From 50 commuters, they are spread over the 3 job wealths by that split.
+- **I zone, freight.** The trip type is 3, and the lot needs road access and no designate.
+  - `n = ceil((I-A + I-D + I-M + I-HT) × factor)`, where `factor` comes from slot 27 of `[0x00B43DA8]`.
+  - All the trips go on job wealth index 2.
+- **C zone, nothing.** Commercial lots are only destinations.
+
+Then the trip list is reconciled with the wanted counts. With no trips, the list keeps one placeholder (flag 2 at
+`+0x1E`). Otherwise, for each job wealth:
+- nodes **of any other trip type are erased**;
+- if trips are missing, the count of a node in state 4/5 (`+0x1F`) is raised, or a new node is added;
+- if there are too many trips, the state-4 nodes are cut first, then the others.
+
+The list helpers are `0x006C1E10` (push front with a copy), `0x006C0FA0` (erase) and `0x006C0FF0` (clear). The
+`cSC4TripData` layout (`0x2C` bytes) is:
+
+| Offset | Field |
+| --- | --- |
+| +0x00, +0x0C | two vectors |
+| +0x18 | count |
+| +0x1C | trip type |
+| +0x1D | job wealth index |
+| +0x1E | flags |
+| +0x1F | state |
+
+So the travel population of a mixed lot already holds the secondary residents and industry, but the zone decides
+the single trip type. A C-zone lot never makes trips, and an R-zone lot never ships freight.
+
+**Destinations.** The traffic simulator (vtable `0x00AB33D0`) counts the reachable occupants of each sub-network
+from `GetPopulations` (`0x00716180`, all types). So secondary jobs count as reachable jobs. How the pathfinder
+(vtable `0x00AB2150`) picks the destination lot of a single trip was not traced.
+
 ## What SC4SIM changes
 
 | # | Hook | Behaviour for mixed lots |
@@ -151,16 +203,18 @@ of each lot is counted.
 | 1 | vtable `0x00AB1A80` (slot 52) → `GetAvailableCapacity` | Same state test. Another class never reduces the room, so residents, shops and industry no longer compete. Within one class, the game's rule **without** joint occupancy applies: R$ / R$$ / R$$$ (or CS$ / CS$$ / …, or I-D / I-M / …) stay exclusive, so the first to move in takes the building, as in the unmodified building. It returns the capacity or 0, so the 16-bit wrap cannot happen. |
 | 2 | vtable `0x00AB1AA4` (slot 61) → `GetOccupancy` | `Σ population / Σ capacity` of the primary class, at most 100%. |
 | 3 | `CALL` at `0x006A7475` and `0x006A74AB` → `PerformCensus` wrapper | Calls the original, then adds each secondary type with the formula of its own class: residential for R, job (`census[t + 1]`) for C and I. |
+| 4 | traffic-source vtable `0x00AB1924` (slot 4) → `UpdateTrafficVolume` | Only for lots whose travel population has a class other than their zone's (residents outside R zones, industry outside I zones). Commuters and freight use the game's formulas whatever the zone. The list is reconciled per trip type with the game's algorithm and list helpers, without erasing the other type, so a lot can hold commuters **and** freight. Every other lot calls the original. `MixedTraffic=false` turns it off. |
 | – | `MixedOccupancy` cheat (and month starts with `DebugLog=true`) | Read only: writes every mixed lot, with the population and capacity of each type, and flags a secondary type whose wealth differs from the lot's. It sets no population (1.5.0 did; see UpdatePopulation above). |
 
-Before patching, the DLL checks that the game version is 641, that both vtable slots still point to the original
-functions and that both call sites are still `CALL 0x006A5A00`. If any check fails, nothing is installed.
+Before patching, the DLL checks that the game version is 641, that the three vtable slots still point to the
+original functions and that both call sites are still `CALL 0x006A5A00`. If any check fails, nothing is installed.
 
 ## Limits
 
-- **Traffic.** `GetJobs` (slot 64) and the travel code use only the primary developer type. Secondary jobs get no
-  commuters, and secondary residents do not commute. Secondary industry produces no freight trips. All of them
-  still count as capacity, population and census demand.
+- **Traffic destinations.** Since 1.7.0 secondary residents commute and secondary industry ships freight (hook 4).
+  How a commuter picks the job lot it drives to was not traced. The traffic simulator counts secondary jobs as
+  reachable occupants, but it is not verified that the pathfinder ends trips at them.
+- **Travel jobs.** `GetJobs` (slot 64) and so the travel jobs at `lot+0x6C..0x74` still hold the primary type only.
 - **Agriculture.** A farm lot holds only the farm building; the fields are separate lots. Secondary residents or
   shops on a farm sit on the building's lot.
 - **Query tool.** The query dialog still shows the primary capacity only (`GetOccupantCapacity`, `0x004C4160`). The
@@ -177,6 +231,7 @@ functions and that both call sites are still `CALL 0x006A5A00`. If any check fai
 [MixedOccupancy]
 Enabled=true
 DebugLog=false
+MixedTraffic=true
 ```
 
 `DebugLog=true` writes the cheat's report to `SC4SIM.log` at the start of every month. To check the game's fill, let

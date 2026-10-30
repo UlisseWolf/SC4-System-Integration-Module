@@ -1,7 +1,7 @@
 # SC4SIM — SC4 System Integration Module DLL for SimCity 4
 
 [![License: LGPL v3](https://img.shields.io/badge/License-LGPL_v3-blue.svg)](LICENSE)
-![Version](https://img.shields.io/badge/version-1.6.0-informational)
+![Version](https://img.shields.io/badge/version-1.7.0-informational)
 ![Game](https://img.shields.io/badge/SimCity_4-1.1.641-success)
 ![Platform](https://img.shields.io/badge/platform-Windows_x86-lightgrey)
 [![Build and release](https://github.com/UlisseWolf/SC4-System-Integration-Module/actions/workflows/build-release.yml/badge.svg?branch=master)](https://github.com/UlisseWolf/SC4-System-Integration-Module/actions/workflows/build-release.yml)
@@ -11,7 +11,7 @@
 SIM collects shared game systems that any mod can rely on, without forcing players to install a specific mod
 such as NEON.
 
-> **Status:** source release, version 1.6.0. Building with MSVC and in-game testing are the next steps.
+> **Status:** source release, version 1.7.0. Building with MSVC and in-game testing are the next steps.
 
 ---
 
@@ -39,7 +39,7 @@ such as NEON.
 | Custom power poles | 1.1.0 | Custom cable geometry, wire appearance, named pole styles switched with Tab, fractional-angle (FAR) power lines and the `keepwires` cheat. |
 | Power lines across zones | 1.3.0 | Power poles can stand on empty zones and farm fields, so lines are no longer cut by zones wider than the pole spacing. |
 | Dezoning under poles | 1.4.0 | The cell under every new pole loses its zone (optionally also on farm fields). |
-| Mixed R, C and I occupancy | 1.5.0 | Residents, commercial and industrial jobs in one building (RC, RI, CI or RCI) with independent capacities, census demand for all of them, and the `MixedOccupancy` cheat. 1.5.1: the game itself fills the secondary types. 1.6.0: industry. *Experimental, not yet tested in game.* |
+| Mixed R, C and I occupancy | 1.5.0 | Residents, commercial and industrial jobs in one building (RC, RI, CI or RCI) with independent capacities, census demand for all of them, and the `MixedOccupancy` cheat. 1.5.1: the game itself fills the secondary types. 1.6.0: industry. 1.7.0: trips for the secondary classes. *Experimental, not yet tested in game.* |
 | Advanced Water Management | 1.2.0 | The real efficiency of water buildings in the query dialog and tool tip, a monthly warning for fresh or salt water pumps that produce nothing, and the `ScanPumps` cheat. |
 
 ## Requirements
@@ -62,7 +62,7 @@ it and says so in the log:
    [Building](#building)).
 2. Copy `SC4SIM.dll` and, optionally, `SC4SIM.ini` to your SimCity 4 **Plugins** folder.
 3. Start the game. `SC4SIM.log`, created next to the DLL, should report:
-   - `SC4 SIM DLL 1.6.0`;
+   - `SC4 SIM DLL 1.7.0`;
    - `PowerPoleCustomization: installed N of N patches`;
    - `AdvancedWater: installed the water building query UI hook`;
    - `MixedOccupancy: enabled (...)`.
@@ -164,13 +164,16 @@ the building's own wealth; industrial types have a fixed wealth:
   the room. So the secondary types must have the building's own wealth (see the table above).
 - **Demand.** The demand census also counts the secondary types: the residential formula for R, the job formula
   for C and I.
+- **Trips.** The game makes trips from the lot's zone only: commuters in R zones, freight in I zones, nothing in C
+  zones. SC4SIM also lets secondary residents commute and secondary industry ship freight, with the game's
+  formulas, and a lot can hold both kinds of trips. `MixedTraffic=false` turns this off.
 - **`MixedOccupancy` cheat.** Writes every mixed lot, with the population and capacity of each type, to
   `SC4SIM.log`. It also flags a secondary type whose wealth differs from the lot's, because the game never fills
   it. It changes nothing.
 
 **Limits:**
-- secondary jobs get no commuters, and secondary residents do not commute, because the game's traffic code reads
-  only the primary type; secondary industry also produces no freight trips;
+- it is not verified that commuters choose secondary jobs as their destination: the traffic simulator counts them
+  as reachable jobs, but the pathfinder's choice of destination was not traced;
 - the query dialog shows the primary capacity only;
 - without the DLL, a saved city falls back to the game's shared-pool rule.
 
@@ -238,6 +241,7 @@ The reverse-engineering notes behind every address are in [`docs/sc4-powerline-t
 | `[AdvancedWaterManagement]` | `Enabled` | `true` | Turns Advanced Water Management on or off. |
 | `[MixedOccupancy]` | `Enabled` | `true` | Turns mixed R, C and I occupancy on or off. |
 | | `DebugLog` | `false` | Writes the cheat's report of the mixed lots to `SC4SIM.log` at the start of every month. |
+| | `MixedTraffic` | `true` | Commuters and freight for the secondary classes. |
 | `[SC4PowerPoleCustomization]` | `Enabled` | `true` | Turns the custom power poles on or off. |
 | | `CrossZones` | `true` | Lets poles stand on empty zones and farm fields. |
 | | `DezoneUnderPoles` | `true` | Removes the zone from the cell of every new pole when the drag ends. |
