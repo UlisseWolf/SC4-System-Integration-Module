@@ -41,12 +41,18 @@
 // Version 1.7.1:
 //  * Commute destinations: GetJobs also counts the secondary commercial and industrial jobs of mixed lots, so they
 //    reach the lot's maximum trip capacity and commuters can end their trips there.
+//
+// Version 1.8.0:
+//  * Manufacturing (I-M) zone on a reused zone slot, Spaceport (13) by default (src/zones, [ManufacturingZone] in
+//    SC4SIM.ini, IMZone / IMZoneConvert / IMZoneInfo cheats). Experimental and off by default.
+//    See docs/manufacturing-zone.md.
 // The reward creators themselves are Lua (create_reward_utilities, ...): reward scripts call them while the game
 // compiles them, before any DLL can reach the city's Lua, so they live in the SIM Lua package 0x0151A000.
 #include "SimLog.h"
 #include "mixed/MixedOccupancy.h"
 #include "powerpoles/PowerPoleCustomization.h"
 #include "water/AdvancedWater.h"
+#include "zones/ManufacturingZone.h"
 #include "version.h"
 
 #include "cIGZCOM.h"
@@ -122,6 +128,7 @@ public:
 		PowerPoleCustomization::OnStart();
 		AdvancedWater::OnStart();
 		MixedOccupancy::OnStart();
+		ManufacturingZone::OnStart();
 		cIGZFrameWork* const framework = pCOM->FrameWork();
 		if (framework->GetState() < cIGZFrameWork::kStatePreAppInit) framework->AddHook(this);
 		else PostAppInit();
@@ -150,8 +157,9 @@ public:
 		PowerPoleCustomization::PostAppInit(this);
 		AdvancedWater::PostAppInit();
 		MixedOccupancy::PostAppInit();
+		ManufacturingZone::PostAppInit();
 
-		// Cheat codes (keepwires, ScanPumps, MixedOccupancy) are registered by the modules; the notification is added once here.
+		// Cheat codes (keepwires, ScanPumps, MixedOccupancy, IMZone...) are registered by the modules; the notification is added once here.
 		cISC4AppPtr app;
 		if (app)
 		{
@@ -171,6 +179,7 @@ public:
 			cheatManager->RemoveNotification2(this, 0);
 			cheatManager.Reset();
 		}
+		ManufacturingZone::PostAppShutdown();
 		MixedOccupancy::PostAppShutdown();
 		AdvancedWater::PostAppShutdown();
 		PowerPoleCustomization::PostAppShutdown(this);
@@ -185,12 +194,14 @@ public:
 			PostCityInit(static_cast<cISC4City*>(static_cast<cIGZMessage2Standard*>(message)->GetVoid1()));
 			AdvancedWater::DoMessage(message);
 			MixedOccupancy::DoMessage(message);
+			ManufacturingZone::DoMessage(message);
 		}
 		else if (type == kMsgPreCityShutdown || type == kMsgCheatIssued)
 		{
 			PowerPoleCustomization::DoMessage(message);
 			AdvancedWater::DoMessage(message);
 			MixedOccupancy::DoMessage(message);
+			ManufacturingZone::DoMessage(message);
 		}
 		else if (type == AdvancedWater::kMessageSimNewMonth)
 		{

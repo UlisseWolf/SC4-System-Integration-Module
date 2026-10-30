@@ -149,6 +149,40 @@ viene scritto a ogni inizio mese. Limiti:
 
 Analisi completa in `docs/mixed-occupancy.md`. Impostazioni: `[MixedOccupancy] Enabled` e `DebugLog`.
 
+## Zona industriale manifatturiera I-M (1.8.0)
+
+**Sperimentale e disattivata di default: compilata e verificata staticamente, non ancora provata in gioco. Provarla
+su una copia della regione.**
+
+Nel gioco base gli sviluppatori I-D, I-M e I-HT chiedono tutti la zona 8, e la zona 9 accetta gli edifici della zona 8:
+niente separa l'industria manifatturiera. Il gioco ha 16 tipi di zona fissi e il salvataggio è dimensionato su 16,
+quindi la nuova zona **riusa uno slot**: Spaceport (13) di default, oppure Military (10) con `ZoneSlot`.
+
+Cosa cambia (indirizzi della 1.1.641, dalle note di decompilazione):
+- `GetConstructionInfo` (0x006B38E0, vtable dello sviluppatore): lo sviluppatore I-M chiede lo slot. I-M cresce solo
+  lì; I-D e I-HT chiedono ancora la zona 8 e non ci entrano mai;
+- `GrowthStageFitsInZone` (0x00695340): ogni stadio va bene nello slot (altrimenti ogni lotto fallisce con il
+  motivo 6, WrongZone). Senza questo hook il modulo non cambia niente;
+- `IsSuitableForConstruction` (0x00695430): niente controllo di ricchezza sul valore del terreno nello slot, come
+  nelle zone 7, 8 e 9 (`IgnoreLandValue`);
+- `IsRCIZone` (0x004DC300): vero anche per lo slot (`RCIZoneHook`);
+- `PlaceZone` (vtable del gestore zone): con il pennello `IMZone` attivo lo strumento Industria densa piazza la zona I-M.
+
+Sicurezza: le note non danno i byte né le firme, quindi la DLL misura tutto prima di applicare le patch. Le funzioni
+virtuali si cercano nella vtable per indirizzo. `GrowthStageFitsInZone` e `IsRCIZone` sono funzioni pure: la DLL le
+chiama per ogni ingresso possibile, confronta le risposte con le regole delle note, misura la convenzione di chiamata
+e l'ordine degli argomenti, e la sostituta risponde dalla tabella registrata aggiungendo solo lo slot. Il campo della
+zona nel profilo di costruzione si trova chiamando l'originale per sviluppatori con zona nota. Se qualcosa non torna,
+non viene installato niente e il log spiega perché.
+
+Trucchi: `IMZone` attiva/disattiva il pennello, `IMZoneConvert` converte in zona I-M ogni casella vuota di industria
+densa, `IMZoneInfo` scrive stato e contatori in `SC4SIM.log`.
+
+Limiti: lo slot mantiene texture, colore, dimensioni e costi dello Spaceport finché un mod di dati non li cambia;
+non c'è un pulsante I-M; una città salvata con zone I-M e aperta senza il modulo le vede come Spaceport;
+inquinamento, traffico e crimine potrebbero trattare la zona come lo slot originale. Analisi completa e punti da
+verificare in gioco in `docs/manufacturing-zone.md`. Impostazioni: `[ManufacturingZone]`.
+
 ## Advanced Water Management (1.2.0)
 
 Porting nel SC4SIM.dll di [sc4-advanced-water-management](https://github.com/0xC0000054/sc4-advanced-water-management)

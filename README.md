@@ -1,7 +1,7 @@
 # SC4SIM — SC4 System Integration Module DLL for SimCity 4
 
 [![License: LGPL v3](https://img.shields.io/badge/License-LGPL_v3-blue.svg)](LICENSE)
-![Version](https://img.shields.io/badge/version-1.7.1-informational)
+![Version](https://img.shields.io/badge/version-1.8.0-informational)
 ![Game](https://img.shields.io/badge/SimCity_4-1.1.641-success)
 ![Platform](https://img.shields.io/badge/platform-Windows_x86-lightgrey)
 [![Build and release](https://github.com/UlisseWolf/SC4-System-Integration-Module/actions/workflows/build-release.yml/badge.svg?branch=master)](https://github.com/UlisseWolf/SC4-System-Integration-Module/actions/workflows/build-release.yml)
@@ -11,7 +11,7 @@
 SIM collects shared game systems that any mod can rely on, without forcing players to install a specific mod
 such as NEON.
 
-> **Status:** source release, version 1.7.1. Building with MSVC and in-game testing are the next steps.
+> **Status:** source release, version 1.8.0. Building with MSVC and in-game testing are the next steps.
 
 ---
 
@@ -23,6 +23,7 @@ such as NEON.
 - [Advisor rewards](#advisor-rewards)
 - [Advanced Water Management](#advanced-water-management)
 - [Mixed R, C and I occupancy](#mixed-r-c-and-i-occupancy)
+- [Manufacturing (I-M) zone](#manufacturing-i-m-zone)
 - [Custom power poles](#custom-power-poles)
 - [Configuration](#configuration)
 - [Building](#building)
@@ -40,6 +41,7 @@ such as NEON.
 | Power lines across zones | 1.3.0 | Power poles can stand on empty zones and farm fields, so lines are no longer cut by zones wider than the pole spacing. |
 | Dezoning under poles | 1.4.0 | The cell under every new pole loses its zone (optionally also on farm fields). |
 | Mixed R, C and I occupancy | 1.5.0 | Residents, commercial and industrial jobs in one building (RC, RI, CI or RCI) with independent capacities, census demand for all of them, and the `MixedOccupancy` cheat. 1.5.1: the game itself fills the secondary types. 1.6.0: industry. 1.7.0: trips for the secondary classes. 1.7.1: secondary jobs as commute destinations. *Experimental, not yet tested in game.* |
+| Manufacturing (I-M) zone | 1.8.0 | A zone of its own for manufacturing industry, on a reused zone slot (Spaceport by default): I-M grows only there, I-D and I-HT never do. `IMZone`, `IMZoneConvert` and `IMZoneInfo` cheats. *Experimental, off by default, not yet tested in game.* |
 | Advanced Water Management | 1.2.0 | The real efficiency of water buildings in the query dialog and tool tip, a monthly warning for fresh or salt water pumps that produce nothing, and the `ScanPumps` cheat. |
 
 ## Requirements
@@ -62,10 +64,11 @@ it and says so in the log:
    [Building](#building)).
 2. Copy `SC4SIM.dll` and, optionally, `SC4SIM.ini` to your SimCity 4 **Plugins** folder.
 3. Start the game. `SC4SIM.log`, created next to the DLL, should report:
-   - `SC4 SIM DLL 1.7.1`;
+   - `SC4 SIM DLL 1.8.0`;
    - `PowerPoleCustomization: installed N of N patches`;
    - `AdvancedWater: installed the water building query UI hook`;
-   - `MixedOccupancy: enabled (...)`.
+   - `MixedOccupancy: enabled (...)`;
+   - `ManufacturingZone: disabled in SC4SIM.ini (...)` until you turn it on.
 
 ## Advisor rewards
 
@@ -180,6 +183,32 @@ the building's own wealth; industrial types have a fixed wealth:
 
 The reverse-engineering notes are in [`docs/mixed-occupancy.md`](docs/mixed-occupancy.md).
 
+## Manufacturing (I-M) zone
+
+> **Experimental, off by default:** compiled and statically checked, not yet tested in game. Test it on a copy of a
+> region.
+
+In the base game the I-D, I-M and I-HT developers all ask for the same zone, so dirty, manufacturing and high-tech
+industry mix freely. SC4SIM can give manufacturing a zone of its own. The game has exactly 16 zone types and the
+save format is sized for them, so the new zone **reuses a slot**: Spaceport (13) by default, or Military (10).
+
+- **Growth.** The I-M developer asks for the new zone; every growth stage fits it; there is no land-value wealth
+  test in it, as in the other industrial zones. I-M grows only in the new zone; I-D and I-HT never grow there.
+- **Placing it.** The `IMZone` cheat toggles a brush: while it is on, the **Dense Industrial** zone tool places the
+  I-M zone. `IMZoneConvert` turns every empty dense industrial cell into the I-M zone.
+- **`IMZoneInfo` cheat.** Writes the status and counters to `SC4SIM.log`.
+- **Safety.** The DLL measures the game's functions before patching them (vtable addresses, calling convention,
+  argument order, the answers of the original rule functions) and installs nothing it cannot confirm.
+
+**Limits:**
+- the zone keeps the slot's tuning (texture, drag colour, size, costs) until a data mod changes it;
+- there is no I-M button: the brush borrows the Dense Industrial tool;
+- a city saved with I-M zones and opened without the module sees them as Spaceport (or Military);
+- pollution, traffic and crime may treat the zone like the slot's original type: this is what the in-game test has
+  to check.
+
+The hook plan, the safety checks and the open points are in [`docs/manufacturing-zone.md`](docs/manufacturing-zone.md).
+
 ## Custom power poles
 
 A port of caspervg's **custom-powerlines** work
@@ -243,6 +272,11 @@ The reverse-engineering notes behind every address are in [`docs/sc4-powerline-t
 | `[MixedOccupancy]` | `Enabled` | `true` | Turns mixed R, C and I occupancy on or off. |
 | | `DebugLog` | `false` | Writes the cheat's report of the mixed lots to `SC4SIM.log` at the start of every month. |
 | | `MixedTraffic` | `true` | Commuters and freight for the secondary classes, and secondary jobs as commute destinations. |
+| `[ManufacturingZone]` | `Enabled` | `false` | Turns the I-M zone on (experimental). |
+| | `ZoneSlot` | `13` | Zone slot reused for the I-M zone: 13 Spaceport or 10 Military. |
+| | `StageHook` | `true` | Every growth stage fits the slot; required for the I-M redirect. |
+| | `RCIZoneHook` | `true` | `IsRCIZone` answers true for the slot. |
+| | `IgnoreLandValue` | `true` | No land-value wealth test in the slot. |
 | `[SC4PowerPoleCustomization]` | `Enabled` | `true` | Turns the custom power poles on or off. |
 | | `CrossZones` | `true` | Lets poles stand on empty zones and farm fields. |
 | | `DezoneUnderPoles` | `true` | Removes the zone from the cell of every new pole when the drag ends. |
@@ -295,6 +329,7 @@ src/                 SC4SIM director, log and version
 src/powerpoles/      custom power-pole module (ported from sc4-render-services)
 src/water/           Advanced Water Management module (ported from sc4-advanced-water-management)
 src/mixed/           mixed R, C and I occupancy module
+src/zones/           manufacturing (I-M) zone module
 lua/                 sim_advisor_rewards.lua (advisor reward creators)
 docs/                power-pole documentation and README.it.md (Italian notes)
 vendor/              gzcom-dll, mINI

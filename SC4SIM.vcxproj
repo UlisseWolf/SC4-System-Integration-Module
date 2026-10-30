@@ -36,7 +36,7 @@
       <SDLCheck>true</SDLCheck>
       <ConformanceMode>true</ConformanceMode>
       <LanguageStandard>stdcpp20</LanguageStandard>
-      <AdditionalIncludeDirectories>src;src\powerpoles;src\water;src\mixed;vendor\mINI\src;vendor\gzcom-dll\gzcom-dll\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>src;src\powerpoles;src\water;src\mixed;src\zones;vendor\mINI\src;vendor\gzcom-dll\gzcom-dll\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <AdditionalOptions>/utf-8 %(AdditionalOptions)</AdditionalOptions>
       <PrecompiledHeader>NotUsing</PrecompiledHeader>
     </ClCompile>
@@ -70,6 +70,8 @@
     <ClCompile Include="src\water\WaterBuildingOccupantFilter.cpp" />
     <ClCompile Include="src\water\WaterBuildingPropertyUtil.cpp" />
     <ClCompile Include="src\mixed\MixedOccupancy.cpp" />
+    <ClCompile Include="src\zones\ManufacturingZone.cpp" />
+    <ClCompile Include="src\zones\ManufacturingZone.cpp" />
     <ClCompile Include="vendor\gzcom-dll\gzcom-dll\src\cRZBaseString.cpp">
       <WarningLevel>Level3</WarningLevel>
     </ClCompile>
@@ -105,6 +107,8 @@
     <ClInclude Include="src\water\WaterBuildingOccupantFilter.h" />
     <ClInclude Include="src\water\WaterBuildingPropertyUtil.h" />
     <ClInclude Include="src\mixed\MixedOccupancy.h" />
+    <ClInclude Include="src\zones\ManufacturingZone.h" />
+    <ClInclude Include="src\zones\ManufacturingZone.h" />
     <ClInclude Include="src\water\QueryUIHooks\cIBuildingQueryHookServer.h" />
     <ClInclude Include="src\water\QueryUIHooks\cIBuildingQueryCustomToolTipHookTarget.h" />
     <ClInclude Include="src\version.h" />

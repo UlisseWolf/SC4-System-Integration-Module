@@ -24,6 +24,7 @@ add_library(SC4SIM SHARED
   src/water/WaterBuildingOccupantFilter.cpp
   src/water/WaterBuildingPropertyUtil.cpp
   src/mixed/MixedOccupancy.cpp
+  src/zones/ManufacturingZone.cpp
   ${GZCOM}/src/cRZBaseString.cpp
   ${GZCOM}/src/cRZBaseVariant.cpp
   ${GZCOM}/src/cRZCOMDllDirector.cpp
@@ -32,7 +33,7 @@ add_library(SC4SIM SHARED
   ${GZCOM}/src/StringResourceManager.cpp
   ${GZCOM}/src/cRZCellMap.cpp
 )
-target_include_directories(SC4SIM PRIVATE src src/powerpoles src/water src/mixed vendor/mINI/src ${GZCOM}/include)
+target_include_directories(SC4SIM PRIVATE src src/powerpoles src/water src/mixed src/zones vendor/mINI/src ${GZCOM}/include)
 target_link_libraries(SC4SIM PRIVATE version)
 target_compile_definitions(SC4SIM PRIVATE WIN32 _WINDOWS _USRDLL NOMINMAX)
 target_compile_options(SC4SIM PRIVATE /W4 /permissive- /utf-8)
