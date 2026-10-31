@@ -46,9 +46,15 @@
 //  * Manufacturing (I-M) zone on a reused zone slot, Spaceport (13) by default (src/zones, [ManufacturingZone] in
 //    SC4SIM.ini, IMZone / IMZoneConvert / IMZoneInfo cheats). Experimental and off by default.
 //    See docs/manufacturing-zone.md.
+//
+// Version 1.9.0:
+//  * Afterlife: DLL version of AFTERLIFE.lua (src/afterlife, [Afterlife] in SC4SIM.ini). Registers
+//    run_afterlife_balance_variables and get_news_ticker_character in the advisor Lua over the Lua ones.
+//    See docs/afterlife.md.
 // The reward creators themselves are Lua (create_reward_utilities, ...): reward scripts call them while the game
 // compiles them, before any DLL can reach the city's Lua, so they live in the SIM Lua package 0x0151A000.
 #include "SimLog.h"
+#include "afterlife/Afterlife.h"
 #include "mixed/MixedOccupancy.h"
 #include "powerpoles/PowerPoleCustomization.h"
 #include "water/AdvancedWater.h"
@@ -129,6 +135,7 @@ public:
 		AdvancedWater::OnStart();
 		MixedOccupancy::OnStart();
 		ManufacturingZone::OnStart();
+		Afterlife::OnStart();
 		cIGZFrameWork* const framework = pCOM->FrameWork();
 		if (framework->GetState() < cIGZFrameWork::kStatePreAppInit) framework->AddHook(this);
 		else PostAppInit();
@@ -195,6 +202,7 @@ public:
 			AdvancedWater::DoMessage(message);
 			MixedOccupancy::DoMessage(message);
 			ManufacturingZone::DoMessage(message);
+			Afterlife::DoMessage(message);
 		}
 		else if (type == kMsgPreCityShutdown || type == kMsgCheatIssued)
 		{
@@ -202,6 +210,7 @@ public:
 			AdvancedWater::DoMessage(message);
 			MixedOccupancy::DoMessage(message);
 			ManufacturingZone::DoMessage(message);
+			Afterlife::DoMessage(message);
 		}
 		else if (type == AdvancedWater::kMessageSimNewMonth)
 		{

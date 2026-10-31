@@ -1,7 +1,7 @@
 # SC4SIM — SC4 System Integration Module DLL for SimCity 4
 
 [![License: LGPL v3](https://img.shields.io/badge/License-LGPL_v3-blue.svg)](LICENSE)
-![Version](https://img.shields.io/badge/version-1.8.0-informational)
+![Version](https://img.shields.io/badge/version-1.9.0-informational)
 ![Game](https://img.shields.io/badge/SimCity_4-1.1.641-success)
 ![Platform](https://img.shields.io/badge/platform-Windows_x86-lightgrey)
 [![Build and release](https://github.com/UlisseWolf/SC4-System-Integration-Module/actions/workflows/build-release.yml/badge.svg?branch=master)](https://github.com/UlisseWolf/SC4-System-Integration-Module/actions/workflows/build-release.yml)
@@ -11,7 +11,7 @@
 SIM collects shared game systems that any mod can rely on, without forcing players to install a specific mod
 such as NEON.
 
-> **Status:** source release, version 1.8.0. Building with MSVC and in-game testing are the next steps.
+> **Status:** source release, version 1.9.0. Building with MSVC and in-game testing are the next steps.
 
 ---
 
@@ -25,6 +25,7 @@ such as NEON.
 - [Mixed R, C and I occupancy](#mixed-r-c-and-i-occupancy)
 - [Manufacturing (I-M) zone](#manufacturing-i-m-zone)
 - [Custom power poles](#custom-power-poles)
+- [Afterlife](#afterlife)
 - [Configuration](#configuration)
 - [Building](#building)
 - [Repository layout](#repository-layout)
@@ -42,6 +43,7 @@ such as NEON.
 | Dezoning under poles | 1.4.0 | The cell under every new pole loses its zone (optionally also on farm fields). |
 | Mixed R, C and I occupancy | 1.5.0 | Residents, commercial and industrial jobs in one building (RC, RI, CI or RCI) with independent capacities, census demand for all of them, and the `MixedOccupancy` cheat. 1.5.1: the game itself fills the secondary types. 1.6.0: industry. 1.7.0: trips for the secondary classes. 1.7.1: secondary jobs as commute destinations. *Experimental, not yet tested in game.* |
 | Manufacturing (I-M) zone | 1.8.0 | A zone of its own for manufacturing industry, on a reused zone slot (Spaceport by default): I-M grows only there, I-D and I-HT never do. `IMZone`, `IMZoneConvert` and `IMZoneInfo` cheats. *Experimental, off by default, not yet tested in game.* |
+| Afterlife | 1.9.0 | The DLL version of `AFTERLIFE.lua`: fictitious Winner / Sinner / I.M.P. statistics, registered over the Lua functions, with the constants still in `PACK_CONSTANTS.lua`. *Calculation checked against the Lua, bridge not yet tested in game.* |
 | Advanced Water Management | 1.2.0 | The real efficiency of water buildings in the query dialog and tool tip, a monthly warning for fresh or salt water pumps that produce nothing, and the `ScanPumps` cheat. |
 
 ## Requirements
@@ -64,11 +66,12 @@ it and says so in the log:
    [Building](#building)).
 2. Copy `SC4SIM.dll` and, optionally, `SC4SIM.ini` to your SimCity 4 **Plugins** folder.
 3. Start the game. `SC4SIM.log`, created next to the DLL, should report:
-   - `SC4 SIM DLL 1.8.0`;
+   - `SC4 SIM DLL 1.9.0`;
    - `PowerPoleCustomization: installed N of N patches`;
    - `AdvancedWater: installed the water building query UI hook`;
    - `MixedOccupancy: enabled (...)`;
-   - `ManufacturingZone: disabled in SC4SIM.ini (...)` until you turn it on.
+   - `ManufacturingZone: disabled in SC4SIM.ini (...)` until you turn it on;
+   - `Afterlife: run_afterlife_balance_variables registered` when a city opens.
 
 ## Advisor rewards
 
@@ -262,6 +265,23 @@ MaxPointsPerDirection=8
 
 The reverse-engineering notes behind every address are in [`docs/sc4-powerline-tool-re.md`](docs/sc4-powerline-tool-re.md).
 
+## Afterlife
+
+> **Calculation checked, bridge not yet tested in game.**
+
+The DLL version of `AFTERLIFE.lua` (Winners in Heaven, Sinners in Hell, Hell's native population, I.M.P. clients and
+kills). The numbers are fictitious and cosmetic: the module only reads the city's health, crime, education and
+population values and never changes the real simulation.
+
+- When a city opens, the DLL registers `run_afterlife_balance_variables(ret_type)` and
+  `get_news_ticker_character(event_type)` in the advisor Lua, over the Lua functions of the same name, and copies
+  every result into `afterlife_grid_var`. Scripts that call them need no change.
+- The constants stay in `PACK_CONSTANTS.lua`; the DLL reads them from the Lua tables.
+- Keep `AFTERLIFE.lua` in the pack as the fallback (and keep its `dofile("PACK_CONSTANTS.lua")` if nothing else loads
+  the constants). `[Afterlife] Enabled=false` leaves everything to the Lua.
+
+Details, differences from the Lua and the equivalence test are in [`docs/afterlife.md`](docs/afterlife.md).
+
 ## Configuration
 
 `SC4SIM.ini` sits next to the DLL; without it, the defaults are used. See the [template](SC4SIM.ini).
@@ -272,6 +292,7 @@ The reverse-engineering notes behind every address are in [`docs/sc4-powerline-t
 | `[MixedOccupancy]` | `Enabled` | `true` | Turns mixed R, C and I occupancy on or off. |
 | | `DebugLog` | `false` | Writes the cheat's report of the mixed lots to `SC4SIM.log` at the start of every month. |
 | | `MixedTraffic` | `true` | Commuters and freight for the secondary classes, and secondary jobs as commute destinations. |
+| `[Afterlife]` | `Enabled` | `true` | Registers the DLL version of the Afterlife functions in the advisor Lua. |
 | `[ManufacturingZone]` | `Enabled` | `false` | Turns the I-M zone on (experimental). |
 | | `ZoneSlot` | `13` | Zone slot reused for the I-M zone: 13 Spaceport or 10 Military. |
 | | `StageHook` | `true` | Every growth stage fits the slot; required for the I-M redirect. |
@@ -335,8 +356,9 @@ src/powerpoles/      custom power-pole module (ported from sc4-render-services)
 src/water/           Advanced Water Management module (ported from sc4-advanced-water-management)
 src/mixed/           mixed R, C and I occupancy module
 src/zones/           manufacturing (I-M) zone module
+src/afterlife/       Afterlife module (DLL version of AFTERLIFE.lua)
 lua/                 sim_advisor_rewards.lua (advisor reward creators)
-docs/                power-pole documentation and README.it.md (Italian notes)
+docs/                power-pole, mixed occupancy, I-M zone and Afterlife documentation and README.it.md (Italian notes)
 vendor/              gzcom-dll, mINI
 SC4SIM.ini           settings template
 ```
