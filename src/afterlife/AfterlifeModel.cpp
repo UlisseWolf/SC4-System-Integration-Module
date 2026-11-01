@@ -75,7 +75,7 @@ namespace
 		{ "KATIE_KILLJOY", "Katie Killjoy", "Anchor, 670 News", "Hazbin Hotel", "Sinner Demon", "text@BB3C1000" },
 		{ "TOM_TRENCH", "Tom Trench", "Co-Anchor, 670 News", "Hazbin Hotel", "Sinner Demon", "text@BB3C1001" },
 		{ "CHARLIE_MORNINGSTAR", "Charlie Morningstar", "Hotel Manager, Princess of Hell", "Hazbin Hotel", "Royal Goetia (Hellborn)", "text@BB3C1010" },
-		{ "VAGGIE", "Vaggie", "Hotel Co-Manager", "Hazbin Hotel", "Sinner Demon", "text@BB3C1011" },
+		{ "VAGGIE", "Vaggie", "Hotel Co-Manager, former Exorcist", "Hazbin Hotel", "Fallen Angel (former Exorcist)", "text@BB3C1011" },
 		{ "ALASTOR", "Alastor", "Overlord, Radio Demon", "Hazbin Hotel", "Overlord (Sinner-origin)", "text@BB3C1012" },
 		{ "VOX", "Vox", "Overlord, VoxTek CEO", "Hazbin Hotel", "Overlord (Sinner-origin)", "text@BB3C1013" },
 		{ "VALENTINO", "Valentino", "Overlord, Studio Owner", "Hazbin Hotel", "Overlord (Sinner-origin)", "text@BB3C1014" },
@@ -103,8 +103,8 @@ namespace
 		{ "MIMZY", "Mimzy", "Singer, Alastor's Acquaintance", "Hazbin Hotel", "Sinner Demon", "text@BB3C103F" },
 		{ "SUSAN", "Susan", "Hell Resident", "Hazbin Hotel", "Sinner Demon", "text@BB3C1040" },
 		{ "BAXTER", "Baxter", "Hotel Guest, Scientist", "Hazbin Hotel", "Sinner Demon", "text@BB3C1041" },
-		{ "ZEEZI", "Zeezi", "Hell Resident", "Hazbin Hotel", "Sinner Demon", "text@BB3C1042" },
-		{ "PRICK", "Prick", "Hell Resident", "Hazbin Hotel", "Sinner Demon", "text@BB3C1043" },
+		{ "ZEEZI", "Zeezi", "Overlord", "Hazbin Hotel", "Overlord (Sinner-origin)", "text@BB3C1042" },
+		{ "PRICK", "Prick", "Overlord", "Hazbin Hotel", "Overlord (Sinner-origin)", "text@BB3C1043" },
 		{ "ADAM", "Adam", "First Man, Exorcist Leader", "Hazbin Hotel", "Angel (Winner)", "text@BB3C1044" },
 		{ "LUTE", "Lute", "Exorcist Lieutenant", "Hazbin Hotel", "Exorcist (Angel)", "text@BB3C1045" },
 		{ "ABEL", "Abel", "Exorcist, Son of Adam", "Hazbin Hotel", "Angel (Winner)", "text@BB3C1046" },
@@ -130,6 +130,8 @@ namespace
 		{ "SALLIE_MAY", "Sallie May", "Millie's Sister", "Helluva Boss", "Imp (Hellborn)", "text@BB3C105F" },
 		{ "VORTEX", "Vortex", "Loona's Friend", "Helluva Boss", "Hellhound (Hellborn)", "text@BB3C1060" },
 		{ "GLITZ_AND_GLAM", "Glitz & Glam", "Imp Twin Performers", "Helluva Boss", "Imp (Hellborn)", "text@BB3C1061" },
+		{ "LEVIATHAN", "Leviathan", "Sin of Envy", "Helluva Boss", "Sin (Hellborn)", "text@BB3C1062" },
+		{ "BELPHEGOR", "Belphegor", "Sin of Sloth", "Helluva Boss", "Sin (Hellborn)", "text@BB3C1063" },
 	};
 
 	constexpr const char* kNaturalDeath[] = { "KATIE_KILLJOY", "TOM_TRENCH" };

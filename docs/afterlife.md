@@ -60,7 +60,7 @@ A value that is not a number is ignored with a warning in `SC4SIM.log`; `EDUCATI
 
 `get_news_ticker_character` picks from the roster tables `news_ticker_event_characters` and
 `hell_news_characters` of `PACK_CONSTANTS.lua`, so a pack can still change the roster in Lua. If the Lua does not
-define them, the DLL uses its built-in copy of the same 58 characters and 5 event types (`AfterlifeModel.cpp`) and
+define them, the DLL uses its built-in copy of the same 60 characters and 5 event types (`AfterlifeModel.cpp`) and
 says so once per city in `SC4SIM.log`. The roster holds the 13 original characters (ids unchanged) plus the other
 Hazbin Hotel characters (`text@BB3C1030` onward) and Helluva Boss characters (`text@BB3C1050` onward); each
 `ticker_text_id` needs a matching LTEXT in the pack. The extra characters are in no event list yet, so the ticker
