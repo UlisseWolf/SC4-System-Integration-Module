@@ -13,10 +13,11 @@
 //    for players without the DLL, and every script that calls those functions works unchanged;
 //  * the inputs are read from the `game` table (g_health_coverage_p, g_city_r_population, ga_crime, ga_education);
 //  * the constants (mortality, judgment, I.M.P., redemption and Hell's native ratios) live in the DLL, as in the other
-//    CAM scripts (CAM_LUA_Controller.dat keeps its constants inside the code): defaults in AfterlifeModel.h, each one
-//    overridable in the [Afterlife] section of SC4SIM.ini. No other Lua file is needed for the calculation;
-//  * get_news_ticker_character only picks from the roster tables news_ticker_event_characters and
-//    hell_news_characters, which the pack's Lua defines;
+//    CAM scripts (CAM_LUA_Controller.dat keeps its constants inside the code): the defaults in AfterlifeModel.h are
+//    the AFTERLIFE values of PACK_CONSTANTS.lua, each one overridable in the [Afterlife] section of SC4SIM.ini. The
+//    calculation reads no constant from Lua, so it works even if PACK_CONSTANTS.lua is not loaded;
+//  * get_news_ticker_character picks from the roster tables news_ticker_event_characters and hell_news_characters
+//    of PACK_CONSTANTS.lua; if the Lua does not define them, from the built-in copy in AfterlifeModel.cpp;
 //  * after every cycle the result is copied into the Lua table afterlife_grid_var, so scripts and UIs that read it
 //    directly see the same values as with the Lua version;
 //  * the cumulative populations are kept by the DLL and start from zero when a city opens.
@@ -322,7 +323,38 @@ namespace
 		return 0; // unknown ret_type: nil, as the Lua
 	}
 
+	bool warnedBuiltInRoster = false;
+
+	// Pushes a hell_news_characters-style table for a built-in roster entry.
+	void PushNewsCharacter(cISCLua* lua, const Afterlife::NewsCharacter& character)
+	{
+		const char* const fields[][2] = {
+			{ "full_name", character.fullName },
+			{ "role", character.role },
+			{ "source", character.source },
+			{ "species", character.species },
+			{ "ticker_text_id", character.tickerTextId },
+		};
+		lua->NewTable();
+		for (const auto& field : fields)
+		{
+			lua->PushString(field[0]);
+			lua->PushString(field[1]);
+			lua->SetTable(-3);
+		}
+	}
+
+	bool IsGlobalTable(cISCLua* lua, const char* name)
+	{
+		lua->GetGlobal(name);
+		const bool result = lua->IsTable(-1);
+		lua->Pop(1);
+		return result;
+	}
+
 	// get_news_ticker_character(event_type): hell_news_characters[random pick of news_ticker_event_characters[event_type]]
+	// The roster tables come from the pack's Lua (PACK_CONSTANTS.lua), so a pack can change them. When the Lua does not
+	// define them, the built-in copy of AfterlifeModel.cpp (same content as PACK_CONSTANTS.lua) is used instead.
 	int32_t GetNewsTickerCharacter(lua_State* luaState)
 	{
 		cRZAutoRefCount<cISCLua> lua = SCLuaUtil::GetISCLuaFromFunctionState(luaState);
@@ -336,11 +368,24 @@ namespace
 		}
 		const char* eventType = lua->ToString(1);
 
-		lua->GetGlobal("news_ticker_event_characters"); // events
-		if (!lua->IsTable(-1))
+		if (!IsGlobalTable(lua, "news_ticker_event_characters") || !IsGlobalTable(lua, "hell_news_characters"))
 		{
-			return 0;
+			if (!warnedBuiltInRoster)
+			{
+				warnedBuiltInRoster = true;
+				SimLog::Write(SimLog::Level::Info,
+					"Afterlife: the Lua news ticker roster is missing (PACK_CONSTANTS.lua not loaded?): using the built-in copy.");
+			}
+			const Afterlife::NewsCharacter* character = Afterlife::PickNewsCharacter(eventType, RandomInt);
+			if (!character)
+			{
+				return 0; // unknown event type: nil, as the Lua
+			}
+			PushNewsCharacter(lua, *character);
+			return 1;
 		}
+
+		lua->GetGlobal("news_ticker_event_characters"); // events
 		lua->PushString(eventType);
 		lua->GetTable(-2); // events, candidates
 		if (!lua->IsTable(-1))
@@ -354,10 +399,6 @@ namespace
 		}
 		lua->RawGetI(-1, RandomInt(1, count)); // events, candidates, pick
 		lua->GetGlobal("hell_news_characters"); // events, candidates, pick, characters
-		if (!lua->IsTable(-1))
-		{
-			return 0;
-		}
 		lua->PushValue(-2);
 		lua->GetTable(-2); // events, candidates, pick, characters, entry
 		if (lua->IsNil(-1))
@@ -434,6 +475,7 @@ void Afterlife::DoMessage(cIGZMessage2* message)
 	case kMessagePostCityInit:
 		state = Afterlife::State{};
 		warnedMissing = false;
+		warnedBuiltInRoster = false;
 		RegisterFunctions(static_cast<cISC4City*>(static_cast<cIGZMessage2Standard*>(message)->GetVoid1()));
 		break;
 	case kMessagePreCityShutdown:

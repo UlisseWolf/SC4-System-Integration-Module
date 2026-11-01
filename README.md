@@ -1,7 +1,7 @@
 # SC4SIM — SC4 System Integration Module DLL for SimCity 4
 
 [![License: LGPL v3](https://img.shields.io/badge/License-LGPL_v3-blue.svg)](LICENSE)
-![Version](https://img.shields.io/badge/version-1.9.0-informational)
+![Version](https://img.shields.io/badge/version-1.9.1-informational)
 ![Game](https://img.shields.io/badge/SimCity_4-1.1.641-success)
 ![Platform](https://img.shields.io/badge/platform-Windows_x86-lightgrey)
 [![Build and release](https://github.com/UlisseWolf/SC4-System-Integration-Module/actions/workflows/build-release.yml/badge.svg?branch=master)](https://github.com/UlisseWolf/SC4-System-Integration-Module/actions/workflows/build-release.yml)
@@ -11,7 +11,7 @@
 SIM collects shared game systems that any mod can rely on, without forcing players to install a specific mod
 such as NEON.
 
-> **Status:** source release, version 1.9.0. Building with MSVC and in-game testing are the next steps.
+> **Status:** source release, version 1.9.1. Building with MSVC and in-game testing are the next steps.
 
 ---
 
@@ -43,7 +43,7 @@ such as NEON.
 | Dezoning under poles | 1.4.0 | The cell under every new pole loses its zone (optionally also on farm fields). |
 | Mixed R, C and I occupancy | 1.5.0 | Residents, commercial and industrial jobs in one building (RC, RI, CI or RCI) with independent capacities, census demand for all of them, and the `MixedOccupancy` cheat. 1.5.1: the game itself fills the secondary types. 1.6.0: industry. 1.7.0: trips for the secondary classes. 1.7.1: secondary jobs as commute destinations. *Experimental, not yet tested in game.* |
 | Manufacturing (I-M) zone | 1.8.0 | A zone of its own for manufacturing industry, on a reused zone slot (Spaceport by default): I-M grows only there, I-D and I-HT never do. `IMZone`, `IMZoneConvert` and `IMZoneInfo` cheats. *Experimental, off by default, not yet tested in game.* |
-| Afterlife | 1.9.0 | The DLL version of `AFTERLIFE.lua`: fictitious Winner / Sinner / I.M.P. statistics, registered over the Lua functions, with the balance constants in the DLL and in `SC4SIM.ini`. *Calculation checked against the Lua, bridge not yet tested in game.* |
+| Afterlife | 1.9.0 | The DLL version of `AFTERLIFE.lua`: fictitious Winner / Sinner / I.M.P. statistics, registered over the Lua functions, with the balance constants in the DLL and in `SC4SIM.ini`. 1.9.1: the defaults and the news roster of `PACK_CONSTANTS.lua`. *Calculation checked against the Lua, bridge not yet tested in game.* |
 | Advanced Water Management | 1.2.0 | The real efficiency of water buildings in the query dialog and tool tip, a monthly warning for fresh or salt water pumps that produce nothing, and the `ScanPumps` cheat. |
 
 ## Requirements
@@ -66,7 +66,7 @@ it and says so in the log:
    [Building](#building)).
 2. Copy `SC4SIM.dll` and, optionally, `SC4SIM.ini` to your SimCity 4 **Plugins** folder.
 3. Start the game. `SC4SIM.log`, created next to the DLL, should report:
-   - `SC4 SIM DLL 1.9.0`;
+   - `SC4 SIM DLL 1.9.1`;
    - `PowerPoleCustomization: installed N of N patches`;
    - `AdvancedWater: installed the water building query UI hook`;
    - `MixedOccupancy: enabled (...)`;
@@ -277,7 +277,8 @@ population values and never changes the real simulation.
   `get_news_ticker_character(event_type)` in the advisor Lua, over the Lua functions of the same name, and copies
   every result into `afterlife_grid_var`. Scripts that call them need no change.
 - The balance constants live in the DLL (like the other CAM scripts keep theirs inside the code) and each one can be
-  overridden in `[Afterlife]` of `SC4SIM.ini`. **Most defaults are placeholders**: replace them with the real balance.
+  overridden in `[Afterlife]` of `SC4SIM.ini`. Since 1.9.1 the defaults are the AFTERLIFE values of
+  `PACK_CONSTANTS.lua`, and the news ticker roster has a built-in copy used when that file is not loaded.
 - Keep `AFTERLIFE.lua` in the pack as the fallback. `[Afterlife] Enabled=false` leaves everything to the Lua.
 
 Details, differences from the Lua and the equivalence test are in [`docs/afterlife.md`](docs/afterlife.md).

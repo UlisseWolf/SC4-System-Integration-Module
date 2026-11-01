@@ -16,24 +16,23 @@ namespace Afterlife
 	};
 
 	// Balance constants. They live in the DLL; SC4SIM.ini ([Afterlife], same names) overrides each one.
-	// !! PLACEHOLDERS: only BASE_MORTALITY_RATE_PER_CAPITA (the ~0.06% per month of the original comment) and the two
-	// fixed Hell counts (Fallen Angels 2, Seven Deadly Sins 7) come from AFTERLIFE.lua. Every other value is a neutral
-	// starting point to be replaced with the pack's real balance.
+	// Defaults = the AFTERLIFE section of PACK_CONSTANTS.lua (package 0BB33100): mortality_ratio, judgment_ratio,
+	// imp_ratio, redemption_ratio, hell_native_ratio and hell_native_fixed. tools/afterlife-test checks they match.
 	struct Constants
 	{
-		// mortality
-		double baseMortalityRatePerCapita = 0.0006, healthCoverageWeight = 1.0;
-		// judgment (Winner / Sinner split)
-		double educationReference = 100, baseSinRatio = 0.5, crimeWeight = 0.3, educationWeight = 0.2,
-			sinRatioMin = 0.05, sinRatioMax = 0.95;
-		// I.M.P.
-		double impClientRatio = 0.001, impSuccessChance = 0.5, impKillRandomVariance = 2, maxImpKillFractionPop = 0.01;
-		// redemption
-		double redemptionRatio = 0.001;
-		// Hell's native population, share of the Sinner population
-		double impRatio = 0.20, hellhoundRatio = 0.10, succubusRatio = 0.10, infestorRatio = 0.05, possessorRatio = 0.05,
-			baphometRatio = 0.02, reaperRatio = 0.02, goetiaArsGoetiaRatio = 0.02;
-		// Hell's fixed population
+		// mortality_ratio
+		double baseMortalityRatePerCapita = 0.0006, healthCoverageWeight = 1.5;
+		// judgment_ratio (Winner / Sinner split)
+		double educationReference = 500, baseSinRatio = 0.5, crimeWeight = 0.3, educationWeight = 0.3,
+			sinRatioMin = 0.1, sinRatioMax = 0.9;
+		// imp_ratio
+		double impClientRatio = 0.002, impSuccessChance = 0.15, impKillRandomVariance = 2, maxImpKillFractionPop = 0.01;
+		// redemption_ratio
+		double redemptionRatio = 0.0015;
+		// hell_native_ratio: Hell's native population, share of the Sinner population
+		double impRatio = 0.05, hellhoundRatio = 0.03, succubusRatio = 0.02, infestorRatio = 0.008,
+			possessorRatio = 0.005, baphometRatio = 0.001, reaperRatio = 0.0005, goetiaArsGoetiaRatio = 0.00005;
+		// hell_native_fixed: Hell's fixed population
 		double fallenAngels = 2, sevenDeadlySins = 7;
 	};
 
@@ -54,4 +53,31 @@ namespace Afterlife
 
 	// run_afterlife_balance_variables(): one cycle, same order of operations as AFTERLIFE.lua.
 	void Step(State& state, const GameInputs& game, const Constants& constants, const RandomInt& random);
+
+	// One entry of hell_news_characters (PACK_CONSTANTS.lua). `key` is the table key, e.g. "BLITZO".
+	struct NewsCharacter
+	{
+		const char* key;
+		const char* fullName;
+		const char* role;
+		const char* source;
+		const char* species;
+		const char* tickerTextId;
+	};
+
+	// One entry of news_ticker_event_characters: an event type and the keys of the characters on topic for it.
+	struct NewsEvent
+	{
+		const char* type;
+		const char* const* characters;
+		int count;
+	};
+
+	// The built-in copies of the two roster tables, used when the pack's Lua does not define them.
+	const NewsCharacter* NewsCharacters(int& count);
+	const NewsEvent* NewsEvents(int& count);
+	const NewsCharacter* FindNewsCharacter(const char* key);
+
+	// get_news_ticker_character(event_type) on the built-in roster: nullptr for an unknown event type.
+	const NewsCharacter* PickNewsCharacter(const char* eventType, const RandomInt& random);
 }

@@ -4,6 +4,8 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstring>
+#include <iterator>
 
 void Afterlife::Step(State& s, const GameInputs& game, const Constants& k, const RandomInt& random)
 {
@@ -58,4 +60,86 @@ void Afterlife::Step(State& s, const GameInputs& game, const Constants& k, const
 	s.hellNativeTotal = s.impPopulation + s.hellhoundPopulation + s.succubusPopulation + s.infestorPopulation
 		+ s.possessorPopulation + s.baphometPopulation + s.reaperPopulation + s.goetiaArsGoetiaPopulation
 		+ s.fallenAngelsPopulation + s.sevenDeadlySinsPopulation;
+}
+
+// ------------------------------------------------------------------ news ticker roster (PACK_CONSTANTS.lua)
+
+namespace
+{
+	using Afterlife::NewsCharacter;
+	using Afterlife::NewsEvent;
+
+	constexpr NewsCharacter kCharacters[] = {
+		{ "KATIE_KILLJOY", "Katie Killjoy", "Anchor, 670 News", "Hazbin Hotel", "Sinner Demon", "text@BB3C1000" },
+		{ "TOM_TRENCH", "Tom Trench", "Co-Anchor, 670 News", "Hazbin Hotel", "Sinner Demon", "text@BB3C1001" },
+		{ "CHARLIE_MORNINGSTAR", "Charlie Morningstar", "Hotel Manager, Princess of Hell", "Hazbin Hotel", "Royal Goetia (Hellborn)", "text@BB3C1010" },
+		{ "VAGGIE", "Vaggie", "Hotel Co-Manager", "Hazbin Hotel", "Sinner Demon", "text@BB3C1011" },
+		{ "ALASTOR", "Alastor", "Overlord, Radio Demon", "Hazbin Hotel", "Overlord (Sinner-origin)", "text@BB3C1012" },
+		{ "VOX", "Vox", "Overlord, VoxTek CEO", "Hazbin Hotel", "Overlord (Sinner-origin)", "text@BB3C1013" },
+		{ "VALENTINO", "Valentino", "Overlord, Studio Owner", "Hazbin Hotel", "Overlord (Sinner-origin)", "text@BB3C1014" },
+		{ "BLITZO", "Blitzo", "C.E.O., I.M.P.", "Helluva Boss", "Imp (Hellborn)", "text@BB3C1020" },
+		{ "MOXXIE", "Moxxie", "Field Agent, I.M.P.", "Helluva Boss", "Imp (Hellborn)", "text@BB3C1021" },
+		{ "MILLIE", "Millie", "Field Agent, I.M.P.", "Helluva Boss", "Imp (Hellborn)", "text@BB3C1022" },
+		{ "LOONA", "Loona", "Receptionist, I.M.P.", "Helluva Boss", "Hellhound (Hellborn)", "text@BB3C1023" },
+		{ "STOLAS", "Stolas", "Ars Goetia Royalty", "Helluva Boss", "Royal Goetia (Hellborn)", "text@BB3C1024" },
+		{ "VEROSIKA_MAYDAY", "Verosika Mayday", "Pop Star", "Helluva Boss", "Succubus (Hellborn)", "text@BB3C1025" },
+	};
+
+	constexpr const char* kNaturalDeath[] = { "KATIE_KILLJOY", "TOM_TRENCH" };
+	constexpr const char* kImpKill[] = { "BLITZO", "MOXXIE", "MILLIE" };
+	constexpr const char* kRedemption[] = { "CHARLIE_MORNINGSTAR", "VAGGIE" };
+	constexpr const char* kOverlord[] = { "ALASTOR", "VOX", "VALENTINO" };
+	constexpr const char* kHellNative[] = { "STOLAS", "LOONA", "VEROSIKA_MAYDAY" };
+
+	template <int N>
+	constexpr NewsEvent Event(const char* type, const char* const (&characters)[N])
+	{
+		return NewsEvent{ type, characters, N };
+	}
+
+	constexpr NewsEvent kEvents[] = {
+		Event("NATURAL_DEATH_REPORT", kNaturalDeath),
+		Event("IMP_KILL_REPORT", kImpKill),
+		Event("REDEMPTION_REPORT", kRedemption),
+		Event("OVERLORD_REPORT", kOverlord),
+		Event("HELL_NATIVE_REPORT", kHellNative),
+	};
+}
+
+const Afterlife::NewsCharacter* Afterlife::NewsCharacters(int& count)
+{
+	count = static_cast<int>(std::size(kCharacters));
+	return kCharacters;
+}
+
+const Afterlife::NewsEvent* Afterlife::NewsEvents(int& count)
+{
+	count = static_cast<int>(std::size(kEvents));
+	return kEvents;
+}
+
+const Afterlife::NewsCharacter* Afterlife::FindNewsCharacter(const char* key)
+{
+	if (!key) return nullptr;
+	for (const NewsCharacter& character : kCharacters)
+	{
+		if (std::strcmp(character.key, key) == 0) return &character;
+	}
+	return nullptr;
+}
+
+const Afterlife::NewsCharacter* Afterlife::PickNewsCharacter(const char* eventType, const RandomInt& random)
+{
+	if (!eventType) return nullptr;
+	for (const NewsEvent& event : kEvents)
+	{
+		if (std::strcmp(event.type, eventType) == 0)
+		{
+			if (event.count <= 0) return nullptr;
+			// candidates[math.random(1, #candidates)], 1-based as in the Lua
+			const int pick = std::max(1, std::min(event.count, random(1, event.count)));
+			return FindNewsCharacter(event.characters[pick - 1]);
+		}
+	}
+	return nullptr;
 }

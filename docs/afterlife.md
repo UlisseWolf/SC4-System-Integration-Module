@@ -38,15 +38,30 @@ the name below (a commented line keeps the default):
 | Hell's natives | `HELL_IMP_RATIO`, `HELL_HELLHOUND_RATIO`, `HELL_SUCCUBUS_RATIO`, `HELL_INFESTOR_RATIO`, `HELL_POSSESSOR_RATIO`, `HELL_BAPHOMET_RATIO`, `HELL_REAPER_RATIO`, `HELL_GOETIA_ARS_GOETIA_RATIO` |
 | Hell's fixed population | `FALLEN_ANGELS` (2), `SEVEN_DEADLY_SINS` (7) |
 
-> **Most defaults are placeholders.** `AFTERLIFE.lua` gave no numbers, so only `BASE_MORTALITY_RATE_PER_CAPITA`
-> (0.0006, the ~0.06% a month of its comment), `FALLEN_ANGELS` and `SEVEN_DEADLY_SINS` are taken from it. The other
-> values are neutral starting points: replace them in `AfterlifeModel.h` or in `SC4SIM.ini` with the real balance.
+Since 1.9.1 the defaults are the real balance of the pack: the AFTERLIFE section of `PACK_CONSTANTS.lua`
+(package `0BB33100`), where `AFTERLIFE.lua` now takes its constants from. The DLL keeps its own copy, so the
+calculation does not need `PACK_CONSTANTS.lua` to be loaded; if you change a value there, change it in `SC4SIM.ini`
+too (the Lua constants are not read by the DLL).
+
+| Lua table | Key | Default |
+| --- | --- | --- |
+| `mortality_ratio` | `BASE_MORTALITY_RATE_PER_CAPITA` / `HEALTH_COVERAGE_WEIGHT` | 0.0006 / 1.5 |
+| `judgment_ratio` | `BASE_SIN_RATIO` / `CRIME_WEIGHT` / `EDUCATION_WEIGHT` / `EDUCATION_REFERENCE` | 0.5 / 0.3 / 0.3 / 500 |
+| | `SIN_RATIO_MIN` / `SIN_RATIO_MAX` | 0.1 / 0.9 |
+| `imp_ratio` | `IMP_CLIENT_RATIO` / `IMP_SUCCESS_CHANCE` / `IMP_KILL_RANDOM_VARIANCE` / `MAX_IMP_KILL_FRACTION_POP` | 0.002 / 0.15 / 2 / 0.01 |
+| `redemption_ratio` | `REDEMPTION_RATIO` | 0.0015 |
+| `hell_native_ratio` | `HELL_IMP_RATIO` ... `HELL_GOETIA_ARS_GOETIA_RATIO` (INI names; `IMP_RATIO` ... in Lua) | 0.05, 0.03, 0.02, 0.008, 0.005, 0.001, 0.0005, 0.00005 |
+| `hell_native_fixed` | `FALLEN_ANGELS` / `SEVEN_DEADLY_SINS` | 2 / 7 |
+
+`EDUCATION_REFERENCE` is marked *TUNE THIS* in `PACK_CONSTANTS.lua`: adjust it to the `game.ga_education` values
+your cities really reach.
 
 A value that is not a number is ignored with a warning in `SC4SIM.log`; `EDUCATION_REFERENCE=0` is changed to 1.
 
-`get_news_ticker_character` is the only function that still uses Lua data: it picks from the roster tables
-`news_ticker_event_characters` and `hell_news_characters`, defined by the pack's Lua. If they are missing it returns
-nothing. The inputs of the calculation are the `game` values read from the city; if one is missing,
+`get_news_ticker_character` picks from the roster tables `news_ticker_event_characters` and
+`hell_news_characters` of `PACK_CONSTANTS.lua`, so a pack can still change the roster in Lua. If the Lua does not
+define them, the DLL uses its built-in copy of the same 13 characters and 5 event types (`AfterlifeModel.cpp`) and
+says so once per city in `SC4SIM.log`. An unknown event type returns nothing, as in the Lua. The inputs of the calculation are the `game` values read from the city; if one is missing,
 `run_afterlife_balance_variables` returns nothing, changes no state, and `SC4SIM.log` lists the missing names once per
 city.
 
@@ -58,14 +73,23 @@ city.
   are kept by the DLL and reset to zero when a city opens and when it closes. Nothing is saved in the city file, as
   before (the Lua table was not saved either).
 - **Missing values** give `nil` instead of a Lua error (see above).
+- **`#candidates`.** `get_news_ticker_character` in `AFTERLIFE.lua` uses the `#` length operator, which exists only
+  from Lua 5.1; SimCity 4 runs Lua 5.0, where that line does not compile. The DLL version counts the list with
+  `getn`, so it works; for the Lua fallback, `table.getn(candidates)` is the 5.0 form.
 - A fractional `IMP_KILL_RANDOM_VARIANCE` is truncated to an integer, as `math.random` does in Lua 5.0; a negative one
   is treated as 0.
 
 ## Tested
 
-`src/afterlife/AfterlifeModel.cpp` has no game or Windows dependency. It was compared with the original
-`AFTERLIFE.lua` (run in a Lua interpreter with the same constants, inputs and random numbers; the constants are test inputs there) over 12,000 cycles of
-random inputs and constants, in 300 sequences of 40 cycles: every one of the 24 state values matched. That test
+`src/afterlife/AfterlifeModel.cpp` has no game or Windows dependency. `tools/afterlife-test` compares it with
+`AFTERLIFE.lua` and `PACK_CONSTANTS.lua` run in a Lua interpreter, with the same inputs and random numbers. For 1.9.1:
+
+- 12,000 cycles with random constants (300 sequences of 40 cycles): all 24 state values matched;
+- the 23 DLL defaults are equal to the values of `PACK_CONSTANTS.lua`;
+- the built-in roster is equal to `hell_news_characters` and `news_ticker_event_characters`, and the ticker pick
+  returns the same character for every event type and index;
+- 40,000 cycles with the real constants of `PACK_CONSTANTS.lua` (100 sequences of 400 cycles, up to 5 million
+  residents): all 24 state values matched. That test
 covers the calculation only. The Lua bridge (`Afterlife.cpp`) is compiled and statically checked, but **not yet
 tested in game**: check `SC4SIM.log` after opening a city, then the values your UI shows.
 
@@ -75,5 +99,6 @@ The four `game` variable names the module reads were also checked in the 1.1.641
 
 | File | Role |
 | --- | --- |
-| `src/afterlife/AfterlifeModel.h/.cpp` | The calculation (`Afterlife::Step`), a line-by-line port of `run_afterlife_balance_variables`. |
+| `src/afterlife/AfterlifeModel.h/.cpp` | The calculation (`Afterlife::Step`), a line-by-line port of `run_afterlife_balance_variables`; the default constants and the built-in news roster of `PACK_CONSTANTS.lua`. |
+| `tools/afterlife-test` | Equivalence test with `AFTERLIFE.lua` and `PACK_CONSTANTS.lua`. |
 | `src/afterlife/Afterlife.h/.cpp` | Module: reads the Lua inputs and constants, registers the two functions, mirrors `afterlife_grid_var`. |
