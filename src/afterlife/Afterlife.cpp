@@ -11,10 +11,12 @@
 //    get_news_ticker_character(event_type) as global Lua functions of the city's advisor scripting context. They
 //    replace the functions of AFTERLIFE.lua, which the game has already compiled by then; the Lua stays a fallback
 //    for players without the DLL, and every script that calls those functions works unchanged;
-//  * the inputs are read from the `game` table (g_health_coverage_p, g_city_r_population, ga_crime, ga_education),
-//    the constants from the tables of PACK_CONSTANTS.lua (mortality_ratio, judgment_ratio, imp_ratio,
-//    redemption_ratio, hell_native_ratio, hell_native_fixed, news_ticker_event_characters, hell_news_characters),
-//    so the balance stays in that file;
+//  * the inputs are read from the `game` table (g_health_coverage_p, g_city_r_population, ga_crime, ga_education);
+//  * the constants (mortality, judgment, I.M.P., redemption and Hell's native ratios) live in the DLL, as in the other
+//    CAM scripts (CAM_LUA_Controller.dat keeps its constants inside the code): defaults in AfterlifeModel.h, each one
+//    overridable in the [Afterlife] section of SC4SIM.ini. No other Lua file is needed for the calculation;
+//  * get_news_ticker_character only picks from the roster tables news_ticker_event_characters and
+//    hell_news_characters, which the pack's Lua defines;
 //  * after every cycle the result is copied into the Lua table afterlife_grid_var, so scripts and UIs that read it
 //    directly see the same values as with the Lua version;
 //  * the cumulative populations are kept by the DLL and start from zero when a city opens.
@@ -34,7 +36,9 @@
 #include "SCLuaUtil.h"
 
 #include <Windows.h>
+#include <cmath>
 #include <cwctype>
+#include <cwchar>
 #include <filesystem>
 #include <random>
 #include <string>
@@ -49,6 +53,7 @@ namespace
 
 	bool enabled = true;
 	Afterlife::State state;
+	Afterlife::Constants constants; // AfterlifeModel.h defaults, overridden by [Afterlife] in SC4SIM.ini
 	bool warnedMissing = false;
 	std::mt19937 generator;
 	bool seeded = false;
@@ -64,6 +69,67 @@ namespace
 		}
 		if (hi < lo) hi = lo;
 		return std::uniform_int_distribution<int>(lo, hi)(generator);
+	}
+
+	// ---------------------------------------------------------------- constants (SC4SIM.ini)
+
+	struct ConstantKey
+	{
+		const wchar_t* key;
+		double Afterlife::Constants::* member;
+	};
+
+	// One INI key per constant; the key is the constant's name.
+	constexpr ConstantKey kConstantKeys[] = {
+		{ L"BASE_MORTALITY_RATE_PER_CAPITA", &Afterlife::Constants::baseMortalityRatePerCapita },
+		{ L"HEALTH_COVERAGE_WEIGHT", &Afterlife::Constants::healthCoverageWeight },
+		{ L"EDUCATION_REFERENCE", &Afterlife::Constants::educationReference },
+		{ L"BASE_SIN_RATIO", &Afterlife::Constants::baseSinRatio },
+		{ L"CRIME_WEIGHT", &Afterlife::Constants::crimeWeight },
+		{ L"EDUCATION_WEIGHT", &Afterlife::Constants::educationWeight },
+		{ L"SIN_RATIO_MIN", &Afterlife::Constants::sinRatioMin },
+		{ L"SIN_RATIO_MAX", &Afterlife::Constants::sinRatioMax },
+		{ L"IMP_CLIENT_RATIO", &Afterlife::Constants::impClientRatio },
+		{ L"IMP_SUCCESS_CHANCE", &Afterlife::Constants::impSuccessChance },
+		{ L"IMP_KILL_RANDOM_VARIANCE", &Afterlife::Constants::impKillRandomVariance },
+		{ L"MAX_IMP_KILL_FRACTION_POP", &Afterlife::Constants::maxImpKillFractionPop },
+		{ L"REDEMPTION_RATIO", &Afterlife::Constants::redemptionRatio },
+		{ L"HELL_IMP_RATIO", &Afterlife::Constants::impRatio },
+		{ L"HELL_HELLHOUND_RATIO", &Afterlife::Constants::hellhoundRatio },
+		{ L"HELL_SUCCUBUS_RATIO", &Afterlife::Constants::succubusRatio },
+		{ L"HELL_INFESTOR_RATIO", &Afterlife::Constants::infestorRatio },
+		{ L"HELL_POSSESSOR_RATIO", &Afterlife::Constants::possessorRatio },
+		{ L"HELL_BAPHOMET_RATIO", &Afterlife::Constants::baphometRatio },
+		{ L"HELL_REAPER_RATIO", &Afterlife::Constants::reaperRatio },
+		{ L"HELL_GOETIA_ARS_GOETIA_RATIO", &Afterlife::Constants::goetiaArsGoetiaRatio },
+		{ L"FALLEN_ANGELS", &Afterlife::Constants::fallenAngels },
+		{ L"SEVEN_DEADLY_SINS", &Afterlife::Constants::sevenDeadlySins },
+	};
+
+	void LoadConstants(const wchar_t* ini)
+	{
+		for (const ConstantKey& entry : kConstantKeys)
+		{
+			wchar_t text[64]{};
+			GetPrivateProfileStringW(L"Afterlife", entry.key, L"", text, 64, ini);
+			if (text[0] == L'\0')
+			{
+				continue; // not set: the default of AfterlifeModel.h
+			}
+			wchar_t* end = nullptr;
+			const double parsed = std::wcstod(text, &end);
+			if (end == text || !std::isfinite(parsed))
+			{
+				SimLog::Write(SimLog::Level::Warning, "Afterlife: %ls=%ls is not a number: the default stays.", entry.key, text);
+				continue;
+			}
+			constants.*entry.member = parsed;
+		}
+		if (constants.educationReference == 0)
+		{
+			SimLog::Write(SimLog::Level::Warning, "Afterlife: EDUCATION_REFERENCE=0 would divide by zero: set to 1.");
+			constants.educationReference = 1;
+		}
 	}
 
 	// ---------------------------------------------------------------- Lua helpers
@@ -133,7 +199,7 @@ namespace
 		}
 	}
 
-	bool ReadInputs(cISCLua* lua, Afterlife::GameInputs& game, Afterlife::Constants& k)
+	bool ReadInputs(cISCLua* lua, Afterlife::GameInputs& game)
 	{
 		std::vector<std::string> missing;
 		ReadBindings(lua, {
@@ -141,35 +207,6 @@ namespace
 			{ "game", "g_city_r_population", &game.residentPopulation },
 			{ "game", "ga_crime", &game.crime },
 			{ "game", "ga_education", &game.education },
-
-			{ "mortality_ratio", "BASE_MORTALITY_RATE_PER_CAPITA", &k.baseMortalityRatePerCapita },
-			{ "mortality_ratio", "HEALTH_COVERAGE_WEIGHT", &k.healthCoverageWeight },
-
-			{ "judgment_ratio", "EDUCATION_REFERENCE", &k.educationReference },
-			{ "judgment_ratio", "BASE_SIN_RATIO", &k.baseSinRatio },
-			{ "judgment_ratio", "CRIME_WEIGHT", &k.crimeWeight },
-			{ "judgment_ratio", "EDUCATION_WEIGHT", &k.educationWeight },
-			{ "judgment_ratio", "SIN_RATIO_MIN", &k.sinRatioMin },
-			{ "judgment_ratio", "SIN_RATIO_MAX", &k.sinRatioMax },
-
-			{ "imp_ratio", "IMP_CLIENT_RATIO", &k.impClientRatio },
-			{ "imp_ratio", "IMP_SUCCESS_CHANCE", &k.impSuccessChance },
-			{ "imp_ratio", "IMP_KILL_RANDOM_VARIANCE", &k.impKillRandomVariance },
-			{ "imp_ratio", "MAX_IMP_KILL_FRACTION_POP", &k.maxImpKillFractionPop },
-
-			{ "redemption_ratio", "REDEMPTION_RATIO", &k.redemptionRatio },
-
-			{ "hell_native_ratio", "IMP_RATIO", &k.impRatio },
-			{ "hell_native_ratio", "HELLHOUND_RATIO", &k.hellhoundRatio },
-			{ "hell_native_ratio", "SUCCUBUS_RATIO", &k.succubusRatio },
-			{ "hell_native_ratio", "INFESTOR_RATIO", &k.infestorRatio },
-			{ "hell_native_ratio", "POSSESSOR_RATIO", &k.possessorRatio },
-			{ "hell_native_ratio", "BAPHOMET_RATIO", &k.baphometRatio },
-			{ "hell_native_ratio", "REAPER_RATIO", &k.reaperRatio },
-			{ "hell_native_ratio", "GOETIA_ARS_GOETIA_RATIO", &k.goetiaArsGoetiaRatio },
-
-			{ "hell_native_fixed", "FALLEN_ANGELS", &k.fallenAngels },
-			{ "hell_native_fixed", "SEVEN_DEADLY_SINS", &k.sevenDeadlySins },
 		}, missing);
 
 		if (missing.empty())
@@ -181,8 +218,7 @@ namespace
 			warnedMissing = true;
 			std::string list;
 			for (const std::string& name : missing) list += (list.empty() ? "" : ", ") + name;
-			SimLog::Write(SimLog::Level::Warning,
-				"Afterlife: %zu value(s) missing, nothing calculated (is PACK_CONSTANTS.lua loaded?): %s",
+			SimLog::Write(SimLog::Level::Warning, "Afterlife: %zu game value(s) missing, nothing calculated: %s",
 				missing.size(), list.c_str());
 		}
 		return false;
@@ -263,8 +299,7 @@ namespace
 		}
 
 		Afterlife::GameInputs game;
-		Afterlife::Constants constants;
-		if (!ReadInputs(lua, game, constants))
+		if (!ReadInputs(lua, game))
 		{
 			return 0; // nil, state unchanged
 		}
@@ -379,6 +414,7 @@ void Afterlife::OnStart()
 		return;
 	}
 	const std::filesystem::path ini = std::filesystem::path(modulePath).replace_filename(L"SC4SIM.ini");
+	LoadConstants(ini.c_str());
 	wchar_t value[32]{};
 	GetPrivateProfileStringW(L"Afterlife", L"Enabled", L"true", value, 32, ini.c_str());
 	std::wstring text = value;

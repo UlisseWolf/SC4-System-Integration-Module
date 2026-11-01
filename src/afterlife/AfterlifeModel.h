@@ -15,22 +15,26 @@ namespace Afterlife
 		double education = 0; // game.ga_education
 	};
 
-	// Constants of PACK_CONSTANTS.lua, one member per Lua name (table.NAME).
+	// Balance constants. They live in the DLL; SC4SIM.ini ([Afterlife], same names) overrides each one.
+	// !! PLACEHOLDERS: only BASE_MORTALITY_RATE_PER_CAPITA (the ~0.06% per month of the original comment) and the two
+	// fixed Hell counts (Fallen Angels 2, Seven Deadly Sins 7) come from AFTERLIFE.lua. Every other value is a neutral
+	// starting point to be replaced with the pack's real balance.
 	struct Constants
 	{
-		// mortality_ratio
-		double baseMortalityRatePerCapita = 0, healthCoverageWeight = 0;
-		// judgment_ratio
-		double educationReference = 1, baseSinRatio = 0, crimeWeight = 0, educationWeight = 0, sinRatioMin = 0, sinRatioMax = 1;
-		// imp_ratio
-		double impClientRatio = 0, impSuccessChance = 0, impKillRandomVariance = 0, maxImpKillFractionPop = 0;
-		// redemption_ratio
-		double redemptionRatio = 0;
-		// hell_native_ratio
-		double impRatio = 0, hellhoundRatio = 0, succubusRatio = 0, infestorRatio = 0, possessorRatio = 0,
-			baphometRatio = 0, reaperRatio = 0, goetiaArsGoetiaRatio = 0;
-		// hell_native_fixed
-		double fallenAngels = 0, sevenDeadlySins = 0;
+		// mortality
+		double baseMortalityRatePerCapita = 0.0006, healthCoverageWeight = 1.0;
+		// judgment (Winner / Sinner split)
+		double educationReference = 100, baseSinRatio = 0.5, crimeWeight = 0.3, educationWeight = 0.2,
+			sinRatioMin = 0.05, sinRatioMax = 0.95;
+		// I.M.P.
+		double impClientRatio = 0.001, impSuccessChance = 0.5, impKillRandomVariance = 2, maxImpKillFractionPop = 0.01;
+		// redemption
+		double redemptionRatio = 0.001;
+		// Hell's native population, share of the Sinner population
+		double impRatio = 0.20, hellhoundRatio = 0.10, succubusRatio = 0.10, infestorRatio = 0.05, possessorRatio = 0.05,
+			baphometRatio = 0.02, reaperRatio = 0.02, goetiaArsGoetiaRatio = 0.02;
+		// Hell's fixed population
+		double fallenAngels = 2, sevenDeadlySins = 7;
 	};
 
 	// Mirror of afterlife_grid_var. The CUMULATIVE members survive from one cycle to the next.

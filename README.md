@@ -43,7 +43,7 @@ such as NEON.
 | Dezoning under poles | 1.4.0 | The cell under every new pole loses its zone (optionally also on farm fields). |
 | Mixed R, C and I occupancy | 1.5.0 | Residents, commercial and industrial jobs in one building (RC, RI, CI or RCI) with independent capacities, census demand for all of them, and the `MixedOccupancy` cheat. 1.5.1: the game itself fills the secondary types. 1.6.0: industry. 1.7.0: trips for the secondary classes. 1.7.1: secondary jobs as commute destinations. *Experimental, not yet tested in game.* |
 | Manufacturing (I-M) zone | 1.8.0 | A zone of its own for manufacturing industry, on a reused zone slot (Spaceport by default): I-M grows only there, I-D and I-HT never do. `IMZone`, `IMZoneConvert` and `IMZoneInfo` cheats. *Experimental, off by default, not yet tested in game.* |
-| Afterlife | 1.9.0 | The DLL version of `AFTERLIFE.lua`: fictitious Winner / Sinner / I.M.P. statistics, registered over the Lua functions, with the constants still in `PACK_CONSTANTS.lua`. *Calculation checked against the Lua, bridge not yet tested in game.* |
+| Afterlife | 1.9.0 | The DLL version of `AFTERLIFE.lua`: fictitious Winner / Sinner / I.M.P. statistics, registered over the Lua functions, with the balance constants in the DLL and in `SC4SIM.ini`. *Calculation checked against the Lua, bridge not yet tested in game.* |
 | Advanced Water Management | 1.2.0 | The real efficiency of water buildings in the query dialog and tool tip, a monthly warning for fresh or salt water pumps that produce nothing, and the `ScanPumps` cheat. |
 
 ## Requirements
@@ -276,9 +276,9 @@ population values and never changes the real simulation.
 - When a city opens, the DLL registers `run_afterlife_balance_variables(ret_type)` and
   `get_news_ticker_character(event_type)` in the advisor Lua, over the Lua functions of the same name, and copies
   every result into `afterlife_grid_var`. Scripts that call them need no change.
-- The constants stay in `PACK_CONSTANTS.lua`; the DLL reads them from the Lua tables.
-- Keep `AFTERLIFE.lua` in the pack as the fallback (and keep its `dofile("PACK_CONSTANTS.lua")` if nothing else loads
-  the constants). `[Afterlife] Enabled=false` leaves everything to the Lua.
+- The balance constants live in the DLL (like the other CAM scripts keep theirs inside the code) and each one can be
+  overridden in `[Afterlife]` of `SC4SIM.ini`. **Most defaults are placeholders**: replace them with the real balance.
+- Keep `AFTERLIFE.lua` in the pack as the fallback. `[Afterlife] Enabled=false` leaves everything to the Lua.
 
 Details, differences from the Lua and the equivalence test are in [`docs/afterlife.md`](docs/afterlife.md).
 
