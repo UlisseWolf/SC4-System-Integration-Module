@@ -13,7 +13,7 @@ Expected output (the script exits with 1 on any mismatch):
 ```
 random constants   - cycles compared: 12000 mismatches: 0
 defaults           - constants compared: 23 mismatches: 0
-news roster        - characters: 13 events: 5 match: True
+news roster        - characters: 58 events: 5 match: True
 ticker picks       - compared: 18 mismatches: 0
 PACK_CONSTANTS run - cycles compared: 40000 mismatches: 0
 ```
