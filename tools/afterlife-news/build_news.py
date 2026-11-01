@@ -3,7 +3,9 @@
 #   * lua/afterlife_news.lua, the advisor script that puts the Afterlife news in the ticker;
 #   * tools/afterlife-test/reference/PACK_CONSTANTS.lua, the test fixture (roster and events only change);
 #   * optionally, with --dat CONTROLLER_IN CONTROLLER_OUT LTEXT_OUT:
-#       CAM_LUA_Controller.dat with the news script added (or replaced) and the LTEXT .dat of the ticker lines.
+#       CAM_LUA_Controller.dat with the news script added (or replaced) and the LTEXT .dat of the ticker lines and of
+#       the church / cemetery query rows;
+#   * optionally, with --ui IN OUT: Cemetery_and_Church.dat with the Afterlife rows added to both query UIs.
 #
 #   python3 tools/afterlife-news/build_news.py [--dat CAM_LUA_Controller.dat out/CAM_LUA_Controller.dat out/CAM_Afterlife_News_en.dat]
 #
@@ -19,6 +21,28 @@ NEWS_LUA_INSTANCE = 0x8BB3C100            # package signature 0BB3C100 (the old 
 LTEXT_TYPE = 0x2026960B
 LTEXT_GROUP = 0x6A231EAA                  # !! must match the group the pack's other text@ strings use (see docs/afterlife.md)
 ADVICE_BASE = 0xBB3C2000                  # advice GUIDs: BB3C2000 + index of the character
+
+# Query UIs of Cemetery_and_Church.dat: one new row per Afterlife value under the game's own "goofy stat" row.
+# Each row has a label LTEXT and a value LTEXT (group EA5524EB, like the existing labels); the value LTEXT is a
+# #afterlife_grid_var.FIELD# token, which the query expands when it is shown.
+UI_TYPE, UI_GROUP = 0x00000000, 0x96A006B0
+UI_TEXT_GROUP = 0xEA5524EB
+UI_TEXT_BASE = 0xBB3C3000                 # label = base + 2n, value = base + 2n + 1
+UI_ROWS = {
+    0xCA8B9AA2: [  # Church (Weddings Per Week)
+        ("Winners This Month", "WINNER_COUNT_THIS_CYCLE"),
+        ("Souls in Heaven", "WINNER_POPULATION_HEAVEN"),
+        ("Sinners Redeemed", "REDEEMED_TOTAL"),
+    ],
+    0xCA8B96C2: [  # Cemetery (Misplaced Coffins)
+        ("Deaths This Month", "TOTAL_DEATHS_THIS_CYCLE"),
+        ("I.M.P. Victims This Month", "IMP_KILLS_THIS_CYCLE"),
+        ("Sinners This Month", "SINNER_COUNT_THIS_CYCLE"),
+        ("Souls in Hell", "SINNER_POPULATION_HELL"),
+        ("Hellborn Population", "HELL_NATIVE_TOTAL"),
+    ],
+}
+UI_ROW_STEP = 20
 
 
 def cpp_roster():
@@ -44,6 +68,10 @@ def write_cpp():
 
 
 def news_lua():
+    fields = sorted({f for rows in UI_ROWS.values() for _, f in rows} | {
+        "IMP_KILLS_THIS_CYCLE", "REDEEMED_THIS_CYCLE", "WINNER_COUNT_THIS_CYCLE", "NATURAL_DEATHS",
+        "SINNER_POPULATION_HELL", "HELL_NATIVE_TOTAL", "FALLEN_ANGELS_POPULATION", "SEVEN_DEADLY_SINS_POPULATION"})
+    ui_init = "\n".join(f"if (afterlife_grid_var.{f} == nil) then afterlife_grid_var.{f} = 0 end" for f in fields)
     ev_lines = "\n".join(f'--   {ev:<26} {", ".join(ks)}' for ev, ks in roster.EVENTS)
     advices = []
     for n, c in enumerate(roster.CHARACTERS):
@@ -82,6 +110,13 @@ a.news_only = 1
 {ev_lines}
 --------------------------------------------------------------------------------------------------
 dofile("adv_fluffnews.lua")
+
+-- afterlife_grid_var starts at zero, so the church and cemetery query UIs (#afterlife_grid_var.FIELD#) show 0 until
+-- the first cycle instead of an empty token. The DLL overwrites every field after each cycle.
+if (afterlife_grid_var == nil) then
+   afterlife_grid_var = {{}}
+end
+{ui_init}
 
 afterlife_news = {{}}
 afterlife_news.NEWS_CHANCE    = 50     -- % chance of an Afterlife headline in a month (game.random_chance)
@@ -165,6 +200,65 @@ def write_reference_constants():
     open(p, "w", encoding="utf-8").write(s)
 
 
+def ui_texts():
+    """(instance, text) of every UI label and value LTEXT, in UI_ROWS order."""
+    out, n = [], 0
+    for iid in sorted(UI_ROWS):
+        for label, field in UI_ROWS[iid]:
+            out.append((UI_TEXT_BASE + 2 * n, label))
+            out.append((UI_TEXT_BASE + 2 * n + 1, f"#afterlife_grid_var.{field}#"))
+            n += 1
+    return out
+
+
+def _shift(line, key, dy, dh=0):
+    """Moves area=(x1,y1,x2,y2) of a UI line by dy (both y) and grows it by dh (y2 only)."""
+    import re
+    m = re.search(r"area=\((-?\d+),(-?\d+),(-?\d+),(-?\d+)\)", line)
+    x1, y1, x2, y2 = map(int, m.groups())
+    return line[:m.start()] + f"area=({x1},{y1 + dy},{x2},{y2 + dy + dh})" + line[m.end():]
+
+
+def patch_ui(text, iid, texts):
+    """Adds the Afterlife rows to one query UI (CRLF text from the UI editor). Returns the new text."""
+    import re
+    lines = text.split("\r\n")
+    if any("afterlife_grid_var" in l or f"{UI_TEXT_BASE:08x}"[:5] in l for l in lines):
+        raise SystemExit(f"UI {iid:08X} already has Afterlife rows")
+    vi = next(i for i, l in enumerate(lines) if "id=0x0000106b" in l)        # game's value row
+    li = next(i for i, l in enumerate(lines) if "captionres={ea5524eb," in l)  # game's label row
+    rows = UI_ROWS[iid]
+    grow = UI_ROW_STEP * len(rows)
+    new = []
+    for k, (label, field) in enumerate(rows):
+        lab_id, val_id = next(t for t in texts if t[1] == label)[0], next(t for t in texts if t[1] == f"#afterlife_grid_var.{field}#")[0]
+        dy = UI_ROW_STEP * (k + 1)
+        lab = _shift(lines[li], "area", dy)
+        lab = re.sub(r'caption="[^"]*" captionres=\{ea5524eb,[0-9a-f]+\}', f'caption="{label}" captionres={{ea5524eb,{lab_id:08x}}}', lab)
+        val = _shift(lines[vi], "area", dy).replace(" id=0x0000106b", "")
+        val = val.replace("font=GenBodyMedium", f'caption="#afterlife_grid_var.{field}#" captionres={{ea5524eb,{val_id:08x}}} font=GenBodyMedium', 1)
+        new += [val, lab]
+    last = max(vi, li)
+    lines[last + 1:last + 1] = new
+    # grow the outer window and the inner panel, move the Close button down
+    outer = next(i for i, l in enumerate(lines) if l.startswith("<LEGACY clsid=GZWinGen"))
+    inner = next(i for i, l in enumerate(lines) if "clsid=0x89e1567c" in l)
+    button = next(i for i, l in enumerate(lines) if "clsid=GZWinBtn" in l)
+    lines[outer] = _shift(lines[outer], "area", 0, grow)
+    lines[inner] = _shift(lines[inner], "area", 0, grow)
+    lines[button] = _shift(lines[button], "area", grow)
+    return "\r\n".join(lines)
+
+
+def write_ui_dat(ui_in, ui_out):
+    header, entries = dbpf2.read(ui_in)
+    texts = ui_texts()
+    for e in entries:
+        if e["t"] == UI_TYPE and e["i"] in UI_ROWS:
+            e["data"] = patch_ui(e["data"].decode("latin-1"), e["i"], texts).encode("latin-1")
+    dbpf2.write(ui_out, entries, header)
+
+
 def ltext(text):
     return struct.pack("<HH", len(text), 0x1000) + text.encode("utf-16-le")
 
@@ -175,16 +269,20 @@ def write_dats(controller_in, controller_out, ltext_out, lua_text):
     entries.append(dict(t=LUA_TYPE, g=LUA_GROUP, i=NEWS_LUA_INSTANCE, data=lua_text.encode("utf-8")))
     dbpf2.write(controller_out, entries, header)
     texts = [dict(t=LTEXT_TYPE, g=LTEXT_GROUP, i=c[5], data=ltext(c[6])) for c in roster.CHARACTERS]
+    texts += [dict(t=LTEXT_TYPE, g=UI_TEXT_GROUP, i=i, data=ltext(t)) for i, t in ui_texts()]
     dbpf2.write(ltext_out, texts, header)
 
 
 if __name__ == "__main__":
     ap = argparse.ArgumentParser()
     ap.add_argument("--dat", nargs=3, metavar=("CONTROLLER_IN", "CONTROLLER_OUT", "LTEXT_OUT"))
+    ap.add_argument("--ui", nargs=2, metavar=("CEMETERY_CHURCH_IN", "CEMETERY_CHURCH_OUT"))
     args = ap.parse_args()
     write_cpp()
     lua_path = write_lua()
     write_reference_constants()
     if args.dat:
         write_dats(*args.dat, open(lua_path, encoding="utf-8").read())
+    if args.ui:
+        write_ui_dat(*args.ui)
     print("roster:", len(roster.CHARACTERS), "characters,", len(roster.EVENTS), "events")

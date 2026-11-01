@@ -27,6 +27,24 @@
 --------------------------------------------------------------------------------------------------
 dofile("adv_fluffnews.lua")
 
+-- afterlife_grid_var starts at zero, so the church and cemetery query UIs (#afterlife_grid_var.FIELD#) show 0 until
+-- the first cycle instead of an empty token. The DLL overwrites every field after each cycle.
+if (afterlife_grid_var == nil) then
+   afterlife_grid_var = {}
+end
+if (afterlife_grid_var.FALLEN_ANGELS_POPULATION == nil) then afterlife_grid_var.FALLEN_ANGELS_POPULATION = 0 end
+if (afterlife_grid_var.HELL_NATIVE_TOTAL == nil) then afterlife_grid_var.HELL_NATIVE_TOTAL = 0 end
+if (afterlife_grid_var.IMP_KILLS_THIS_CYCLE == nil) then afterlife_grid_var.IMP_KILLS_THIS_CYCLE = 0 end
+if (afterlife_grid_var.NATURAL_DEATHS == nil) then afterlife_grid_var.NATURAL_DEATHS = 0 end
+if (afterlife_grid_var.REDEEMED_THIS_CYCLE == nil) then afterlife_grid_var.REDEEMED_THIS_CYCLE = 0 end
+if (afterlife_grid_var.REDEEMED_TOTAL == nil) then afterlife_grid_var.REDEEMED_TOTAL = 0 end
+if (afterlife_grid_var.SEVEN_DEADLY_SINS_POPULATION == nil) then afterlife_grid_var.SEVEN_DEADLY_SINS_POPULATION = 0 end
+if (afterlife_grid_var.SINNER_COUNT_THIS_CYCLE == nil) then afterlife_grid_var.SINNER_COUNT_THIS_CYCLE = 0 end
+if (afterlife_grid_var.SINNER_POPULATION_HELL == nil) then afterlife_grid_var.SINNER_POPULATION_HELL = 0 end
+if (afterlife_grid_var.TOTAL_DEATHS_THIS_CYCLE == nil) then afterlife_grid_var.TOTAL_DEATHS_THIS_CYCLE = 0 end
+if (afterlife_grid_var.WINNER_COUNT_THIS_CYCLE == nil) then afterlife_grid_var.WINNER_COUNT_THIS_CYCLE = 0 end
+if (afterlife_grid_var.WINNER_POPULATION_HEAVEN == nil) then afterlife_grid_var.WINNER_POPULATION_HEAVEN = 0 end
+
 afterlife_news = {}
 afterlife_news.NEWS_CHANCE    = 50     -- % chance of an Afterlife headline in a month (game.random_chance)
 afterlife_news.FREQUENCY_DAYS = 360    -- the same character's line comes back at most once a year
