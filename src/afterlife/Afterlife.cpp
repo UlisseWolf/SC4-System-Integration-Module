@@ -9,15 +9,15 @@
 // How it replaces the Lua, with no game code patched (so it works on every SimCity 4 version):
 //  * when a city opens, the DLL registers run_afterlife_balance_variables(ret_type) and
 //    get_news_ticker_character(event_type) as global Lua functions of the city's advisor scripting context. They
-//    replace the functions of AFTERLIFE.lua, which the game has already compiled by then; the Lua stays a fallback
-//    for players without the DLL, and every script that calls those functions works unchanged;
+//    used to replace AFTERLIFE.lua, which is no longer part of the pack: the DLL is now the only implementation, and
+//    lua/afterlife_news.lua (in CAM_LUA_Controller.dat) calls them to fill the news ticker;
 //  * the inputs are read from the `game` table (g_health_coverage_p, g_city_r_population, ga_crime, ga_education);
 //  * the constants (mortality, judgment, I.M.P., redemption and Hell's native ratios) live in the DLL, as in the other
 //    CAM scripts (CAM_LUA_Controller.dat keeps its constants inside the code): the defaults in AfterlifeModel.h are
 //    the AFTERLIFE values of PACK_CONSTANTS.lua, each one overridable in the [Afterlife] section of SC4SIM.ini. The
 //    calculation reads no constant from Lua, so it works even if PACK_CONSTANTS.lua is not loaded;
-//  * get_news_ticker_character picks from the roster tables news_ticker_event_characters and hell_news_characters
-//    of PACK_CONSTANTS.lua; if the Lua does not define them, from the built-in copy in AfterlifeModel.cpp;
+//  * get_news_ticker_character picks from the built-in roster of AfterlifeModel.cpp (60 characters, 7 events), or
+//    from the Lua tables news_ticker_event_characters and hell_news_characters if a script defines them;
 //  * after every cycle the result is copied into the Lua table afterlife_grid_var, so scripts and UIs that read it
 //    directly see the same values as with the Lua version;
 //  * the cumulative populations are kept by the DLL and start from zero when a city opens.
@@ -353,8 +353,8 @@ namespace
 	}
 
 	// get_news_ticker_character(event_type): hell_news_characters[random pick of news_ticker_event_characters[event_type]]
-	// The roster tables come from the pack's Lua (PACK_CONSTANTS.lua), so a pack can change them. When the Lua does not
-	// define them, the built-in copy of AfterlifeModel.cpp (same content as PACK_CONSTANTS.lua) is used instead.
+	// The roster is built into the DLL (AfterlifeModel.cpp, generated from tools/afterlife-news/roster.py). If a Lua
+	// script defines news_ticker_event_characters and hell_news_characters, those tables are used instead.
 	int32_t GetNewsTickerCharacter(lua_State* luaState)
 	{
 		cRZAutoRefCount<cISCLua> lua = SCLuaUtil::GetISCLuaFromFunctionState(luaState);
@@ -374,7 +374,7 @@ namespace
 			{
 				warnedBuiltInRoster = true;
 				SimLog::Write(SimLog::Level::Info,
-					"Afterlife: the Lua news ticker roster is missing (PACK_CONSTANTS.lua not loaded?): using the built-in copy.");
+					"Afterlife: news ticker uses the built-in roster (no news_ticker_event_characters / hell_news_characters in Lua).");
 			}
 			const Afterlife::NewsCharacter* character = Afterlife::PickNewsCharacter(eventType, RandomInt);
 			if (!character)

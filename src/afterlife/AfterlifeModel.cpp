@@ -69,9 +69,14 @@ namespace
 	using Afterlife::NewsCharacter;
 	using Afterlife::NewsEvent;
 
+	template <int N>
+	constexpr NewsEvent Event(const char* type, const char* const (&characters)[N])
+	{
+		return NewsEvent{ type, characters, N };
+	}
+
+	// BEGIN GENERATED ROSTER (tools/afterlife-news/build_news.py, from roster.py: do not edit by hand)
 	constexpr NewsCharacter kCharacters[] = {
-		// The 13 characters of PACK_CONSTANTS.lua 1.0, then the other Hazbin Hotel (text@BB3C1030+) and Helluva Boss
-		// (text@BB3C1050+) characters. Keep in step with hell_news_characters in PACK_CONSTANTS.lua.
 		{ "KATIE_KILLJOY", "Katie Killjoy", "Anchor, 670 News", "Hazbin Hotel", "Sinner Demon", "text@BB3C1000" },
 		{ "TOM_TRENCH", "Tom Trench", "Co-Anchor, 670 News", "Hazbin Hotel", "Sinner Demon", "text@BB3C1001" },
 		{ "CHARLIE_MORNINGSTAR", "Charlie Morningstar", "Hotel Manager, Princess of Hell", "Hazbin Hotel", "Royal Goetia (Hellborn)", "text@BB3C1010" },
@@ -134,25 +139,25 @@ namespace
 		{ "BELPHEGOR", "Belphegor", "Sin of Sloth", "Helluva Boss", "Sin (Hellborn)", "text@BB3C1063" },
 	};
 
-	constexpr const char* kNaturalDeath[] = { "KATIE_KILLJOY", "TOM_TRENCH" };
-	constexpr const char* kImpKill[] = { "BLITZO", "MOXXIE", "MILLIE" };
-	constexpr const char* kRedemption[] = { "CHARLIE_MORNINGSTAR", "VAGGIE" };
-	constexpr const char* kOverlord[] = { "ALASTOR", "VOX", "VALENTINO" };
-	constexpr const char* kHellNative[] = { "STOLAS", "LOONA", "VEROSIKA_MAYDAY" };
-
-	template <int N>
-	constexpr NewsEvent Event(const char* type, const char* const (&characters)[N])
-	{
-		return NewsEvent{ type, characters, N };
-	}
+	constexpr const char* kEvent_NATURAL_DEATH_REPORT[] = { "KATIE_KILLJOY", "TOM_TRENCH" };
+	constexpr const char* kEvent_IMP_KILL_REPORT[] = { "BLITZO", "MOXXIE", "MILLIE", "STRIKER" };
+	constexpr const char* kEvent_REDEMPTION_REPORT[] = { "CHARLIE_MORNINGSTAR", "VAGGIE", "ANGEL_DUST", "HUSK", "NIFFTY", "SIR_PENTIOUS", "EGG_BOIS", "FAT_NUGGETS", "CHERRI_BOMB", "BAXTER" };
+	constexpr const char* kEvent_OVERLORD_REPORT[] = { "ALASTOR", "VOX", "VALENTINO", "VELVETTE", "CARMILLA_CARMINE", "ODETTE_CARMINE", "CLARA_CARMINE", "ZESTIAL", "ROSIE", "ZEEZI", "PRICK", "MIMZY", "SUSAN" };
+	constexpr const char* kEvent_HELL_NATIVE_REPORT[] = { "STOLAS", "LOONA", "VEROSIKA_MAYDAY", "OCTAVIA", "STELLA", "ANDREALPHUS", "PAIMON", "VASSAGO", "FIZZAROLLI", "ROBO_FIZZ", "CRIMSON", "CASH_BUCKZO", "BARBIE_WIRE", "SALLIE_MAY", "VORTEX", "GLITZ_AND_GLAM" };
+	constexpr const char* kEvent_SEVEN_DEADLY_SINS_REPORT[] = { "LUCIFER_MORNINGSTAR", "LILITH", "ASMODEUS", "BEELZEBUB", "SATAN", "MAMMON", "LEVIATHAN", "BELPHEGOR" };
+	constexpr const char* kEvent_HEAVEN_REPORT[] = { "ADAM", "LUTE", "ABEL", "SERA", "EMILY", "ST_PETER", "SPEAKER_OF_GOD" };
 
 	constexpr NewsEvent kEvents[] = {
-		Event("NATURAL_DEATH_REPORT", kNaturalDeath),
-		Event("IMP_KILL_REPORT", kImpKill),
-		Event("REDEMPTION_REPORT", kRedemption),
-		Event("OVERLORD_REPORT", kOverlord),
-		Event("HELL_NATIVE_REPORT", kHellNative),
+		Event("NATURAL_DEATH_REPORT", kEvent_NATURAL_DEATH_REPORT),
+		Event("IMP_KILL_REPORT", kEvent_IMP_KILL_REPORT),
+		Event("REDEMPTION_REPORT", kEvent_REDEMPTION_REPORT),
+		Event("OVERLORD_REPORT", kEvent_OVERLORD_REPORT),
+		Event("HELL_NATIVE_REPORT", kEvent_HELL_NATIVE_REPORT),
+		Event("SEVEN_DEADLY_SINS_REPORT", kEvent_SEVEN_DEADLY_SINS_REPORT),
+		Event("HEAVEN_REPORT", kEvent_HEAVEN_REPORT),
 	};
+	// END GENERATED ROSTER
+
 }
 
 const Afterlife::NewsCharacter* Afterlife::NewsCharacters(int& count)
