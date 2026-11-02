@@ -121,7 +121,8 @@ save. `SAVE_WITH_CITY=0` turns this off.
 ## Constants
 
 The balance constants live in the DLL (`Afterlife::Constants` in `src/afterlife/AfterlifeModel.h`); their defaults
-are the AFTERLIFE values of the former `PACK_CONSTANTS.lua`. Each one can be overridden in the `[Afterlife]` section
+started as the AFTERLIFE values of the former `PACK_CONSTANTS.lua` and since 1.9.2 differ where noted (the test fixture
+follows the DLL, not the pack's original file). Each one can be overridden in the `[Afterlife]` section
 of `SC4SIM.ini` (a commented line keeps the default):
 
 | Group | Keys and defaults |

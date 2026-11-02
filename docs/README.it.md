@@ -1,6 +1,6 @@
 # SC4SIM.dll – SC4 System Integration Module (CAM)
 
-DLL del **SC4 System Integration Module (SIM)** del Colossus Addon Mod. Versione **1.4.0**.
+DLL del **SC4 System Integration Module (SIM)** del Colossus Addon Mod. Versione **1.9.3**.
 
 ## Ricompense dei consiglieri (Lua del SIM)
 
@@ -43,7 +43,7 @@ a.message = [[text@...]]
   `SC4SIM.log`, accanto alla DLL:
 
 ```
-[INFO] SC4 SIM DLL 1.0.0
+[INFO] SC4 SIM DLL 1.9.3
 [INFO] SIM Lua advisor rewards 1.0 loaded.
 [INFO] create_reward_utilities: available
 ...
@@ -93,8 +93,9 @@ lotti con un edificio bloccano ancora. `CrossZones=false` in `SC4SIM.ini` la dis
 `PlacePoles` (0x00651560) gira a ogni movimento del mouse durante il trascinamento, quindi il SIM registra solo le
 caselle dei tralicci (chiamate 0x006522C8 e 0x006529CB) e le dezona quando il trascinamento finisce (hook di
 `OnMouseUpL`, 0x00661F50, sul controllo di input degli strumenti di rete; `OnMouseDownL` dimentica le caselle di un
-trascinamento annullato). Usa la stessa chiamata con cui il gioco dezona (`PlaceZone` con zona None), con il bypass
-di keepwires attivo così la linea non viene ridisegnata. I lotti con un edificio non vengono toccati; su un campo
+trascinamento annullato). Usa la stessa chiamata con cui il gioco dezona (`PlaceZone` con zona None). Non serve il
+bypass di keepwires: il gestore dei cambi di zona (`UpdateOnZoneChange`, 0x006522F0) esce subito quando la nuova zona
+è 0, quindi dezonare non ridisegna mai la linea (dalla 1.9.3 gli hook non dipendono più da keepwires). I lotti con un edificio non vengono toccati; su un campo
 agricolo il gioco demolisce quel campo (non può togliere una sola casella a un lotto) e la fattoria ne fa crescere
 di nuovi intorno al traliccio. Impostazioni: `DezoneUnderPoles` e `DezoneFieldCells` (entrambe `true`).
 
@@ -147,7 +148,7 @@ viene scritto a ogni inizio mese. Limiti:
 - la finestra di query mostra solo la capacità principale;
 - senza la DLL torna la regola originale.
 
-Analisi completa in `docs/mixed-occupancy.md`. Impostazioni: `[MixedOccupancy] Enabled` e `DebugLog`.
+Analisi completa in `docs/mixed-occupancy.md`. Impostazioni: `[MixedOccupancy] Enabled`, `DebugLog` e `MixedTraffic`.
 
 ## Zona industriale manifatturiera I-M (1.8.0)
 
@@ -168,7 +169,12 @@ Cosa cambia (indirizzi della 1.1.641, dalle note di decompilazione):
   terreno, quindi il reindirizzamento dà al profilo I-M l'intervallo 0-255. Non si sovrascrive il risultato, perché
   dopo il valore del terreno c'è ancora un controllo sullo stato del lotto;
 - `IsRCIZone` (0x004DC300): vero anche per lo slot (`RCIZoneHook`);
-- `PlaceZone` (vtable del gestore zone): con il pennello `IMZone` attivo lo strumento Industria densa piazza la zona I-M.
+- `PlaceZone` (vtable del gestore zone): con il pennello `IMZone` attivo lo strumento Industria densa piazza la zona I-M;
+- all'avvio, senza override dell'exemplar Zone Manager (così i mod di zonizzazione restano compatibili): dimensioni,
+  costi e pendenza massima dell'industria media, texture e colore arancio bruciato, cursore proprio, niente frecce
+  dei lotti, tooltip industriale con il nome "Manufacturing Industrial" e la domanda della sola I-M; i lotti I-M delle
+  zone 8 e 9 crescono anche nello slot. La voce "Manufacturing Industrial" è nel menu delle zone industriali
+  (`SC4SIM_ManufacturingZone.dat`).
 
 Sicurezza: le note non danno i byte né le firme, quindi la DLL misura tutto prima di applicare le patch. Le funzioni
 virtuali si cercano nella vtable per indirizzo. `GrowthStageFitsInZone` e `IsRCIZone` sono funzioni pure: la DLL le
@@ -184,10 +190,23 @@ del gestore zone, senza chiamate dirette. Dettagli in `docs/manufacturing-zone.m
 Trucchi: `IMZone` attiva/disattiva il pennello, `IMZoneConvert` converte in zona I-M ogni casella vuota di industria
 densa, `IMZoneInfo` scrive stato e contatori in `SC4SIM.log`.
 
-Limiti: lo slot mantiene texture, colore, dimensioni e costi dello Spaceport finché un mod di dati non li cambia;
-non c'è un pulsante I-M; una città salvata con zone I-M e aperta senza il modulo le vede come Spaceport;
+Limiti: una città salvata con zone I-M e aperta senza il modulo le vede come Spaceport;
 inquinamento, traffico e crimine potrebbero trattare la zona come lo slot originale. Analisi completa e punti da
 verificare in gioco in `docs/manufacturing-zone.md`. Impostazioni: `[ManufacturingZone]`.
+
+## Afterlife (1.9.0-1.9.3)
+
+Versione DLL dell'Afterlife del pacchetto (Winners in Paradiso, Sinners all'Inferno, popolazioni native, clienti e
+vittime I.M.P., redenzioni), con le notizie nel ticker e righe nelle query di chiesa e cimitero. Le statistiche sono
+**fittizie e cosmetiche**: la simulazione vera non cambia. Dalla 1.9.3:
+- i morti di base vengono dall'aspettativa di vita del gioco (`game.ga_life_exp`), più le "ondate" dei quartieri in
+  cui il simulatore residenziale azzera l'età media (vecchiaia, o morti premature dove l'aspettativa di vita è sotto
+  l'età di reset);
+- il giudizio usa l'istruzione (EQ, scala 0-200, riferimento 100) della fascia di ricchezza dei morti;
+- Hellborn e Heavenborn superano sempre le anime all'Inferno e in Paradiso;
+- i totali vengono salvati in `SC4SIM_Afterlife.ini` quando si salva la città.
+
+Dettagli in `docs/afterlife.md`. Impostazioni: `[Afterlife]` di `SC4SIM.ini`.
 
 ## Advanced Water Management (1.2.0)
 

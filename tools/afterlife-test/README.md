@@ -1,6 +1,7 @@
 # Afterlife equivalence test
 
-Compares `src/afterlife/AfterlifeModel.cpp` with the last Lua version of the engine. `AFTERLIFE.lua` and
+Compares `src/afterlife/AfterlifeModel.cpp` with a Lua version of the engine kept in step with it (the last Lua
+version of the pack, extended with the 1.9.2 natives and the 1.9.3 mortality and generation resets). `AFTERLIFE.lua` and
 `PACK_CONSTANTS.lua` are no longer in the pack; they are kept in `reference/` as test fixtures only. The roster and
 event tables of `reference/PACK_CONSTANTS.lua` are rewritten by `tools/afterlife-news/build_news.py`.
 
@@ -14,9 +15,9 @@ Expected output (the script exits with 1 on any mismatch; `./harness` must be in
 
 ```
 random constants   - cycles compared: 12000 mismatches: 0
-defaults           - constants compared: 23 mismatches: 0
-news roster        - characters: 60 events: 7 match: True
-ticker picks       - compared: 24 mismatches: 0
+defaults           - constants compared: 32 mismatches: 0
+news roster        - characters: 62 events: 8 match: True
+ticker picks       - compared: 27 mismatches: 0
 PACK_CONSTANTS run - cycles compared: 40000 mismatches: 0
 ```
 

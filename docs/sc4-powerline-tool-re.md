@@ -8,6 +8,51 @@ confirmed in §7. The 19 confirmed Windows functions + 4 data globals have been 
 Ghidra database** (see §8), and a `cSC4PowerPoleOccupant` struct now exists in both programs (§9),
 applied as the `this` type on 12 of the renamed methods.
 
+## Corrections (review of 2026-11-01, checked against the 1.1.641 exe)
+
+Several statements below were later found wrong; they are kept for the record, and this list wins:
+
+- **Struct offsets read through a secondary `this`.** `cSC4PowerPoleOccupant::SetPosition` (`0x0064C540`) runs with
+  `this` = object + 8 (`lea ebx,[esi-8]` at `0x0064C560`). In object terms: position `+0xA0/+0xA4/+0xA8`, rotation
+  `+0xC0`, zoom `+0xC4`, cell X/Z `+0xC8/+0xCC`; nothing is shared (§11). Likewise `cSC4PowerLineOccupant::SetPosition`
+  (`0x0064A460`) sits at object + 4: position `+0x38`, cells `+0x44/+0x48`, as on the Mac (§10).
+- **`GetLineConnectionPoints` is not inlined:** it is the standalone function `0x00649BA0`, called at
+  `0x0064D685/0x0064D695` (`UpdateConnection`) and `0x0064E5CF/0x0064E5DF` (`AddConnection`).
+- `0x006392F0` is the base network tool's `CheckForReservedTiles`; the power-line override is `0x0064FED0`.
+  `0x0064A4A0` is `cSC4PowerLineOccupant::GetBoundingBox(min, max)` (both set to the position), not `GetPosition`.
+- **Tunables.** `StaticInit` reads only `0xE9AC43E7` and `0x0A2ECED8`; `InitPowerLineControlVariables` only the six
+  curve values. Max cells between poles, minimum height, placement and pole cost are read by `cSC4PowerLineTool::Init`
+  (`0x00650630`) into tool fields `+0x3A4` (default 20), `+0x3A8` (7.0), `+0x3AC`, `+0x3B0`.
+- **`ComputePolePosition`** uses the cell centre, `(cell + 0.5) x cell width`; height = highest corner + 0.5, or water
+  level + 0.5.
+- The primary vtable `0x00AA9CB8` is the interface's pure-call table overwritten in the constructor; the final one is
+  `0x00AA9EB0` (`0x0064DB76`). There are 8 vtables (plus the virtual-base table at `+0x120` and its pointer at `+0x40`).
+- **`0x006520C0` is `FindNewPolePosition`**, called only from `UpdateOnZoneChange` to move a pole out of a zoned
+  rectangle (§17G). Neighbour connections go through `DoNetworkSpecificPlacement` `0x00652980` and
+  `AttemptNeighborConnections` `0x00628BD0`.
+- `0x0064F170` is `IntersectionIsInList` (two pole pointers and two kind bytes); `0x0064F1D0` is `PoleIsInList` (true
+  if any planned pole shares the pole's cell x or z).
+- **`DrawNetworkLine`'s 3rd argument is the snap flag:** only when it is set does the end snap to horizontal, vertical
+  or 45 degrees; otherwise the path is a straight run plus a 45-degree run. The UI passes a flag that is false when
+  Shift was held at mouse-down, so it does carry Shift. The straight-only switch is tool `+0x2B5`. The bounds check
+  against `+0x240/+0x244` runs only when the network's pen width or height is 2 or more.
+- `0x006492F0` is inside `mov [esi+0x4c],edi` (`0x006492EF`); there are two epilogue copies (`0x00649314`,
+  `0x00649323`).
+- Tool `+0x50` (read in `PlacePoles`) is most likely the tool's "placing for real" (not preview) flag, not a pole field.
+- Wire ribbons are offset sideways in the ground plane (they lie flat); buoys are flat horizontal squares (likely).
+- **Water-crossing list (§22B/E):** vanilla resizes it to 3 points (`0x0064D842`) and fills it with the Bezier
+  sampler at count 3 (`0x0064D86C`): t = 1/3, 2/3, 1, never t = 0. SC4SIM's layout is the same scheme, not a fix.
+  `UpdateConnection` never clears this list (only `+0x14`), a vanilla leak SC4SIM's rebuild clears. Texture
+  `0xC9AF0FCD` (`0x0064B9E3`) draws the buoys.
+- **Render owner (§14):** only the entry with byte `+0x9` set builds and draws the wires (see §14).
+- Smaller: `0xA2ECED8` is `0x0A2ECED8`; `0x0064D020` is the vector's grow-and-insert (it always reallocates); the
+  third dword of a drag step is its kind (0 normal, 1 bridge, 2 tunnel); `Draw`'s chain walk does stop on null (the
+  found node is used unchecked); the wire lists are at `+0x14/+0x20` (§14, §22), not `+0x18/+0x24`; the model-ID bit
+  layout is resolved in §15D and the curve distance mapped in §7; `SetConnectedPoleA/B` is one function (§13a).
+- Section numbers: the old second and third §18 are now §20 and §21, the second §19 is §22, and the old §12 (after
+  §13) is §13b. The "Open next steps" lists below are historical: `GetLineConnectionPoints` was found (above),
+  `GetControlPoints` is `__stdcall` (§14), and the style index is handled by the Tab switch (§20).
+
 ## Class architecture
 
 - `cSC4PowerLineTool` (0x0022c578) — drag tool, subclass of `cSC4NetworkTool`. Builds a pole/connection
@@ -125,8 +170,11 @@ point = table[direction & 3][i] + (this.x, this.y, this.z)
 
 `this+0xe0` is set by `InitConnectionPoints` (0x002556ac) to one of exactly two **hardcoded**
 global tables: `_cardinalConnectionPoints` (0x00c20fc0) or `_diagonalConnectionPoints`
-(0x00c20f00), picked via a 2-bit field read off the exemplar's orientation property (bits 8-11 of
-a property read at `piVar1+0x2c`).
+(0x00c20f00), picked from bits 8-11 of the pole exemplar's own resource key (its instance, read
+through `GetKey`, slot `+0x2c`). Windows `0x00649B30`: 1 or 2 → cardinal `0x00B0C0D8`, 3 or 4 →
+diagonal `0x00B0C198`, anything else → nothing, and the pointer stays null from the constructor
+(`GetLineConnectionPoints` and `Write` then read it unchecked; SC4SIM repairs it, see the corrections
+at the top).
 
 `AddConnection` (0x00258eee) / `UpdateConnection` (0x00258346) both run
 `while (local_110 != 4)` building **4 separate Bezier polylines** per connection — one per
@@ -242,7 +290,7 @@ are OOAnalyzer guesses, mostly `FUN_xxxxxxxx`. A few function names did survive 
 | `cSC4PowerPoleOccupant::StaticInit` (0x00256ac8) | `FUN_0064cc20` | confirmed — `0xC911E35B` + `0xE9AC43E7` both present |
 | `cSC4PowerPoleOccupant::InitPowerLineControlVariables` (0x002554da) | `FUN_0064a170` | confirmed — `0xC911E35B` + `0xE9A18D3F` both present |
 | `cSC4PowerPoleOccupant::GetControlPoints` (0x0025608c) | `FUN_0064a6c0` | confirmed — reads `sfMaxHorizontalControlPointDistance` global, 2 callers match AddConnection/UpdateConnection |
-| `cSC4PowerPoleOccupant::InitConnectionPoints` (0x002556ac) | `FUN_00649b30` | confirmed — identical bit-extract `(prop>>8)&0xF`, 2-way branch to two table addresses |
+| `cSC4PowerPoleOccupant::InitConnectionPoints` (0x002556ac) | `FUN_00649b30` | confirmed — bit-extract `(instance>>8)&0xF` of the exemplar's resource key; 1-2 cardinal, 3-4 diagonal, other values leave the table null |
 | `cSC4PowerPoleOccupant::SetDefaultExemplar` (0x0025879a) | `FUN_0064d910` | confirmed — calls LoadModel + InitConnectionPoints-equiv + UpdateConnection-equiv, matches call shape |
 | `cSC4PowerPoleOccupant::UpdateConnection` (0x00258346) | `FUN_0064d510` | confirmed — sole caller is the SetDefaultExemplar match above |
 | `cSC4PowerPoleOccupant::AddConnection` (0x00258eee) | `FUN_0064e3e0` | confirmed — called directly inline from PlacePoles match, guarded by `this[0x50]==0` ⇄ `unaff_ESI[0x14]==0` |
@@ -355,7 +403,7 @@ until each gets its own confirming xref the way `0xc4`/`0xb8`/`0xac` did.
 
 ## 10. Second RE pass (2026-07-01) — closing the DLL scaffold's gaps
 
-Prompted by writing `PowerPoleCustomizationDirector.cpp` (§9's DLL, now at
+Prompted by writing `PowerPoleCustomizationDirector.cpp` (the DLL of §8-§9, now at
 `src/sample/power-pole-customization/`) — three of its four flagged gaps got closed by going back
 into Ghidra, not guessed at.
 
@@ -507,7 +555,7 @@ correctly computed "2 extra strands in direction 2, vanilla already built 4" via
 `SetConnectedPoleA`/`SetConnectedPoleB`) with **no crash** for all 6 extra-strand builds. But no
 extra wires were visible in-game.
 
-This confirms — not just hypothesizes — §11 item 5: registering a `cSC4PowerLineOccupant` via
+This confirms — not just hypothesizes — the open question of §11: registering a `cSC4PowerLineOccupant` via
 `SetConnectedPoleA/B` makes it a real, refcounted, non-crashing game object, but does **not** make
 `DrawPowerlines` draw it. `DrawPowerlines` reads polyline data cached directly in each *pole's own*
 `tConnection` entry (`this+0xac`/`+0xb0`), populated by `AddConnection`/`UpdateConnection`'s own
@@ -522,7 +570,7 @@ pole's own `tConnection.polylines` vector — the same `vector<vector<cS3DVector
 `AddConnection`/`DrawPowerlines` field layout). That inner structure wasn't independently
 re-confirmed on Windows this session — the next scoped RE task, not a guess to act on yet.
 
-## 12. PoC cheat code added (2026-07-01)
+## 13b. PoC cheat code added (2026-07-01)
 
 `PowerPoleCustomizationDirector.cpp` now has a `"polelinetest"` cheat code (search
 `kCheatPoleLineTest`), following the `DateJumperDirector.cpp` pattern (`RegisterCheatCode` in
@@ -530,7 +578,7 @@ re-confirmed on Windows this session — the next scoped RE task, not a guess to
 ID). Toggling it makes every pole that goes through `InitConnectionPointsHook` (newly placed or
 reloaded) get a synthetic 6-point override built from its own already-baked vanilla attach point,
 duplicated with a small Y offset — no new art or exemplar needed. This isolates testing of exactly
-the open question from §11 item 5: does `CreateLineOccupant` + `SetConnectedPoleA/B` registration
+the open question from §11: does `CreateLineOccupant` + `SetConnectedPoleA/B` registration
 alone make `DrawPowerlines` render the extra strands, independent of the still-unresolved
 exemplar-property-reading path. Every block is tagged `TEMPORARY PoC-ONLY` for easy removal once
 that question is answered either way.
@@ -568,10 +616,9 @@ dropping content-matching entirely: since the append always runs immediately aft
 **last entry** in the pole's connections vector. Simpler and doesn't depend on the one offset pair
 that's already been shown wrong.
 
-Not yet verified in-game whether the *last-entry* assumption holds for `UpdateConnection` specifically
-(rebuilding an existing connection, e.g. on exemplar/zone change, may update an entry in the middle
-of the vector rather than the most recent one) — `AddConnection` (new placement) is the case tested
-so far.
+**Superseded.** The last-entry assumption is wrong in general: `UpdateConnection` rebuilds whichever
+entry matches the other pole and has `+0x9` set, at any index. The current code finds that entry by
+content (`FindConnectionEntry`: other pole at `+0x00`, render-owner byte `+0x9` set).
 
 **Second in-game bug, same test round: wrong calling convention on `GetControlPoints`.** Declared
 `__cdecl` based on how the decompiler rendered it (plain params, no visible `this`) — decompiler
@@ -595,8 +642,10 @@ separately `this=poleB,other=poleA`) -- confirmed by this exact symptom, not jus
 each call only touches its own `this` pole's connections vector. `TopUpExtraStrands` was appending
 to *both* poles per single hook firing, so the "other pole" append ran before that pole's own
 separate `AddConnection` call (and thus its own fresh entry) existed yet. Fixed by appending only
-to `occupant` (the `this` side) per hook firing -- the swapped call, already hooked at all 4 call
-sites, naturally handles the other side when it fires moments later. Not yet re-tested in-game.
+to `occupant` (the `this` side) per hook firing. **Later correction:** only the render owner of a
+span (the entry with byte `+0x9` set: the pole lower in z, then in x) builds and draws the wires;
+`DrawPowerlines` skips entries whose `+0x9` is 0 (`0x0064B7A1`). Strands appended on the other pole's
+entry are saved but never drawn, so the code now touches only the render-owner entry.
 
 ## Open next steps (updated)
 
@@ -612,7 +661,7 @@ sites, naturally handles the other side when it fires moments later. Not yet re-
 4. Cross-check all addresses above against Windows `SimCity 4.exe` 1.1.641 — done for the functions in
    §7; re-verify before writing a real patch.
 5. Check whether `cSC4NetworkTool` already has an unused style-index field/cycle mechanism (for
-   the multi-pole-type design in §6B).
+   the multi-pole-type design, "DLL design notes" B after §6).
 6. Pin exact byte layout for the proposed new connection-point properties (property IDs from
    modder-reserved range, decide array-vs-fixed-struct encoding).
 7. ~~Decide `GetModelInstanceID`'s instance-ID bit layout~~ — resolved 2026-07-03; see §15D.
@@ -667,7 +716,7 @@ system knows only 4 orientations (`Get0To3Direction`). Three separable layers:
   **New insight:** this DLL already reimplements attach reads (`GetAttachPoint`) and has *both* poles
   in `ApplyConnectionCustomization`, so rotating each attach offset by the true bearing
   `atan2(dz,dx)` aligns cables at any angle — pure code, no art. Vanilla couldn't (flat translation
-  add, no rotation matrix, §6C). This is the one cheap, high-value FAR win.
+  add, no rotation matrix, "DLL design notes" C after §6). This is the one cheap, high-value FAR win.
 - **Pole mesh:** `GetModelInstanceID` picks ~4 discrete rotated S3D variants → mesh faces nearest
   45°, visual seam. Needs new art (or accept seam). Bit layout still unmapped.
 - **Pole position:** grid-quantized (`ComputePolePosition = cellX*16`). Confirmed 2026-07-03 this is
@@ -958,7 +1007,7 @@ cardinal direction code for the crossed edge (`0=−X`, `2=−Z`, `4=+X`, `6=+Z`
 on exact FAR-period nodes. The shortened terminal span is a transition segment and uses the normal
 fallback model policy until dedicated transition art exists.
 
-## 18. Tab / Shift-Tab pole-style switch — OnKeyDown hook (2026-07-05, implemented)
+## 20. Tab / Shift-Tab pole-style switch — OnKeyDown hook (2026-07-05, implemented)
 
 Resolves the deferred "real Tab/Shift-Tab key hook" and the open question at §§ above about a
 style-cycle mechanism.
@@ -989,7 +1038,7 @@ The one address in the gate (`0x00aab008`) is byte-validated at install (the OnK
 the optional status overlay — when it is confirmed on the live binary. See
 `docs/power-line-style-ui-design.md` for the full UI design.
 
-## 18. Pole lifetime + texture registry (2026-07-19) — beta hardening pass
+## 21. Pole lifetime + texture registry (2026-07-19) — beta hardening pass
 
 ### A. cSC4PowerPoleOccupant destructor chain (Windows, confirmed)
 
@@ -1031,7 +1080,7 @@ SimCity_1.dat, template = `PowerPole_205`), RKT1 → P3 FA-2 tangent S3Ds
 `5AD0E817-E4586C0B-00030000` (NL266) and `5AD0E817-44586CF1-00030000` (NR266); base instances end
 in `00` per the RKT1 rotation-nibble rule.
 
-## 19. Wire textures, water-crossing list, pad rotation, Shift modifier (2026-07-19)
+## 22. Wire textures, water-crossing list, pad rotation, Shift modifier (2026-07-19)
 
 ### A. DrawPowerlines texture sites (Windows, confirmed)
 
@@ -1046,7 +1095,7 @@ Unlike Draw's floor/wall pair-sites, each DrawPowerlines texture is loaded by a 
 DLL: both sites patched to `CALL` hooks keyed by the tConnection entry pointer
 (`gConnectionTextureOverrides`, re-registered per pole after every AddConnection/UpdateConnection
 since vector reallocation moves entries). New exemplar properties `0xB22A000F` (strand) and
-`0xB22A0010` (water wire), validated/registered through the §18B machinery.
+`0xB22A0010` (water wire), validated/registered through the §21B machinery.
 
 ### B. tConnection +0x20/+0x24 identified: water-crossing coarse polylines
 

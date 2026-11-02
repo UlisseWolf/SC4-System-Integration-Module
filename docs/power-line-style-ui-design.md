@@ -12,8 +12,8 @@ working regardless.
 
 ## Resolved RE (2026-07-05)
 
-- Keyboard input for all network tools goes through `cSC4ViewInputControlNetworkTool` (one shared
-  instance, vtable **`0x00aab008`**). `OnKeyDown` body = **`0x00661e90`**, at vtable slot
+- Keyboard input for all network tools goes through `cSC4ViewInputControlNetworkTool` (vtable
+  **`0x00aab008`**; a new input control is made each time the tool is selected). `OnKeyDown` body = **`0x00661e90`**, at vtable slot
   **`0x00aab040`** (= `+0x38`, interface slot 14). Vanilla `OnKeyDown` handles only Escape
   (`0x1b`) — Tab is unclaimed, no conflict.
 - The input control stores the **current network type at `+0x50`** (fed to `SL::NetworkManager` in
@@ -97,15 +97,15 @@ false. The `+0x50` network-type enum is both correct and more rebuild-stable tha
 uint8_t __fastcall OnKeyDownHook(void* control, void* edx, int vkCode, uint32_t modifiers):
     // Bail to original unless Tab AND the active network type is power (5).
     if (enabled and vkCode == VK_TAB and *(control) == 0x00aab008 and *(control+0x50) == 5):
-        shift = GetAsyncKeyState(VK_SHIFT) & 0x8000
+        shift = modifiers & 1          // SC4SIM reads bit 0 of OnKeyDown's modifiers (not GetAsyncKeyState)
         CycleStyle(shift ? -1 : +1)
         return 1                      // consume; do not let vanilla see Tab
     return original(control, vkCode, modifiers)
 ```
 
 `CycleStyle(dir)` advances `gActiveStyleIndex` over `[0 .. gStyles.size()]` (0 = vanilla), wrapping,
-exactly like the current `kCheatPoleStyle` handler — reuse that logic, just driven by the key. It
-already only affects newly-placed poles, which is the intended semantics.
+wrapping (the `kCheatPoleStyle` cheat of the design was removed; the key is the only way). It only
+affects newly-placed poles, which is the intended semantics.
 
 Notes / risks:
 - **Reuse `VTableSlotPatch`** (already in the DLL for `DrawNetworkLine` and the shutdown observer).
@@ -163,9 +163,9 @@ when false — the plop-and-paint `PaintStatusPanel` pattern):
 
 - Get `cISC4View3DWin` (via `cISC4App` → `GetView3DWin`, as plop-and-paint's director does with
   `pView3D_`), call `GetCurrentViewInputControl()`, and test whether it is the power tool.
-- **Reuse the exact tool-identity check developed for the key hook** (network type `== 5` at
-  `+0x35c`, adjusting for the interface subobject offset) so there is one source of truth. If the
-  current control isn't the power tool, hide the overlay.
+- **Reuse the exact tool-identity check developed for the key hook** (network type `== 5` at `+0x50`
+  of the input control; `+0x35c` is the same value on the tool itself) so there is one source of truth.
+  If the current control isn't the power tool, hide the overlay. (SC4SIM has no overlay.)
 
 ### B.4 Contents and data sources
 
@@ -212,6 +212,9 @@ requirement — call out in code, don't over-engineer.
 ---
 
 ## Files & symbols
+
+> As planned for sc4-render-services. In SC4SIM the code is `src/powerpoles/PowerPoleCustomization.cpp`, there is
+> no ImGui panel and no `kStatusPanelId`, and the identity check reads `+0x50` of the input control.
 
 - `src/sample/power-pole-customization/PowerPoleCustomizationDirector.cpp` — add `OnKeyDown` hook +
   `VTableSlotPatch`; add the ImGui panel (render/update/shutdown), service acquisition in

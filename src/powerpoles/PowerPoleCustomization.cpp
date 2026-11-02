@@ -187,12 +187,15 @@ namespace {
     constexpr uint32_t kConnection_PolylinesEnd = 0x18;
     // Second vector<vector<cS3DVector3>> (confirmed 2026-07-19 via AddConnection's decompile and
     // DrawPowerlines' reads at [entry+0x20]/[entry+0x24]): coarse 4-point copies of each strand,
-    // built by AddConnection ONLY when the span crosses water (terrain service vtbl+0x88 test) and
-    // drawn with the 0xC9AF0FCD texture. Same element layout and the same insert/erase helpers as
-    // the regular list, with a fixed tessellation count of 3 segments after the start point.
+    // built by AddConnection ONLY when the span crosses water (terrain service vtbl+0x88 test); the
+    // 0xC9AF0FCD texture draws its buoys. Same element layout and the same insert/erase helpers as
+    // the regular list. Vanilla resizes each copy to 3 points (push 3 at 0x0064D842) and fills it
+    // with the Bezier sampler at count 3 (0x0064D86C), which writes t = 1/3, 2/3, 1 and never t = 0.
+    // UpdateConnection clears the wire list (+0x14) but never this one, so every update of a water
+    // span appends more copies (a vanilla leak); the rebuild below clears it.
     constexpr uint32_t kConnection_WaterPolylinesBegin = 0x20;
     constexpr uint32_t kConnection_WaterPolylinesEnd = 0x24;
-    constexpr int32_t kWaterPolylinePointCount = 4; // start + 3 tessellated, matching vanilla
+    constexpr int32_t kWaterPolylinePointCount = 3; // t = 1/3, 2/3, 1: vanilla's own layout
     constexpr uint32_t kConnection_Size = 0x2c;
 
     // DrawPowerlines resolves the vanilla zoom-dependent width pointer at this instruction range.
@@ -1243,12 +1246,10 @@ namespace {
                              a, b, sagScale, maximumSag);
     }
 
-    // Water-crossing variant. The engine draws one buoy ball at every point EXCEPT the last, so a
-    // plain 0..1 tessellation (vanilla's own layout) puts the first ball exactly on pole A's
-    // attach node. The list's only consumer is that ball loop, so the points are free to place:
-    // for B balls (totalPoints - 1), tessellate B+2 uniform points along the sagged bezier and
-    // drop the t=0 one -- the stored points sit at t = k/(B+1) for k = 1..B+1, the engine draws
-    // balls at the B strictly-interior positions, and neither pole ever wears a ball.
+    // Water-crossing variant, the same layout as vanilla: for totalPoints points it tessellates
+    // totalPoints + 1 uniform points along the sagged bezier and drops the t = 0 one, so the stored
+    // points sit at t = k/totalPoints for k = 1..totalPoints (vanilla: count 3, t = 1/3, 2/3, 1). The
+    // engine draws a buoy at every point except the last, so neither pole wears one.
     void AppendWaterPolylineToConnection(void* entry, const AttachPoint& a, const AttachPoint& b,
                                          const float sagScale, const float maximumSag,
                                          const int32_t totalPoints) {
@@ -1678,12 +1679,10 @@ namespace {
         const int32_t waterPointCount = (buoySource != nullptr && buoySource->hasWaterBuoyCount)
             ? static_cast<int32_t>(buoySource->waterBuoyPointCount)
             : kWaterPolylinePointCount;
-        // Any water-crossing span is rebuilt unconditionally: vanilla's own layout draws its first
-        // buoy ball exactly on pole A's attach node (the ball loop renders every point except the
-        // last of a uniform 0..1 tessellation), and the rebuild replaces that with the
-        // strictly-interior layout of AppendWaterPolylineToConnection. On an otherwise-vanilla
-        // span the strand rebuild this forces is geometry-identical (vanilla table, zero yaw,
-        // default sag), so only the ball positions change.
+        // Any water-crossing span is rebuilt unconditionally: UpdateConnection never clears the
+        // water list, so without the rebuild every update of the span would add more buoy copies
+        // (a vanilla leak). On an otherwise-vanilla span the rebuild is geometry-identical
+        // (vanilla table, zero yaw, default sag, the same t = k/count buoy layout as vanilla).
         const bool rebuildGeometry = HasAttachPointCustomization(occupant, direction) ||
                                      HasAttachPointCustomization(otherPole, direction) ||
                                      (appearance != nullptr && appearance->hasSagCustomization) ||
@@ -2172,12 +2171,15 @@ namespace {
     using UpdateConnectionFn = void(__thiscall*)(void* occupant, void* otherPole);
     using CreateFloorFn = void(__fastcall*)(void* occupant, void* /*unused edx*/);
 
-    // Vanilla selects one of its two fixed attachment tables from bits 8-11 of the model's RKT1
-    // group. Arbitrary custom-model groups can encode a value outside vanilla's accepted 1-4
-    // range, in which case InitConnectionPoints silently leaves the constructor-initialized field
-    // null. AddConnection/UpdateConnection dereference that field before our custom polyline rebuild,
-    // so seed a safe staging table for those models. Custom attachment geometry still replaces the
-    // resulting vanilla strands in ApplyConnectionCustomization.
+    // Vanilla InitConnectionPoints (0x00649B30) selects one of its two fixed attachment tables from
+    // bits 8-11 of the pole exemplar's own resource key (its instance, read through GetKey, slot
+    // +0x2C): 1 or 2 -> the cardinal table 0x00B0C0D8, 3 or 4 -> the diagonal table 0x00B0C198, any
+    // other value -> nothing, and the field stays null from the constructor. GetLineConnectionPoints
+    // (0x00649BA0) and Write read it without a check, so a custom pole outside 1-4 (the FAR poles use
+    // 0xA) would crash; seed a safe table for those poles. Custom attachment geometry still replaces
+    // the resulting vanilla strands in ApplyConnectionCustomization.
+    uint32_t gRepairedConnectionTables = 0;
+
     void RepairMissingConnectionPointTable(void* occupant) {
         auto*& table = *reinterpret_cast<uint8_t**>(
             reinterpret_cast<uint8_t*>(occupant) + kOccupant_ConnectionPointTablePtr);
@@ -2191,9 +2193,16 @@ namespace {
                                   (directionFlags & kCardinalDirectionFlags) == 0;
         table = reinterpret_cast<uint8_t*>(
             diagonalOnly ? kDiagonalConnectionPoints : kCardinalConnectionPoints);
-        LOG_WARN("PowerPoleCustomization: vanilla left pole {} without a connection-point table "
-                 "(direction flags 0x{:X}); using the {} table as a safe fallback.",
-                 occupant, directionFlags, diagonalOnly ? "diagonal" : "cardinal");
+        // Expected for every FAR / custom pole: log the first one, the rest only at debug level.
+        if (gRepairedConnectionTables++ == 0) {
+            LOG_INFO("PowerPoleCustomization: pole {} has no vanilla connection-point table (exemplar instance "
+                     "bits 8-11 outside 1-4, direction flags 0x{:X}); using the {} table. Further poles like it "
+                     "are logged at debug level only.",
+                     occupant, directionFlags, diagonalOnly ? "diagonal" : "cardinal");
+        } else {
+            LOG_DEBUG("PowerPoleCustomization: pole {} given the {} connection-point table.",
+                      occupant, diagonalOnly ? "diagonal" : "cardinal");
+        }
     }
 
     void __fastcall CreateFloorHook(void* occupant, void* edxUnused) {
@@ -2327,7 +2336,9 @@ namespace {
     // cSC4PowerLineTool::CellIsOKForPlacement (0x0064fd00, __thiscall, args cellX, cellZ, RET 8) returns
     //   0 = a pole may stand here,
     //   1 = zoned cell (cISC4ZoneManager::GetZoneType != None, Landfill, Plopped),
-    //   2 = a building occupant or a lot on the cell, 3 = a blocking flora-type occupant.
+    //   2 = a building occupant or a lot on the cell, 3 = a network piece that is not underground.
+    // CheckForReservedTiles (0x0064fed0) never moves the cut point forward on 1, so a 1 cuts the drag back to the
+    // last free step; a 3 cuts only on the last step when the cell before gave 0.
     // DeterminePolePositions (call 0x006509ad) only places poles on 0. Over 1 the wire may span, but no
     // pole can stand, so a zone wider than the pole spacing breaks the line; the drag validation
     // (call 0x0064ff3e) stops the drag at 2. A farm field is a zoned lot without a building.
@@ -2383,23 +2394,25 @@ namespace {
     // pole-add helper 0x00650760: +0x00 pole index, +0x04/+0x08 the cell X/Z taken from the dragged-cell
     // vector (the same cells passed to CellIsOKForPlacement), +0x0c the cell index, +0x10 the pole occupant
     // (cleared at the end of PlacePoles), +0x24..+0x2d the snap key compared by the list scan 0x0064f170.
-    // It is called from outside itself at 0x006522c8
-    // (neighbour auto-connect, 0x006520c0) and 0x006529cb (line placement, power tool vtable slot 0xD4);
-    // both read the same vector after the call, so it is still valid there. tool+0x50 != 0 is the removal
-    // mode (PlacePoles takes the RemoveConnection branch). PlacePoles also runs on every mouse move of a drag,
+    // It is called from outside itself at 0x006522c8 (FindNewPolePosition 0x006520c0, which moves a pole out of a
+    // zoned rectangle for UpdateOnZoneChange and returns straight after the call) and 0x006529cb (line placement,
+    // power tool vtable slot 0xD4). tool+0x50 is most likely the tool's "placing for real" (not preview) flag;
+    // only calls with it 0 are recorded, which during a drag are the preview calls that list the same poles as
+    // the final placement. PlacePoles also runs on every mouse move of a drag,
     // so the hook only records the pole cells; when the drag ends (OnMouseUpL hook below) every recorded pole
     // cell that is still zoned is dezoned, with the call the game itself uses to dezone a rectangle (0x00467075):
     // PlaceZone(region, None, place=1, skipFunds=1, checkSlope=0, skipZoneSize=1, checkLotSize=1, 0, 0, 0).
     // Cells with a lot are skipped (a lot cannot lose a single cell: the game would demolish it), unless
-    // DezoneFieldCells is on and the lot has no building (farm field). The keepwires bypass is switched on
-    // around the call, so the zone change does not reroute the line that was just placed.
+    // DezoneFieldCells is on and the lot has no building (farm field). No keepwires bypass is needed: the zone
+    // change handler UpdateOnZoneChange (0x006522f0) returns at once when the new zone is 0 (0x006522fc), so
+    // dezoning never reroutes a line.
     // ------------------------------------------------------------------
     constexpr uintptr_t kPlacePoles = 0x00651560;
     constexpr std::array<uintptr_t, 2> kPlacePolesCallSites = {
         0x006522c8, // neighbour auto-connect
         0x006529cb, // line placement
     };
-    constexpr uint32_t kTool_RemovalMode = 0x50;     // byte
+    constexpr uint32_t kTool_RemovalMode = 0x50;     // byte; most likely "placing for real" (see above)
     constexpr uint32_t kTool_PoleInfoBegin = 0x36c;
     constexpr uint32_t kTool_PoleInfoEnd = 0x370;
     constexpr uint32_t kPoleInfoStride = 0x30;
@@ -2463,11 +2476,8 @@ namespace {
             }
 
             SC4CellRegion<int32_t> region(x, z, x, z, true);
-            const bool savedKeepWires = gKeepWiresOnZoneChange;
-            gKeepWiresOnZoneChange = true;
             const bool ok = zoneManager->PlaceZone(region, cISC4ZoneManager::ZoneType::None,
                                                    true, true, false, true, true, nullptr, nullptr, 0);
-            gKeepWiresOnZoneChange = savedKeepWires;
             if (ok) {
                 ++dezoned;
             }
@@ -3157,15 +3167,11 @@ public:
             return true;
         }
 
-        if (!gSettings.enabled) {
-            LOG_INFO("PowerPoleCustomization: disabled via ini; not patching.");
-            return true;
-        }
-
+        // The connection-point table repair is a crash guard, not a feature: it is installed even when the module
+        // is disabled, because pole exemplars whose instance bits 8-11 are not 1-4 (the FAR poles, any custom pole)
+        // leave the table null and the game reads it without a check. With the module disabled the hook only
+        // repairs the table (InitConnectionPointsHook drops every override when gSettings.enabled is false).
         size_t installed = 0;
-        installed += InstallCallSitePatch(modelInstanceIdPatch_, "GetModelInstanceID@LoadModel",
-                                           kGetModelInstanceID_CallSite_LoadModel, kGetModelInstanceID,
-                                           &GetModelInstanceIDHook);
         installed += InstallCallSitePatch(initConnectionPointsPatches_[0], "InitConnectionPoints@Init",
                                            kInitConnectionPoints_CallSite_Init, kInitConnectionPoints,
                                            &InitConnectionPointsHook);
@@ -3175,6 +3181,16 @@ public:
         installed += InstallCallSitePatch(initConnectionPointsPatches_[2], "InitConnectionPoints@Read",
                                            kInitConnectionPoints_CallSite_Read, kInitConnectionPoints,
                                            &InitConnectionPointsHook);
+
+        if (!gSettings.enabled) {
+            LOG_INFO("PowerPoleCustomization: disabled via ini; only the connection-point table guard is installed "
+                     "({} of 3 sites).", installed);
+            return true;
+        }
+
+        installed += InstallCallSitePatch(modelInstanceIdPatch_, "GetModelInstanceID@LoadModel",
+                                           kGetModelInstanceID_CallSite_LoadModel, kGetModelInstanceID,
+                                           &GetModelInstanceIDHook);
         installed += InstallCallSitePatch(destructorPatch_, "Destructor@DeletingDtor",
                                            kDestructor_CallSite_DeletingDtor, kDestructor,
                                            &DestructorHook);
@@ -3235,19 +3251,15 @@ public:
         installed += keepWiresPatch_.Install(kUpdateOnZoneChange,
             {0x83, 0xec, 0x68, 0x8b, 0x44, 0x24, 0x7c}, &KeepWiresOnZoneChangeHook,
             "KeepWiresOnZoneChange") ? 1 : 0;
-        // SC4SIM: the dezoning hook relies on the keepwires bypass (see PlacePolesHook).
-        if (keepWiresPatch_.IsInstalled()) {
-            for (size_t i = 0; i < kPlacePolesCallSites.size(); ++i) {
-                installed += InstallCallSitePatch(placePolesPatches_[i], "PlacePoles",
-                                                   kPlacePolesCallSites[i], kPlacePoles, &PlacePolesHook);
-            }
-            installed += onMouseDownLPatch_.Install(kOnMouseDownLSlot, kOnMouseDownL, &OnMouseDownLHook,
-                                                    "OnMouseDownL@NetworkToolInputControl") ? 1 : 0;
-            installed += onMouseUpLPatch_.Install(kOnMouseUpLSlot, kOnMouseUpL, &OnMouseUpLHook,
-                                                  "OnMouseUpL@NetworkToolInputControl") ? 1 : 0;
-        } else {
-            LOG_WARN("PowerPoleCustomization: keepwires hook not installed; dezoning under poles disabled.");
+        // SC4SIM: dezoning under new poles (independent of keepwires: dezoning never reroutes a line).
+        for (size_t i = 0; i < kPlacePolesCallSites.size(); ++i) {
+            installed += InstallCallSitePatch(placePolesPatches_[i], "PlacePoles",
+                                               kPlacePolesCallSites[i], kPlacePoles, &PlacePolesHook);
         }
+        installed += onMouseDownLPatch_.Install(kOnMouseDownLSlot, kOnMouseDownL, &OnMouseDownLHook,
+                                                "OnMouseDownL@NetworkToolInputControl") ? 1 : 0;
+        installed += onMouseUpLPatch_.Install(kOnMouseUpLSlot, kOnMouseUpL, &OnMouseUpLHook,
+                                              "OnMouseUpL@NetworkToolInputControl") ? 1 : 0;
 
         // Tab / Shift-Tab pole-style switch. Byte-validates the OnKeyDown slot, which transitively
         // confirms the network-tool input-control vtable the overlay's power-tool check also reads.

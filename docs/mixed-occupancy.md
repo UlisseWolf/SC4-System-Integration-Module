@@ -103,7 +103,7 @@ unexplained "66" in the 2021 hotel test.
 
 For one growth developer and one tract:
 - the factor is `desirability(tract) × 0.01` (`0x00A823A4`), spread by a seeded random number;
-- above 1.0 it is replaced by `1 − random(+0x64, +0x68)`;
+- at 1.0 or more it is replaced by `1 − random(+0x64, +0x68)`;
 - the developer only fills lots whose `GetOccupantWealth()` equals its own wealth;
 - it calls `SetPopulation(type, round(GetAvailableCapacity(type) × factor))`.
 
@@ -206,7 +206,10 @@ traffic simulator's own pieces were checked against the executable.
 
 The maximum is written by `cSC4Lot::UpdateJobs` (`0x006BF6A0`, checked here). For each of the three wealths, it
 calls `SetMaxTripCapacity` (traffic simulator slot 19) with the lot's travel jobs (`lot+0x6C..0x74`), when they
-changed by more than 10%. The travel jobs are the sum of `GetJobs` over the lots of the designate. `GetJobs`
+changed by more than 10%. **Game bug:** the "changed by more than 10%" test compares all three wealths' jobs with
+`GetMaxTripCapacity(holder, 0)`, the **$** capacity (`push 0` before every read at 0x006BF6C9, 0x006BF72F,
+0x006BF795); only the writes use wealths 1 and 2. So $$ and $$$ jobs are judged against $ capacity, the cause of the
+community-known "high-tech industry has no $$$ jobs" bug. SC4SIM does not change this. The travel jobs are the sum of `GetJobs` over the lots of the designate. `GetJobs`
 (`0x006BF800`) reads only the primary type:
 
 `jobs[1..3] = CalculateJobsPerUnitOfDemand(type + 1, 0) × GetPopulation(type)`
@@ -235,8 +238,8 @@ original functions and that both call sites are still `CALL 0x006A5A00`. If any 
 - **Traffic.**
   - Secondary residents commute and secondary industry ships freight (hook 4, 1.7.0). Secondary jobs count in the
     trip capacity, so they are destinations (hook 5, 1.7.1).
-  - `UpdateJobs` only refreshes the maximum when the jobs change by more than 10%, so new secondary jobs may show
-    with a delay.
+  - `UpdateJobs` only refreshes the maximum when the jobs differ by more than 10% from the **$** capacity (the game
+    bug above), so $$ and $$$ secondary jobs may show late or, when the $ capacity is close, not at all.
   - The pathfinder's search loops (`FindPath` `0x006D91B0`, `FindNearestStandardDest` `0x006D7E50`) were not
     traced.
   - To check in game, read lot property `0x8A0B4100`:

@@ -9,8 +9,8 @@ Now added: named `FAR-<ratio>.<orient>` parsing + a `[PowerPoles.FAR]` default s
 capture (`gFarDragRatioIndex`/`gFarDragOrient`) feeding `ResolvePoleInstanceForDirectionMask`, and
 the per-endpoint attach-yaw refactor with an optional `kPropAttachBasisDegrees` exemplar property
 (`ComputeSpanBearing`/`AttachBasisAngle`, replacing the single `ComputeYawDelta`). In-game
-verification completed 2026-07-19. Example angled-art exemplars ship in
-`assets/power-pole-customization/SC4PowerPoleFA2Example.dat` (instances `0xB07EFA20`/`0xB07EFA21`,
+verification completed 2026-07-19. Example angled-art exemplars are in the sc4-render-services
+sample's `SC4PowerPoleFA2Example.dat`, not in this repository (instances `0xB07EFA20`/`0xB07EFA21`,
 vanilla pole group `0x088E1962`, RKT1 -> the P3 NL266/NR266 26.6-degree tangent S3Ds), with a
 matching commented `[PowerPoles.FAR]` preset in `SC4SIM.ini`.
 
@@ -56,7 +56,7 @@ and angle (`2:1 — 26.6°`) rather than requiring familiarity with the internal
 
 `Get0To3Direction` classifies every non-axis-aligned span as diagonal (1 or 3), so a FAR span gets
 the diagonal pole model, visually rotated 45° while the wires run at e.g. 26.57°. The engine picks
-the mesh via the direction-mask → instance-ID table (`[PowerPoles]` / `[PowerPoles.<Name>]`), and
+the mesh via the direction-mask → instance-ID table (`[PowerPoles.<Name>]` styles and `[PowerPoles.FAR]`; SC4SIM reads no bare `[PowerPoles]` section), and
 `GetModelInstanceID` only selects among pre-authored rotated S3D variants — a correct FAR pole
 mesh therefore **requires new art**. Code can only route to that art once it exists.
 
@@ -148,7 +148,8 @@ InterPoleDistance=14
 itself prove that its attachment-point table was authored in the same basis. Record both pieces of
 metadata for each FAR instance/exemplar. Connection rebuilding must calculate a separate delta at
 each endpoint: `deltaA = spanBearing − attachBasisA`, `deltaB = spanBearing − attachBasisB`. The
-current single `ComputeYawDelta` value cannot correctly handle a mixed FAR/fallback span. Metadata
+old single `ComputeYawDelta` value could not handle a mixed FAR/fallback span; the code now uses
+`ComputeSpanBearing` and `AttachBasisAngle` per endpoint. Metadata
 must be reconstructed during `InitConnectionPoints`, not retained only in a pointer side table from
 the original drag, so save/reload remains correct.
 
@@ -186,7 +187,9 @@ There is an extra mask-order wrinkle: `XP/ZP` classify to mask `0x2` (no engine 
 determined by the source model's authored basis. In-game validation of the P3 wood H-frame tangents
 shows that its `XP/ZN` (NR/negative-slope) pair needs the model exemplar's `Power Pole Invert Model
 Quarter Turn` property (`0xB22A000E`) set to true; its `XN/ZP` (NL/positive-slope) pair must leave it
-absent. The `LoadModel` call-site hook XORs the engine's 0/1 choice without changing model resources
+absent. *(Review of 2026-11-01: this pairing is reversed compared with `power-pole-customization.md` and
+`SC4SIM.ini`, which route `XP/ZN` to the NL prop and `XN/ZP` to the NR prop; one of the two is wrong and has to be
+checked in game.)* The `LoadModel` call-site hook XORs the engine's 0/1 choice without changing model resources
 or relying on drag-scoped state.
 
 Do not attempt runtime mesh rotation via `SetTransform`: `GetModelInstanceID`'s variant selection

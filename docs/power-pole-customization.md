@@ -73,8 +73,9 @@ connect seamlessly.
 ## Foundation pad (floor + retaining walls)
 
 Every pole draws a flat pad plus two retaining walls under it to hide terrain z-fighting on slopes.
-Vanilla hardcodes this to a fixed 10m x 10m pad (5.0 half-extent) and two fixed texture IDs,
-regardless of the pole's model or exemplar. These three properties override that:
+Vanilla hardcodes this to a 10m x 10m pad (5.0 half-extent) and two fixed texture IDs; the only
+model-dependent case is a 45-degree turn of the pad for RKT1 instances `0x0503xxxx` and `0x0504xxxx`
+(`CreateFloor` 0x0064BFD0, at 0x0064C092-0x0064C09E). These properties override that:
 
 | ID | Property | Type | Meaning |
 |---|---|---|---|
@@ -94,13 +95,13 @@ foundation, set the half-extent to `0`; that path needs no texture at all.
 
 ## Wire textures
 
-The wire strands and the coarse water-crossing wires DrawPowerlines renders use two hardcoded
-texture IDs; these properties override them per pole:
+The wire strands and the water-crossing buoys DrawPowerlines renders use two hardcoded texture IDs;
+these properties override them per pole:
 
 | ID | Property | Type | Meaning |
 |---|---|---|---|
 | `0xB22A000F` | Power Line Wire Texture ID | Uint32 | Replaces the strand texture (vanilla `0xAA9DA78E`) on every connection this pole render-owns. |
-| `0xB22A0010` | Power Line Water Wire Texture ID | Uint32 | Replaces the water-crossing/coarse wire texture (vanilla `0xC9AF0FCD`) the engine draws where a span crosses water. |
+| `0xB22A0010` | Power Line Water Wire Texture ID | Uint32 | Replaces the texture of the water-crossing buoys (vanilla `0xC9AF0FCD`, drawn at 0x0064B9E3) where a span crosses water. The name is historical: it is the buoy texture, not a wire texture. |
 
 Both are validated and engine-registered exactly like the foundation textures: the ID must exist
 as FSH `0x7AB50E44` in group `0x1ABE787D` or the pole keeps the vanilla texture (warning logged,
@@ -110,21 +111,24 @@ a pole without wire-texture properties inherits the other endpoint's.
 Water-crossing wires are also kept geometrically aligned: whenever the DLL rebuilds a connection's
 strands (custom attach points, sag, or an off-nominal FAR bearing), it now rebuilds the engine's
 coarse water-crossing polyline list with the same attach points, strand count, yaw, and sag, so
-spans over water match their custom geometry instead of reverting to the vanilla 4-wire shape.
+spans over water match their custom geometry instead of reverting to the vanilla strand layout. The
+rebuild also clears a vanilla leak: `UpdateConnection` clears the wire list but never the water list,
+so every update of a water span would otherwise append more buoy copies.
 
 ### Water-crossing buoys
 
-The engine draws one billboarded ball per point (except the last) of each water-crossing polyline,
-sized from the per-zoom wire-width table times a fixed 4.0. Vanilla's uniform layout therefore put
-its first ball exactly on a pole's attach node; the DLL now rebuilds every water-crossing span with
-a strictly-interior layout -- for B balls they sit at even fractions k/(B+1) of the span, so no
-ball ever renders on a pole (this fix applies to all spans, customized or not). Two properties
-tune the balls per pole:
+The engine draws one ball per point (except the last) of each water-crossing polyline, a flat
+horizontal square sized from the per-zoom wire-width table times a fixed 4.0. Vanilla stores 3
+points per strand at t = 1/3, 2/3 and 1 (vector resized to 3 at 0x0064D842, Bezier sampler with
+count 3 at 0x0064D86C, which never writes t = 0), so 2 balls sit inside the span and none on a pole.
+The DLL rebuilds every water-crossing span with the same layout (points at t = k/N, k = 1..N); before
+1.9.3 its notes called this a fix and used 4 points by default, which gave 3 balls instead of
+vanilla's 2. Two properties tune the balls per pole:
 
 | ID | Property | Type | Meaning |
 |---|---|---|---|
 | `0xB22A0012` | Power Line Water Buoy Size Scale | Float32 | Scales the ball quads (1.0 = vanilla). |
-| `0xB22A0013` | Power Line Water Buoy Point Count | Uint32 | Points per water-crossing strand; balls drawn = points - 1, evenly spaced inside the span. Vanilla 4 (= 3 balls at 1/4, 1/2, 3/4). Clamped to 2-17 (1-16 balls). |
+| `0xB22A0013` | Power Line Water Buoy Point Count | Uint32 | Points per water-crossing strand; balls drawn = points - 1, evenly spaced inside the span. Vanilla 3 (= 2 balls at 1/3, 2/3). Clamped to 2-17 (1-16 balls). |
 
 Like all appearance properties these live on pole prop exemplars, so different `[PowerPoles.*]`
 styles get different buoy density/size simply by routing to different exemplars. The render-owning
@@ -146,24 +150,18 @@ attachment bearings remain controlled by the attachment properties.
 
 ## Switching pole styles in-game (Tab / Shift-Tab)
 
-When more than one `[PowerPoles.<Name>]` style is loaded, **Tab** cycles the active style forward and
-**Shift-Tab** backward while the power-line tool is selected; the change applies to newly-placed
-poles. This works with no other mods. See `docs/power-line-style-ui-design.md` for the hook details.
-
-An optional on-screen overlay (top-left) shows the active style, the inter-pole distance, the live
-drag heading (e.g. `FA-2  26.6 deg`), whether Shift is constraining to regular headings, and which
-FAR ratios the active style supports. The overlay requires the ImGui service
-(`SC4RenderServices` / `imgui.dll`); when it is not installed the overlay simply does not appear and
-everything else — including Tab switching — keeps working. `imgui.dll` is delay-loaded, so this DLL
-never hard-depends on it.
+When at least one `[PowerPoles.<Name>]` style is loaded, **Tab** cycles the active style forward and
+**Shift-Tab** backward (vanilla counts as a style, so one style already gives two choices) while the
+power-line tool is selected; the change applies to newly-placed poles. This works with no other
+mods. See `docs/power-line-style-ui-design.md` for the hook details. SC4SIM has no on-screen overlay
+(the sc4-render-services sample's ImGui overlay was not ported).
 
 ## Property definitions
 
-The definitions are included in `.agents/new_properties.xml`. `Count="-3"` on attachment properties
-enforces repeated XYZ groups; `Count="-1"` permits variable-length per-wire arrays. The
-`0xB22A0000` through `0xB22A0011` IDs are reserved by this feature (the original conflict check
-covered `0xB22A0000`-`0xB22A000F` against the vendored registry; `0xB22A0010`/`0xB22A0011` were
-verified absent from the same registry on 2026-07-19).
+The property definitions come from the sc4-render-services sample's `new_properties.xml` (not in
+this repository). `Count="-3"` on attachment properties enforces repeated XYZ groups; `Count="-1"`
+permits variable-length per-wire arrays. The `0xB22A0000` through `0xB22A0013` IDs are reserved by
+this feature.
 
 The production exemplar reader, arbitrary 1-N strand rebuild, sag scaling/capping, per-wire width
 lookup, FAR dragging/routing, and the Tab/Shift-Tab style switch were all validated in-game
@@ -172,8 +170,8 @@ the engine destroys it, and all remaining city-scoped state is flushed on city s
 
 ## Example content
 
-`assets/power-pole-customization/SC4PowerPoleFA2Example.dat` ships two ready-made FA-2 pole prop
-exemplars in the vanilla power-pole group `0x088E1962`:
+The sc4-render-services sample's `SC4PowerPoleFA2Example.dat` (not in this repository) has two
+ready-made FA-2 pole prop exemplars in the vanilla power-pole group `0x088E1962`:
 
 | Instance | Exemplar | Model (S3D) |
 |---|---|---|

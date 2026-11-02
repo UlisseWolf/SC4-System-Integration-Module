@@ -25,14 +25,17 @@
 //     overrides the exemplar does not undo them (IndustrialTuning, ZoneTexture, DragColour).
 //  7. Zone tool cursor (table 0x00A92C40): the slot's cursor becomes the I-M cursor of SC4SIM_ManufacturingZone.dat
 //     instead of the high density residential one (Cursor).
-//  8. Parcels (0x0072DBA8): the slot skips the residential/commercial parcel pass, like industrial zones 7-9.
+//  8. Drag preview (0x0072DBA8, in cSC4ZoneDeveloper::UpdateHighlightTextures 0x0072DB60): like zones 7-9, the slot
+//     gets no lot boundary and arrow textures in the drag preview. The parcel layout itself (0x00733770) already
+//     sends the slot to the industrial path.
 //  9. Lot zone list (IsCompatibleWithZoneType, lot configuration vtable 0x00A8CEF4): the growth path checks each
 //     lot's Zone Types (0x0070654F); an I-M lot that fits zone 8 or 9 also fits the slot, so the game's and IRM's
 //     I-M lots grow there unchanged.
-// 10. Industrial checks (0x004E34BF, 0x004E38A5, 0x004E3989, 0x004E3A75, 0x00467827, 0x006CCA12, 0x006CD409): the slot
-//     takes every "zone 7-9" path of the lot and zone code, so it is not split into parcels with arrows.
-// 11. Zone hover tooltip: the slot's name comes from the LTEXT settings.zoneName (0x004D6C70 case table), and its extra
-//     lines are those of dense industry, freight trips and crime (0x004D5586).
+// 10. Industrial checks (0x004E34BF, 0x004E38A5, 0x004E3989, 0x004E3A75: industrial ambient sounds; 0x00467827: the 1x1
+//     zone lots left after demolition; 0x006CCA12: empty lot base texture; 0x006CD409: UpdateLot, rotate to face the
+//     road): the slot takes every "zone 7-9" path of the lot and zone code.
+// 11. Zone hover tooltip: the slot's name comes from the LTEXT settings.zoneName (0x004D6C70 case table); its traffic
+//     lines are those of industry (0x004D5586), and FindBestDeveloper (0x004D32D0) reads the I-M demand only.
 // 6-11 are patched at application start (9 acts once the I-M redirect is installed); 1-5 when the first city opens.
 //
 // How the code stays safe without the game's bytes:
@@ -44,7 +47,7 @@
 //    replacement answers from the recorded table and adds only the new zone, so every other zone behaves exactly
 //    as the original did. If the probe disagrees with the notes, nothing is patched;
 //  * the field of the construction profile that holds the zone is found by calling the original
-//    GetConstructionInfo of five developers whose zones the notes give (R$ 1, CS$ 4, I-A 7, I-D 8, I-HT 8).
+//    GetConstructionInfo of six developers whose zones the notes give.
 //
 // The I-M redirect (1) is installed only together with the stage hook (2): without it every I-M lot in the new
 // zone would fail, and I-M would grow nowhere. Without the redirect the game is unchanged.
@@ -57,7 +60,7 @@
 //  * IsRCIZone is __thiscall (zone), slot 13 of the zone manager vtable (0x00A92E00), with no direct callers;
 //  * PlaceZone is slot 11 of the same vtable (0x004DD780, 10 arguments), with no direct callers.
 // The run-time measurements below stay as a guard against other versions and other DLLs.
-// Experimental: not yet tested in game.
+// Tested in game (1.8.0).
 //
 ////////////////////////////////////////////////////////////////////////////
 
@@ -139,7 +142,9 @@ namespace
 	constexpr uintptr_t kReadZoneTuningCallSite = 0x004DE192;
 	constexpr size_t kZmMinZoneSize = 0x11C;   // int32  (0xE94825B2)
 	constexpr size_t kZmMaxZoneSize = 0x15C;   // int32  (0xE94825B3)
-	constexpr size_t kZmTuningFloats = 0x1A0;  // float  (0xE94825B9)
+	constexpr size_t kZmTuningFloats = 0x19C;  // float  (0xE94825B9, maximum slope): the copy loop at 0x004DC562 points
+	                                           // at +0x1A0 but writes the first entry to [eax-4]; PlaceZone reads
+	                                           // [base + zone*4 + 0x19C] at 0x004DDA1F (+0x1A0 was one entry off)
 	constexpr size_t kZmZoneCost = 0x1E0;      // sint64 (0xE94825B4)
 	constexpr size_t kZmZoneCost2 = 0x260;     // sint64 (0xE94825B5)
 	constexpr size_t kZmTexture = 0x2E0;       // uint32 FSH instance, group 0x1ABE787D (0xE94825B6)
@@ -151,9 +156,10 @@ namespace
 	constexpr uintptr_t kZoneCursorTable = 0x00A92C40;
 	constexpr uint32_t kGameSlotCursor = 0x02E43524;
 
-	// Parcellization (0x0072DB60, called at the end of DoParcellization): zones 7-9 skip the residential and
-	// commercial parcel pass ("cmp eax, 9; jg" at 0x0072DBA8). Raising the 9 to the slot makes the slot parcel like
-	// industry. Only zones that pass IsRCIZone reach this code, so slots 10-12 are not affected.
+	// Drag preview (cSC4ZoneDeveloper::UpdateHighlightTextures 0x0072DB60, called only from HighlightParcels
+	// 0x00733F30): zones 7-9 get no lot boundary and arrow textures ("cmp eax, 9; jg" at 0x0072DBA8). Raising the 9 to
+	// the slot does the same for the slot. The real parcel layout switch (0x00733770) already sends the slot to the
+	// industrial path. Only zones that pass IsRCIZone reach this code, so slots 10-12 are not affected.
 	// Lot zone list: the tract developer checks the lot configuration's Zone Types against the cell's zone on the
 	// growth path (0x0070654F: GetZoneType, then IsCompatibleWithZoneType; WrongZone, reason 6, if false). The game's
 	// and IRM's I-M lots list zones 8 and 9 only. cSC4LotConfiguration vtable 0x00A8CEB8: slot 15
@@ -640,9 +646,10 @@ namespace
 	//
 	// The game tests "is this an industrial zone" with inline compare chains on zones 7-9. Each site below is replaced
 	// by a call to a small generated thunk that sets ZF when its register holds 7, 8, 9 or the slot, followed by the
-	// site's own branch, so the slot takes every industrial path: lot orientation and road access (0x006CCA12,
-	// 0x006CD409), the 1x1 zone lots left after demolition (0x00467827) and the lot and cell queries at
-	// 0x004E34BF, 0x004E38A5, 0x004E3989 and 0x004E3A75. Every site is checked byte for byte before patching.
+	// site's own branch, so the slot takes every industrial path: UpdateLot's rotation to face the road (0x006CD409),
+	// SetEmptyLotBaseTexture (0x006CCA12, a 1x1 industrial lot skips the border test), the 1x1 zone lots left after
+	// demolition (0x00467827) and the industrial ambient sound filters at 0x004E34BF, 0x004E38A5, 0x004E3989 and
+	// 0x004E3A75. Every site is checked byte for byte before patching.
 
 	enum Reg : uint8_t { kEax = 0, kEcx = 1, kEdi = 7 };
 
@@ -670,8 +677,9 @@ namespace
 	bool industrialSitePatched[kIndustrialSiteCount] = {};
 	uint8_t* industrialThunks = nullptr;   // one 32-byte thunk per register (eax, ecx, edi), then the tooltip thunk
 
-	// Zone hover tooltip (0x004D4FD0): the zone type read at 0x004D5063 ([esp+0x10]) chooses the extra lines with
-	// "dec eax; cmp eax,8; ja; movzx edx,[eax+0x4D5C78]" (zones 1-3 commute, 4-6 none, 7-9 freight and crime).
+	// Zone hover tooltip (GetLotHeadlines 0x004D4FD0): the zone type read at 0x004D5063 ([esp+0x10]) chooses the
+	// traffic lines with "dec eax; cmp eax,8; ja; movzx edx,[eax+0x4D5C78]": 1-3, 4-6 and 7-9 are three cases, each
+	// adding a traffic line and a trip-length line (crime, school and hospital lines are added for every zone).
 	// "mov eax,[esp+0x10]; dec eax" at 0x004D5586 becomes a call to a thunk that reads the zone and turns the slot
 	// into 9 (dense industry), so the slot gets the same lines as industry.
 	constexpr uintptr_t kTooltipZoneSite = 0x004D5586;
@@ -679,13 +687,17 @@ namespace
 	constexpr size_t kTooltipThunkOffset = 96;
 	bool tooltipLinesPatched = false;
 
-	// Before that, 0x004D32D0 picks the influences listed for an empty zoned cell with "lea eax,[ebx-1]; cmp eax,8; ja"
-	// (ebx = zone): any zone outside 1-9 gets nothing, and the tooltip skips every extra line. Those 6 bytes at
-	// 0x004D3370 become "call thunk; nop", the thunk maps the slot to case 8 (dense industry) and ends with the same
-	// compare, so the "ja" that follows is unchanged.
+	// Before that, FindBestDeveloper (0x004D32D0) picks the demand list of an empty zoned cell with "lea eax,[ebx-1];
+	// cmp eax,8; ja" (ebx = zone): any zone outside 1-9 gets nothing, and the tooltip skips every extra line. Those 6
+	// bytes at 0x004D3370 become "call thunk; nop". For the slot the thunk stores the game's own I-M-only demand list
+	// (0x00B09758: 0x4300, 0) where the cases store theirs ([esp+0x2c] of the function) and returns to the common code
+	// at 0x004D33B3, so the tooltip never shows a developer that cannot grow there (zone 9's list also has I-D and
+	// I-HT). If that list is not as expected it falls back to zone 9's case. Other zones run the original compare.
 	constexpr uintptr_t kTooltipGateSite = 0x004D3370;
 	constexpr uint8_t kTooltipGateSiteBytes[] = { 0x8D, 0x43, 0xFF, 0x83, 0xF8, 0x08 };
 	constexpr size_t kTooltipGateThunkOffset = 112;
+	constexpr uintptr_t kDemandListIM = 0x00B09758;      // { 0x4300 (I-M), 0 }
+	constexpr uintptr_t kBestDeveloperCommon = 0x004D33B3;
 	bool tooltipGatePatched = false;
 
 	// Zone hover tooltip name (0x004D6C70): "jmp [edi*4+0x4D7120]" picks one case per zone, each "push 1; push <LTEXT
@@ -719,10 +731,26 @@ namespace
 			const uint8_t tooltip[] = { 0x8B, 0x44, 0x24, 0x14, 0x83, 0xF8, static_cast<uint8_t>(settings.slot), 0x75, 0x05,
 				0xB8, 0x09, 0x00, 0x00, 0x00, 0x48, 0xC3 };
 			std::memcpy(industrialThunks + kTooltipThunkOffset, tooltip, sizeof(tooltip));
-			// lea eax,[ebx-1]; cmp ebx,slot; jne +5; mov eax,8; cmp eax,8; ret
-			const uint8_t gate[] = { 0x8D, 0x43, 0xFF, 0x83, 0xFB, static_cast<uint8_t>(settings.slot), 0x75, 0x05,
-				0xB8, 0x08, 0x00, 0x00, 0x00, 0x83, 0xF8, 0x08, 0xC3 };
-			std::memcpy(industrialThunks + kTooltipGateThunkOffset, gate, sizeof(gate));
+			const auto* const list = reinterpret_cast<const uint32_t*>(kDemandListIM);
+			if (list[0] == 0x4300 && list[1] == 0)
+			{
+				// cmp ebx,slot; jne other; mov dword [esp+0x30],0x00B09758; mov dword [esp],0x004D33B3; ret
+				// other: lea eax,[ebx-1]; cmp eax,8; ret
+				uint8_t gate[] = { 0x83, 0xFB, static_cast<uint8_t>(settings.slot), 0x75, 0x10,
+					0xC7, 0x44, 0x24, 0x30, 0, 0, 0, 0, 0xC7, 0x04, 0x24, 0, 0, 0, 0, 0xC3,
+					0x8D, 0x43, 0xFF, 0x83, 0xF8, 0x08, 0xC3 };
+				const uint32_t listAddress = kDemandListIM, common = kBestDeveloperCommon;
+				std::memcpy(gate + 9, &listAddress, 4);
+				std::memcpy(gate + 16, &common, 4);
+				std::memcpy(industrialThunks + kTooltipGateThunkOffset, gate, sizeof(gate));
+			}
+			else
+			{
+				// lea eax,[ebx-1]; cmp ebx,slot; jne +5; mov eax,8; cmp eax,8; ret  (zone 9's case)
+				const uint8_t gate[] = { 0x8D, 0x43, 0xFF, 0x83, 0xFB, static_cast<uint8_t>(settings.slot), 0x75, 0x05,
+					0xB8, 0x08, 0x00, 0x00, 0x00, 0x83, 0xF8, 0x08, 0xC3 };
+				std::memcpy(industrialThunks + kTooltipGateThunkOffset, gate, sizeof(gate));
+			}
 		}
 		FlushInstructionCache(GetCurrentProcess(), industrialThunks, 160);
 

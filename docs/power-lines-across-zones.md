@@ -25,9 +25,9 @@ landfill exception.)
 
 | Call site | Function | Use of the result |
 | --- | --- | --- |
-| `0x0064FF3E` | drag validation (`0x0064FED0`) | 1: warning `0xF0000011`, the drag goes on. 2: message `0xF0000012`, the drag is cut at the previous step. 3: message `0xF0000013`, cut only on the last step. |
+| `0x0064FF3E` | `CheckForReservedTiles` (`0x0064FED0`, the power-line tool's override) | 1: warning `0xF0000011`; the cut point never moves forward on 1, so the drag is cut back to the last free step. 2: message `0xF0000012`, the drag is cut at the previous step. 3 (a network piece that is not underground): message `0xF0000013`, cut only on the last step when the cell before gave 0. |
 | `0x006509AD` | `DeterminePolePositions` (`0x00650840`) | Only 0 can take a pole; any other value goes to the "no pole here" path (`0x006510C8`). |
-| `0x0065210B` | pole relocation used by `UpdateOnZoneChange` (`0x006520C0`) | Looks for the first cell outside the zone rectangle that returns 0. |
+| `0x0065210B` | `FindNewPolePosition` (`0x006520C0`), called only from `UpdateOnZoneChange` | Looks for the first cell outside the zone rectangle that returns 0. |
 
 So the wire can pass over a zone, but no pole can stand on it: a zone or a field wider than the pole spacing
 (10 cells in vanilla) breaks the line.
@@ -61,11 +61,13 @@ the snap key compared by the list scan `0x0064F170`. Outside itself it is called
 
 | Call site | Caller |
 | --- | --- |
-| `0x006522C8` | neighbour auto-connect (`0x006520C0`) |
+| `0x006522C8` | `FindNewPolePosition` (`0x006520C0`): moves a pole out of a zoned rectangle; returns straight after the call |
 | `0x006529CB` | line placement (power tool vtable slot `0xD4`) |
 
-Both callers read the vector after the call, so it is still valid there. `tool+0x50 != 0` is the removal mode:
-`PlacePoles` then takes the `RemoveConnection` branch.
+`tool+0x50` is most likely the tool's "placing for real" (not preview) flag; the hook records the cells of the
+calls with it 0, which during a drag are the preview calls listing the same poles as the final placement.
+(Neighbour connections go through `DoNetworkSpecificPlacement` `0x00652980` and `AttemptNeighborConnections`
+`0x00628BD0`, not through `0x006520C0`.)
 
 The two calls are redirected to `PlacePolesHook`. **`PlacePoles` also runs on every mouse move of a drag** (the
 in-game log showed the pole count growing while dragging), so the hook only records the pole cells of the latest call.
@@ -86,8 +88,9 @@ PlaceZone(region, None, place = 1, skipFunds = 1, checkSlope = 0, skipZoneSize =
 - **Lots with a building are never touched.**
 - **Farm fields (lots without a building) are dezoned when `DezoneFieldCells=true` (default).** The game cannot take
   one cell from a lot, so it demolishes that field lot; the farm grows new fields around the pole.
-- **The keepwires bypass is switched on around the call,** so the zone change does not reroute the line that was
-  just placed. The hook is installed only if the keepwires patch is.
+- **No keepwires bypass is needed:** `UpdateOnZoneChange` (`0x006522F0`) returns at once when the new zone is 0
+  (`cmp` at `0x006522FC`, `je` at `0x00652303`), so dezoning never reroutes a line. Since 1.9.3 the hooks are
+  installed independently of the keepwires patch. Zoning (types 1-15) does take the reroute path.
 
 Settings: `DezoneUnderPoles` (default `true`) and `DezoneFieldCells` (default `true`).
 
