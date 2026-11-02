@@ -25,8 +25,8 @@ The properties are defined in `New_Properties.xml` of
 **Hospital**, *Cemetery (SC4SIM Deathcare)* and *Crematorium (SC4SIM Deathcare)*, fill them from the lot size, add a
 Health budget line and put the building in the **Deathcare** submenu of the Health menu (`0x5C4DD200`, Submenus DLL;
 the button is in `CAM_Menus.dat`). The buildings get no Health occupant group (`0x1507`): the residential simulator
-counts every `0x1507` building as a hospital (`0x006FB695`). Without the Submenus DLL they appear in the Reward menu
-(`0x150B`). The Reward section's Cemetery generator is unchanged; Maxis and Reward cemeteries (`0x1700`) also count. Every month, for each tract, the dead of the month plus the uncollected dead of
+counts every `0x1507` building as a hospital (`0x006FB695`). They have no Reward group (`0x150B`) either, so they
+need the Submenus DLL: without it they are in no menu. The Reward section's Cemetery generator is unchanged; Maxis and Reward cemeteries (`0x1700`) also count. Every month, for each tract, the dead of the month plus the uncollected dead of
 earlier months go:
 
 1. to the nearest **crematorium** in range with room left this month (a crematorium never fills up);
