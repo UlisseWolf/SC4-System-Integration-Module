@@ -71,6 +71,7 @@
     <ClCompile Include="src\water\WaterBuildingPropertyUtil.cpp" />
     <ClCompile Include="src\mixed\MixedOccupancy.cpp" />
     <ClCompile Include="src\zones\ManufacturingZone.cpp" />
+    <ClCompile Include="src\fixes\TripCapacityFix.cpp" />
     <ClCompile Include="src\afterlife\Afterlife.cpp" />
     <ClCompile Include="src\afterlife\AfterlifeModel.cpp" />
     <ClCompile Include="vendor\gzcom-dll\gzcom-dll\src\cRZBaseString.cpp">
@@ -109,6 +110,7 @@
     <ClInclude Include="src\water\WaterBuildingPropertyUtil.h" />
     <ClInclude Include="src\mixed\MixedOccupancy.h" />
     <ClInclude Include="src\zones\ManufacturingZone.h" />
+    <ClInclude Include="src\fixes\TripCapacityFix.h" />
     <ClInclude Include="src\afterlife\Afterlife.h" />
     <ClInclude Include="src\afterlife\AfterlifeModel.h" />
     <ClInclude Include="src\water\QueryUIHooks\cIBuildingQueryHookServer.h" />

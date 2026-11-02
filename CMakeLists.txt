@@ -25,6 +25,7 @@ add_library(SC4SIM SHARED
   src/water/WaterBuildingPropertyUtil.cpp
   src/mixed/MixedOccupancy.cpp
   src/zones/ManufacturingZone.cpp
+  src/fixes/TripCapacityFix.cpp
   src/afterlife/Afterlife.cpp
   src/afterlife/AfterlifeModel.cpp
   ${GZCOM}/src/cRZBaseString.cpp

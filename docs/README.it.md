@@ -208,6 +208,14 @@ vittime I.M.P., redenzioni), con le notizie nel ticker e righe nelle query di ch
 
 Dettagli in `docs/afterlife.md`. Impostazioni: `[Afterlife]` di `SC4SIM.ini`.
 
+## Correzioni del gioco (1.9.3)
+
+`cSC4Lot::UpdateJobs` confronta i posti di lavoro $$ e $$$ con la capacità di viaggio $: se differiscono da quella di
+meno del 10% non vengono mai scritti, e i pendolari di quella ricchezza non trovano lavoro lì (il bug "l'industria
+high-tech non ha posti $$$", che colpisce anche la clinica, le centrali solari e nucleari e i lotti misti). Due byte
+fanno leggere a ogni controllo la propria ricchezza; non servono correzioni ai dati. Impostazione:
+`[GameFixes] TripCapacityWealthFix` (attiva di default). Dettagli in `docs/game-fixes.md`.
+
 ## Advanced Water Management (1.2.0)
 
 Porting nel SC4SIM.dll di [sc4-advanced-water-management](https://github.com/0xC0000054/sc4-advanced-water-management)

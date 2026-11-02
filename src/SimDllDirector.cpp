@@ -51,6 +51,10 @@
 //  * Afterlife: DLL version of AFTERLIFE.lua (src/afterlife, [Afterlife] in SC4SIM.ini). Registers
 //    run_afterlife_balance_variables and get_news_ticker_character in the advisor Lua over the Lua ones.
 //    See docs/afterlife.md.
+//
+// Version 1.9.3:
+//  * Game fix: cSC4Lot::UpdateJobs reads the $$ and $$$ trip capacities for their own wealth (the "high-tech
+//    industry has no $$$ jobs" bug; src/fixes, [GameFixes] in SC4SIM.ini). See docs/game-fixes.md.
 // The reward creators themselves are Lua (create_reward_utilities, ...): reward scripts call them while the game
 // compiles them, before any DLL can reach the city's Lua, so they live in the SIM Lua package 0x0151A000.
 #include "SimLog.h"
@@ -59,6 +63,7 @@
 #include "powerpoles/PowerPoleCustomization.h"
 #include "water/AdvancedWater.h"
 #include "zones/ManufacturingZone.h"
+#include "fixes/TripCapacityFix.h"
 #include "version.h"
 
 #include "cIGZCOM.h"
@@ -136,6 +141,7 @@ public:
 		AdvancedWater::OnStart();
 		MixedOccupancy::OnStart();
 		ManufacturingZone::OnStart();
+		TripCapacityFix::OnStart();
 		Afterlife::OnStart();
 		cIGZFrameWork* const framework = pCOM->FrameWork();
 		if (framework->GetState() < cIGZFrameWork::kStatePreAppInit) framework->AddHook(this);
@@ -166,6 +172,7 @@ public:
 		AdvancedWater::PostAppInit();
 		MixedOccupancy::PostAppInit();
 		ManufacturingZone::PostAppInit();
+		TripCapacityFix::PostAppInit();
 
 		// Cheat codes (keepwires, ScanPumps, MixedOccupancy, IMZone...) are registered by the modules; the notification is added once here.
 		cISC4AppPtr app;
@@ -187,6 +194,7 @@ public:
 			cheatManager->RemoveNotification2(this, 0);
 			cheatManager.Reset();
 		}
+		TripCapacityFix::PostAppShutdown();
 		ManufacturingZone::PostAppShutdown();
 		MixedOccupancy::PostAppShutdown();
 		AdvancedWater::PostAppShutdown();

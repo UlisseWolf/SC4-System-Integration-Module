@@ -44,6 +44,7 @@ such as NEON.
 | Mixed R, C and I occupancy | 1.5.0 | Residents, commercial and industrial jobs in one building (RC, RI, CI or RCI) with independent capacities, census demand for all of them, and the `MixedOccupancy` cheat. 1.5.1: the game itself fills the secondary types. 1.6.0: industry. 1.7.0: trips for the secondary classes. 1.7.1: secondary jobs as commute destinations. Tested in game with the test lots. |
 | Manufacturing (I-M) zone | 1.8.0 | A zone of its own for manufacturing industry, on a reused zone slot (Spaceport by default): I-M grows only there, I-D and I-HT never do. `IMZone`, `IMZoneConvert` and `IMZoneInfo` cheats. |
 | Afterlife | 1.9.0 | The DLL version of `AFTERLIFE.lua`: fictitious Winner / Sinner / I.M.P. statistics, registered over the Lua functions, with the balance constants in the DLL and in `SC4SIM.ini`. 1.9.1: the real constants, a 60-character news roster and Afterlife headlines in the news ticker; `AFTERLIFE.lua` and `PACK_CONSTANTS.lua` are no longer needed. 1.9.2: Hell's natives (Hellborn) always outnumber the Souls in Hell, and Heaven gets its own native population (Heavenborn), always larger than the Souls in Heaven, shown in the church query. 1.9.3: deaths from the game's life expectancy and from the residential simulator's generation resets (old age or premature), judgment by the EQ of each wealth level, the education reference fixed (100 on the 0-200 EQ scale), the totals saved with the city. *Calculation checked against the reference Lua; news and queries tested in game, the 1.9.3 tract reading not yet.* |
+| Game fixes | 1.9.3 | `cSC4Lot::UpdateJobs` reads the $$ and $$$ trip capacities for their own wealth: fixes the "high-tech industry has no $$$ jobs" bug for every building (also the Medical Clinic, the solar and nuclear plants and mixed lots). Two bytes, checked before patching. See `docs/game-fixes.md`. |
 | Advanced Water Management | 1.2.0 | The real efficiency of water buildings in the query dialog and tool tip, a monthly warning for fresh or salt water pumps that produce nothing, and the `ScanPumps` cheat. |
 
 ## Requirements
@@ -295,6 +296,7 @@ Details, the news events and the tests are in [`docs/afterlife.md`](docs/afterli
 | | `MixedTraffic` | `true` | Commuters and freight for the secondary classes, and secondary jobs as commute destinations. |
 | `[Afterlife]` | `Enabled` | `true` | Registers the DLL version of the Afterlife functions in the advisor Lua. |
 | `[ManufacturingZone]` | `Enabled` | `true` | Turns the I-M zone on or off. |
+| `[GameFixes]` | `TripCapacityWealthFix` | `true` | Fixes the $$ / $$$ trip capacity bug of `cSC4Lot::UpdateJobs` (no $$$ high-tech jobs). |
 | | `ZoneSlot` | `13` | Zone slot reused for the I-M zone: 13 Spaceport or 10 Military. |
 | | `StageHook` | `true` | Every growth stage fits the slot; required for the I-M redirect. |
 | | `RCIZoneHook` | `true` | `IsRCIZone` answers true for the slot. |
@@ -358,6 +360,7 @@ src/water/           Advanced Water Management module (ported from sc4-advanced-
 src/mixed/           mixed R, C and I occupancy module
 src/zones/           manufacturing (I-M) zone module
 src/afterlife/       Afterlife module (statistics and news roster)
+src/fixes/           game bug fixes (trip capacity by wealth)
 lua/                 sim_advisor_rewards.lua (advisor reward creators)
 docs/                power-pole, mixed occupancy, I-M zone and Afterlife documentation and README.it.md (Italian notes)
 vendor/              gzcom-dll, mINI
