@@ -78,7 +78,13 @@ afterlife_grid_var = {
    GOETIA_ARS_GOETIA_POPULATION    = 0,   -- Hell's native Goetia & Ars Goetia population, snapshot
    FALLEN_ANGELS_POPULATION        = 0,   -- FIXED, always hell_native_fixed.FALLEN_ANGELS
    SEVEN_DEADLY_SINS_POPULATION    = 0,   -- FIXED, always hell_native_fixed.SEVEN_DEADLY_SINS
-   HELL_NATIVE_TOTAL               = 0    -- sum of all ten native subclasses above (eight proportional + two fixed)
+   HELL_NATIVE_TOTAL               = 0,   -- sum of all ten native subclasses above (eight proportional + two fixed)
+   ANGEL_POPULATION                = 0,   -- Heaven's native Angels, snapshot of WINNER_POPULATION_HEAVEN (SC4SIM 1.9.2)
+   CHERUB_POPULATION               = 0,
+   EXORCIST_POPULATION             = 0,
+   SERAPHIM_POPULATION             = 0,
+   SERAPHIM_COUNCIL_POPULATION     = 0,   -- FIXED, always heaven_native_fixed.SERAPHIM_COUNCIL
+   HEAVEN_NATIVE_TOTAL             = 0    -- sum of the five Heaven native subclasses
 }
 
 -- Main function to call to recalculate this cycle's fictitious mortality/afterlife statistics.
@@ -179,6 +185,22 @@ function run_afterlife_balance_variables(ret_type)
         afterlife_grid_var.HELL_NATIVE_TOTAL = afterlife_grid_var.HELL_NATIVE_TOTAL + shortfall
     end
 
+    -- Heaven's NATIVE population (Heavenborn angels), a snapshot of the Winners, as in Hell.
+    afterlife_grid_var.ANGEL_POPULATION            = math.floor(afterlife_grid_var.WINNER_POPULATION_HEAVEN * heaven_native_ratio.ANGEL_RATIO)
+    afterlife_grid_var.CHERUB_POPULATION           = math.floor(afterlife_grid_var.WINNER_POPULATION_HEAVEN * heaven_native_ratio.CHERUB_RATIO)
+    afterlife_grid_var.EXORCIST_POPULATION         = math.floor(afterlife_grid_var.WINNER_POPULATION_HEAVEN * heaven_native_ratio.EXORCIST_RATIO)
+    afterlife_grid_var.SERAPHIM_POPULATION         = math.floor(afterlife_grid_var.WINNER_POPULATION_HEAVEN * heaven_native_ratio.SERAPHIM_RATIO)
+    afterlife_grid_var.SERAPHIM_COUNCIL_POPULATION = heaven_native_fixed.SERAPHIM_COUNCIL
+    afterlife_grid_var.HEAVEN_NATIVE_TOTAL = afterlife_grid_var.ANGEL_POPULATION + afterlife_grid_var.CHERUB_POPULATION
+                                            + afterlife_grid_var.EXORCIST_POPULATION + afterlife_grid_var.SERAPHIM_POPULATION
+                                            + afterlife_grid_var.SERAPHIM_COUNCIL_POPULATION
+    -- Heaven's natives always outnumber the Winners: any shortfall is made up with Angels.
+    if (afterlife_grid_var.HEAVEN_NATIVE_TOTAL <= afterlife_grid_var.WINNER_POPULATION_HEAVEN) then
+        local shortfall = afterlife_grid_var.WINNER_POPULATION_HEAVEN + 1 - afterlife_grid_var.HEAVEN_NATIVE_TOTAL
+        afterlife_grid_var.ANGEL_POPULATION = afterlife_grid_var.ANGEL_POPULATION + shortfall
+        afterlife_grid_var.HEAVEN_NATIVE_TOTAL = afterlife_grid_var.HEAVEN_NATIVE_TOTAL + shortfall
+    end
+
     -- Function call return values --
     if (ret_type == "D") then
         return afterlife_grid_var.TOTAL_DEATHS_THIS_CYCLE      -- total Sims who died this cycle (natural + I.M.P.)
@@ -200,5 +222,7 @@ function run_afterlife_balance_variables(ret_type)
         return afterlife_grid_var.IMP_KILLS_TOTAL               -- cumulative I.M.P. kills across the whole game session
     elseif (ret_type == "N") then
         return afterlife_grid_var.HELL_NATIVE_TOTAL              -- current total native (Hellborn) Hell population
+    elseif (ret_type == "A") then
+        return afterlife_grid_var.HEAVEN_NATIVE_TOTAL            -- current total native (Heavenborn) Heaven population
     end
 end

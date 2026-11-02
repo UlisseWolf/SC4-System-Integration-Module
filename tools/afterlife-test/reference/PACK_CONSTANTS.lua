@@ -554,6 +554,20 @@ hell_native_fixed = {
 }
 
 -- ============================================================
+-- AFTERLIFE -- Heaven Native Population (SC4SIM 1.9.2): Heavenborn angels per Winner
+-- ============================================================
+heaven_native_ratio = {
+   ANGEL_RATIO    = 1.0,     -- Angels:   1 per Winner
+   CHERUB_RATIO   = 0.6,     -- Cherubs:  0.6 per Winner
+   EXORCIST_RATIO = 0.3,     -- Exorcists: 0.3 per Winner
+   SERAPHIM_RATIO = 0.01     -- Seraphim: 0.01 per Winner
+}
+
+heaven_native_fixed = {
+   SERAPHIM_COUNCIL = 3      -- Sera, Emily and the Speaker of God
+}
+
+-- ============================================================
 -- AFTERLIFE -- Character Table for News Ticker
 -- Reference data only: name, role, source show, species and a
 -- placeholder LTEXT id per character. The ticker_text_id is the

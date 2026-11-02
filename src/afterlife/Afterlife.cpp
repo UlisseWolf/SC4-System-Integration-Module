@@ -105,6 +105,11 @@ namespace
 		{ L"HELL_GOETIA_ARS_GOETIA_RATIO", &Afterlife::Constants::goetiaArsGoetiaRatio },
 		{ L"FALLEN_ANGELS", &Afterlife::Constants::fallenAngels },
 		{ L"SEVEN_DEADLY_SINS", &Afterlife::Constants::sevenDeadlySins },
+		{ L"HEAVEN_ANGEL_RATIO", &Afterlife::Constants::angelRatio },
+		{ L"HEAVEN_CHERUB_RATIO", &Afterlife::Constants::cherubRatio },
+		{ L"HEAVEN_EXORCIST_RATIO", &Afterlife::Constants::exorcistRatio },
+		{ L"HEAVEN_SERAPHIM_RATIO", &Afterlife::Constants::seraphimRatio },
+		{ L"SERAPHIM_COUNCIL", &Afterlife::Constants::seraphimCouncil },
 	};
 
 	void LoadConstants(const wchar_t* ini)
@@ -259,6 +264,12 @@ namespace
 		{ "FALLEN_ANGELS_POPULATION", &Afterlife::State::fallenAngelsPopulation },
 		{ "SEVEN_DEADLY_SINS_POPULATION", &Afterlife::State::sevenDeadlySinsPopulation },
 		{ "HELL_NATIVE_TOTAL", &Afterlife::State::hellNativeTotal },
+		{ "ANGEL_POPULATION", &Afterlife::State::angelPopulation },
+		{ "CHERUB_POPULATION", &Afterlife::State::cherubPopulation },
+		{ "EXORCIST_POPULATION", &Afterlife::State::exorcistPopulation },
+		{ "SERAPHIM_POPULATION", &Afterlife::State::seraphimPopulation },
+		{ "SERAPHIM_COUNCIL_POPULATION", &Afterlife::State::seraphimCouncilPopulation },
+		{ "HEAVEN_NATIVE_TOTAL", &Afterlife::State::heavenNativeTotal },
 	};
 
 	void MirrorState(cISCLua* lua)
@@ -284,6 +295,7 @@ namespace
 		case 'P': return &Afterlife::State::winnerPopulationHeaven;
 		case 'T': return &Afterlife::State::impKillsTotal;
 		case 'N': return &Afterlife::State::hellNativeTotal;
+		case 'A': return &Afterlife::State::heavenNativeTotal;
 		default: return nullptr;
 		}
 	}

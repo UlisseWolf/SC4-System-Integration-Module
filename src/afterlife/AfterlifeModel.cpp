@@ -69,6 +69,23 @@ void Afterlife::Step(State& s, const GameInputs& game, const Constants& k, const
 		s.impPopulation += shortfall;
 		s.hellNativeTotal += shortfall;
 	}
+
+	// Heaven's native population (Heavenborn angels): a fresh snapshot of the Winner population, as in Hell.
+	s.angelPopulation = std::floor(s.winnerPopulationHeaven * k.angelRatio);
+	s.cherubPopulation = std::floor(s.winnerPopulationHeaven * k.cherubRatio);
+	s.exorcistPopulation = std::floor(s.winnerPopulationHeaven * k.exorcistRatio);
+	s.seraphimPopulation = std::floor(s.winnerPopulationHeaven * k.seraphimRatio);
+	s.seraphimCouncilPopulation = k.seraphimCouncil;
+	s.heavenNativeTotal = s.angelPopulation + s.cherubPopulation + s.exorcistPopulation + s.seraphimPopulation
+		+ s.seraphimCouncilPopulation;
+
+	// Heaven's natives always outnumber the Winners; if SC4SIM.ini lowers the ratios, the missing natives are Angels.
+	if (s.heavenNativeTotal <= s.winnerPopulationHeaven)
+	{
+		const double shortfall = s.winnerPopulationHeaven + 1 - s.heavenNativeTotal;
+		s.angelPopulation += shortfall;
+		s.heavenNativeTotal += shortfall;
+	}
 }
 
 // ------------------------------------------------------------------ news ticker roster (PACK_CONSTANTS.lua)

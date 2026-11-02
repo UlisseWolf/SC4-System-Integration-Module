@@ -35,6 +35,11 @@ namespace Afterlife
 			possessorRatio = 0.1, baphometRatio = 0.02, reaperRatio = 0.01, goetiaArsGoetiaRatio = 0.001;
 		// hell_native_fixed: Hell's fixed population
 		double fallenAngels = 2, sevenDeadlySins = 7;
+		// heaven_native_ratio (1.9.2): Heaven's natives (Heavenborn angels) per Winner (sum 1.91, so with the fixed
+		// council they always outnumber the Winners)
+		double angelRatio = 1.0, cherubRatio = 0.6, exorcistRatio = 0.3, seraphimRatio = 0.01;
+		// heaven_native_fixed: the Seraphim council (Sera, Emily, the Speaker of God)
+		double seraphimCouncil = 3;
 	};
 
 	// Mirror of afterlife_grid_var. The CUMULATIVE members survive from one cycle to the next.
@@ -47,6 +52,8 @@ namespace Afterlife
 		double impPopulation = 0, hellhoundPopulation = 0, succubusPopulation = 0, infestorPopulation = 0,
 			possessorPopulation = 0, baphometPopulation = 0, reaperPopulation = 0, goetiaArsGoetiaPopulation = 0,
 			fallenAngelsPopulation = 0, sevenDeadlySinsPopulation = 0, hellNativeTotal = 0;
+		double angelPopulation = 0, cherubPopulation = 0, exorcistPopulation = 0, seraphimPopulation = 0,
+			seraphimCouncilPopulation = 0, heavenNativeTotal = 0;
 	};
 
 	// Same as math.random(lo, hi) of Lua: an integer in [lo, hi].
