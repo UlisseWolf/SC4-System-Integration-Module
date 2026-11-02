@@ -17,6 +17,7 @@ namespace Deathcare
 	constexpr uint32_t kPropertyRadius = 0x5C4DD003;     // Float32: service radius in meters
 	constexpr uint32_t kOccupantGroupCemetery = 0x1700;  // Maxis "Building: Cemetery"
 	constexpr uint32_t kOccupantGroupCrematorium = 0x5C4DD100; // SC4SIM "Building: Crematorium"
+	constexpr uint32_t kOccupantGroupDeathcareCemetery = 0x5C4DD101; // SC4SIM "Building: Cemetery (SC4SIM Deathcare)"
 
 	// The residential simulator's tracts, as read by Afterlife.cpp for the generation resets.
 	struct TractGrid

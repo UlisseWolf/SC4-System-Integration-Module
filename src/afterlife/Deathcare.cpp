@@ -7,7 +7,8 @@
 // gives those dead somewhere to go, in the spirit of Cities: Skylines, but with SimCity 4's own service model (a radius
 // and a capacity, like schools and hospitals) instead of vehicles:
 //
-//  * a cemetery (Maxis occupant group 0x1700, or Deathcare Type 1) has a number of graves; every burial fills one, and
+//  * a cemetery (Maxis occupant group 0x1700, SC4SIM 0x5C4DD101, or Deathcare Type 1) has a number of graves; every
+//    burial fills one, and
 //    a full cemetery takes no one;
 //  * a crematorium (occupant group 0x5C4DD100, or Deathcare Type 2) takes up to its capacity every month and never
 //    fills;
@@ -112,6 +113,7 @@ namespace
 		{
 			if (!occupant || !IsOccupantTypeIncluded(occupant->GetType())) return false;
 			if (occupant->IsOccupantGroup(Deathcare::kOccupantGroupCemetery)
+				|| occupant->IsOccupantGroup(Deathcare::kOccupantGroupDeathcareCemetery)
 				|| occupant->IsOccupantGroup(Deathcare::kOccupantGroupCrematorium)) return true;
 			uint32_t type = 0;
 			const cISCPropertyHolder* holder = occupant->AsPropertyHolder();

@@ -17,12 +17,16 @@ simulator's tracts:
 
 | Building | How it is recognised | Capacity | Radius |
 | --- | --- | --- | --- |
-| Cemetery | `0x5C4DD001` = 1, or occupant group `0x1700` (Maxis "Building: Cemetery") | `0x5C4DD002` graves; without it `DEATHCARE_GRAVES_PER_CELL` (40) per lot cell | `0x5C4DD003` meters; without it `DEATHCARE_RADIUS` (1024) |
+| Cemetery | `0x5C4DD001` = 1, or occupant group `0x5C4DD101` ("Cemetery (SC4SIM Deathcare)") or `0x1700` (Maxis "Building: Cemetery") | `0x5C4DD002` graves; without it `DEATHCARE_GRAVES_PER_CELL` (40) per lot cell | `0x5C4DD003` meters; without it `DEATHCARE_RADIUS` (1024) |
 | Crematorium | `0x5C4DD001` = 2, or occupant group `0x5C4DD100` | `0x5C4DD002` bodies per month; without it `DEATHCARE_CREMATION_PER_MONTH` (50) | as above |
 
 The properties are defined in `New_Properties.xml` of
-[New_Properties.xml-patches](https://github.com/UlisseWolf/New_Properties.xml-patches), whose Cemetery and Crematorium
-generators fill them from the lot size. Every month, for each tract, the dead of the month plus the uncollected dead of
+[New_Properties.xml-patches](https://github.com/UlisseWolf/New_Properties.xml-patches). Its two generators under
+**Hospital**, *Cemetery (SC4SIM Deathcare)* and *Crematorium (SC4SIM Deathcare)*, fill them from the lot size, add a
+Health budget line and put the building in the **Deathcare** submenu of the Health menu (`0x5C4DD200`, Submenus DLL;
+the button is in `CAM_Menus.dat`). The buildings get no Health occupant group (`0x1507`): the residential simulator
+counts every `0x1507` building as a hospital (`0x006FB695`). Without the Submenus DLL they appear in the Reward menu
+(`0x150B`). The Reward section's Cemetery generator is unchanged; Maxis and Reward cemeteries (`0x1700`) also count. Every month, for each tract, the dead of the month plus the uncollected dead of
 earlier months go:
 
 1. to the nearest **crematorium** in range with room left this month (a crematorium never fills up);
