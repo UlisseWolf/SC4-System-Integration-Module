@@ -127,6 +127,12 @@ CHARACTERS = [
   "The Envy Ring stays quiet: Leviathan keeps a low profile."),
  ("BELPHEGOR","Belphegor","Sin of Sloth",B,"Sin (Hellborn)",0xBB3C1063,
   "Belphegor of the Sloth Ring reportedly slept through the whole month."),
+ # SC4SIM 1.9.3: premature deaths (generation resets in tracts whose life expectancy fell below the reset age).
+ # Original desk characters of the mod, not characters of the series.
+ ("NEWS_670_HEALTH_DESK","670 News Health Desk","Health Desk, 670 News","SC4SIM","Sinner Demon",0xBB3C1064,
+  "670 News Health Desk: smog and empty hospital beds on Earth send a wave of early arrivals to the gates below."),
+ ("GATE_INTAKE_CLERK","Hell's Intake Clerk","Intake Clerk, Gates of Hell","SC4SIM","Sinner Demon",0xBB3C1065,
+  "Hell's intake clerk logs a run of young newcomers: unhealthy districts on Earth are emptying early."),
 ]
 
 # event type -> characters on topic. The first five are the events of PACK_CONSTANTS.lua (extended); every character
@@ -144,6 +150,7 @@ EVENTS = [
  ("SEVEN_DEADLY_SINS_REPORT", ["LUCIFER_MORNINGSTAR","LILITH","ASMODEUS","BEELZEBUB","SATAN","MAMMON","LEVIATHAN",
                                "BELPHEGOR"]),
  ("HEAVEN_REPORT", ["ADAM","LUTE","ABEL","SERA","EMILY","ST_PETER","SPEAKER_OF_GOD"]),
+ ("PREMATURE_DEATH_REPORT", ["NEWS_670_HEALTH_DESK","GATE_INTAKE_CLERK"]),
 ]
 
 keys=[c[0] for c in CHARACTERS]

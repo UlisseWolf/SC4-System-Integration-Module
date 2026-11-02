@@ -84,6 +84,7 @@ static constexpr uint32_t kSimDirectorID = 0xC4511A01;
 static constexpr uint32_t kMsgPostCityInit = 0x26D31EC1;
 static constexpr uint32_t kMsgPreCityShutdown = 0x26D31EC2;
 static constexpr uint32_t kMsgCheatIssued = 0x230E27AC;
+static constexpr uint32_t kMsgPostSave = 0x26C63345;
 
 namespace
 {
@@ -148,7 +149,7 @@ public:
 		cIGZMessageServer2Ptr ms2;
 		if (ms2)
 		{
-			for (uint32_t type : { kMsgPostCityInit, kMsgPreCityShutdown, AdvancedWater::kMessageSimNewMonth })
+			for (uint32_t type : { kMsgPostCityInit, kMsgPreCityShutdown, AdvancedWater::kMessageSimNewMonth, kMsgPostSave })
 			{
 				if (!ms2->AddNotification(this, type))
 				{
@@ -216,6 +217,11 @@ public:
 		{
 			AdvancedWater::DoMessage(message);
 			MixedOccupancy::DoMessage(message);
+			Afterlife::DoMessage(message);
+		}
+		else if (type == kMsgPostSave)
+		{
+			Afterlife::DoMessage(message);
 		}
 		return true;
 	}

@@ -8,9 +8,9 @@ from lupa import LuaRuntime
 src = open(sys.argv[1], encoding='utf-8').read()
 pack = open(sys.argv[2], encoding='utf-8').read() if len(sys.argv) > 2 else None
 
-names=["healthQuality","sinRatio","natural","clients","kills","total","wcount","scount","redeemed","heaven","hell","redtotal","killstotal","imp","hound","succ","inf","poss","bap","reap","goetia","fallen","sins","nativetotal","angel","cherub","exorcist","seraphim","council","heaventotal"]
-fields=["HEALTH_QUALITY","SIN_RATIO","NATURAL_DEATHS","IMP_CLIENTS_THIS_CYCLE","IMP_KILLS_THIS_CYCLE","TOTAL_DEATHS_THIS_CYCLE","WINNER_COUNT_THIS_CYCLE","SINNER_COUNT_THIS_CYCLE","REDEEMED_THIS_CYCLE","WINNER_POPULATION_HEAVEN","SINNER_POPULATION_HELL","REDEEMED_TOTAL","IMP_KILLS_TOTAL","IMP_POPULATION","HELLHOUND_POPULATION","SUCCUBUS_POPULATION","INFESTOR_POPULATION","POSSESSOR_POPULATION","BAPHOMET_POPULATION","REAPER_POPULATION","GOETIA_ARS_GOETIA_POPULATION","FALLEN_ANGELS_POPULATION","SEVEN_DEADLY_SINS_POPULATION","HELL_NATIVE_TOTAL","ANGEL_POPULATION","CHERUB_POPULATION","EXORCIST_POPULATION","SERAPHIM_POPULATION","SERAPHIM_COUNCIL_POPULATION","HEAVEN_NATIVE_TOTAL"]
-kn=[("mortality_ratio","BASE_MORTALITY_RATE_PER_CAPITA"),("mortality_ratio","HEALTH_COVERAGE_WEIGHT"),("judgment_ratio","EDUCATION_REFERENCE"),("judgment_ratio","BASE_SIN_RATIO"),("judgment_ratio","CRIME_WEIGHT"),("judgment_ratio","EDUCATION_WEIGHT"),("judgment_ratio","SIN_RATIO_MIN"),("judgment_ratio","SIN_RATIO_MAX"),("imp_ratio","IMP_CLIENT_RATIO"),("imp_ratio","IMP_SUCCESS_CHANCE"),("imp_ratio","IMP_KILL_RANDOM_VARIANCE"),("imp_ratio","MAX_IMP_KILL_FRACTION_POP"),("redemption_ratio","REDEMPTION_RATIO")]+[("hell_native_ratio",x) for x in ["IMP_RATIO","HELLHOUND_RATIO","SUCCUBUS_RATIO","INFESTOR_RATIO","POSSESSOR_RATIO","BAPHOMET_RATIO","REAPER_RATIO","GOETIA_ARS_GOETIA_RATIO"]]+[("hell_native_fixed","FALLEN_ANGELS"),("hell_native_fixed","SEVEN_DEADLY_SINS")]+[("heaven_native_ratio",x) for x in ["ANGEL_RATIO","CHERUB_RATIO","EXORCIST_RATIO","SERAPHIM_RATIO"]]+[("heaven_native_fixed","SERAPHIM_COUNCIL")]
+names=["healthQuality","sinRatio","natural","clients","kills","total","wcount","scount","redeemed","heaven","hell","redtotal","killstotal","imp","hound","succ","inf","poss","bap","reap","goetia","fallen","sins","nativetotal","angel","cherub","exorcist","seraphim","council","heaventotal","lifeexp","base","waves","premature"]
+fields=["HEALTH_QUALITY","SIN_RATIO","NATURAL_DEATHS","IMP_CLIENTS_THIS_CYCLE","IMP_KILLS_THIS_CYCLE","TOTAL_DEATHS_THIS_CYCLE","WINNER_COUNT_THIS_CYCLE","SINNER_COUNT_THIS_CYCLE","REDEEMED_THIS_CYCLE","WINNER_POPULATION_HEAVEN","SINNER_POPULATION_HELL","REDEEMED_TOTAL","IMP_KILLS_TOTAL","IMP_POPULATION","HELLHOUND_POPULATION","SUCCUBUS_POPULATION","INFESTOR_POPULATION","POSSESSOR_POPULATION","BAPHOMET_POPULATION","REAPER_POPULATION","GOETIA_ARS_GOETIA_POPULATION","FALLEN_ANGELS_POPULATION","SEVEN_DEADLY_SINS_POPULATION","HELL_NATIVE_TOTAL","ANGEL_POPULATION","CHERUB_POPULATION","EXORCIST_POPULATION","SERAPHIM_POPULATION","SERAPHIM_COUNCIL_POPULATION","HEAVEN_NATIVE_TOTAL","LIFE_EXPECTANCY","BASE_DEATHS","WAVE_DEATHS","PREMATURE_DEATHS"]
+kn=[("mortality_ratio","BASE_MORTALITY_RATE_PER_CAPITA"),("mortality_ratio","HEALTH_COVERAGE_WEIGHT"),("judgment_ratio","EDUCATION_REFERENCE"),("judgment_ratio","BASE_SIN_RATIO"),("judgment_ratio","CRIME_WEIGHT"),("judgment_ratio","EDUCATION_WEIGHT"),("judgment_ratio","SIN_RATIO_MIN"),("judgment_ratio","SIN_RATIO_MAX"),("imp_ratio","IMP_CLIENT_RATIO"),("imp_ratio","IMP_SUCCESS_CHANCE"),("imp_ratio","IMP_KILL_RANDOM_VARIANCE"),("imp_ratio","MAX_IMP_KILL_FRACTION_POP"),("redemption_ratio","REDEMPTION_RATIO")]+[("hell_native_ratio",x) for x in ["IMP_RATIO","HELLHOUND_RATIO","SUCCUBUS_RATIO","INFESTOR_RATIO","POSSESSOR_RATIO","BAPHOMET_RATIO","REAPER_RATIO","GOETIA_ARS_GOETIA_RATIO"]]+[("hell_native_fixed","FALLEN_ANGELS"),("hell_native_fixed","SEVEN_DEADLY_SINS")]+[("heaven_native_ratio",x) for x in ["ANGEL_RATIO","CHERUB_RATIO","EXORCIST_RATIO","SERAPHIM_RATIO"]]+[("heaven_native_fixed","SERAPHIM_COUNCIL")]+[("mortality_ratio","LIFE_EXPECTANCY_DEATH_SCALE"),("death_waves","WAVE_DEATH_SHARE"),("death_waves","MAX_WAVE_DEATH_FRACTION_POP"),("death_waves","PREMATURE_SIN_BONUS")]
 
 PRELUDE = """
 function dofile() end
@@ -29,11 +29,15 @@ def new_lua():
 def run(lua, K, cycles):
     """Runs the cycles in the Lua (constants already set) and in the harness with K; returns (compared, mismatches)."""
     g = lua.globals()
-    inp=" ".join(repr(x) for x in K)+f"\n{len(cycles)}\n"+"\n".join(" ".join(repr(float(x)) for x in c) for c in cycles)
+    def line(c):
+        h,pop,crime,edu,le,jit,waves=c
+        return " ".join(repr(float(x)) for x in (h,pop,crime,edu,le,jit))+f" {len(waves)} "+" ".join(f"{float(p)!r} {float(e)!r} {int(pr)}" for p,e,pr in waves)
+    inp=" ".join(repr(x) for x in K)+f"\n{len(cycles)}\n"+"\n".join(line(c) for c in cycles)
     out=subprocess.run(["./harness"],input=inp,capture_output=True,text=True).stdout.strip().split("\n")
     bad=0
     for c,line in zip(cycles,out):
-        lua.execute(f"game.g_health_coverage_p={c[0]!r}; game.g_city_r_population={c[1]}; game.ga_crime={c[2]!r}; game.ga_education={c[3]!r}; jit={c[4]}")
+        waves=",".join(f"{{population={float(p)!r},education={float(e)!r},premature={'true' if pr else 'false'}}}" for p,e,pr in c[6])
+        lua.execute(f"game.g_health_coverage_p={c[0]!r}; game.g_city_r_population={c[1]}; game.ga_crime={c[2]!r}; game.ga_education={c[3]!r}; game.ga_life_exp={c[4]!r}; jit={c[5]}; afterlife_waves={{{waves}}}")
         g.run_afterlife_balance_variables("D")
         got=[float(x) for x in line.split()]
         exp=[float(g.afterlife_grid_var[f]) for f in fields]
@@ -43,7 +47,9 @@ def run(lua, K, cycles):
     return len(cycles), bad
 
 def random_cycles(r, n=40, pop=2_000_000):
-    return [(r.uniform(-20,130),r.randint(0,pop),r.uniform(0,150),r.uniform(0,1000),r.randint(-15,15)) for _ in range(n)]
+    def waves():
+        return [(r.randint(0,4000),r.uniform(0,200),r.random()<0.3) for _ in range(r.choice([0,0,1,3,8]))]
+    return [(r.uniform(-20,130),r.randint(0,pop),r.uniform(0,150),r.uniform(0,200),r.choice([0,0,r.uniform(1,200),r.randint(20,120)]),r.randint(-15,15),waves()) for _ in range(n)]
 
 failed = False
 
@@ -52,7 +58,7 @@ bad=0; total=0
 for trial in range(300):
     r=random.Random(trial)
     K=[r.uniform(0.0002,0.002),r.uniform(0,3),r.uniform(50,700),r.uniform(0.2,0.7),r.uniform(0,0.5),r.uniform(0,0.5),r.uniform(0,0.1),r.uniform(0.8,1),r.uniform(0,0.05),r.uniform(0,1),r.choice([0,3,10.7]),r.uniform(0,0.01),r.uniform(0,0.1)]
-    K+=[r.uniform(0,0.3) for _ in range(8)]+[2,7]+[r.uniform(0,1.2) for _ in range(4)]+[3]
+    K+=[r.uniform(0,0.3) for _ in range(8)]+[2,7]+[r.uniform(0,1.2) for _ in range(4)]+[3]+[r.uniform(0.5,2),r.uniform(0,0.3),r.uniform(0,0.05),r.uniform(0,0.3)]
     lua=new_lua()
     for t in set(a for a,_ in kn): lua.execute(f"{t}={{}}")
     for (t,f),v in zip(kn,K): lua.execute(f"{t}.{f}={v!r}")

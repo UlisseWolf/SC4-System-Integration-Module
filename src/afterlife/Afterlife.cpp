@@ -32,11 +32,14 @@
 #include "cIGZMessage2Standard.h"
 #include "cISC4AdvisorSystem.h"
 #include "cISC4City.h"
+#include "cISC4ResidentialSimulator.h"
+#include "cISC4SimGrid.h"
 #include "cISCLua.h"
 #include "cRZAutoRefCount.h"
 #include "SCLuaUtil.h"
 
 #include <Windows.h>
+#include <algorithm>
 #include <cmath>
 #include <cwctype>
 #include <cwchar>
@@ -51,10 +54,23 @@ namespace
 {
 	constexpr uint32_t kMessagePostCityInit = 0x26D31EC1;
 	constexpr uint32_t kMessagePreCityShutdown = 0x26D31EC2;
+	constexpr uint32_t kMessageSimNewMonth = 0x66956816;
+	constexpr uint32_t kMessagePostSave = 0x26C63345;
 
 	bool enabled = true;
 	Afterlife::State state;
 	Afterlife::Constants constants; // AfterlifeModel.h defaults, overridden by [Afterlife] in SC4SIM.ini
+	cISC4City* currentCity = nullptr;
+
+	// DLL-only settings of [Afterlife] (not part of the calculation).
+	struct Settings
+	{
+		bool deathWaves = true; // DEATH_WAVES: read the residential simulator's generation resets
+		int resetAge = 40; // TRACT_RESET_AGE: the age a tract is set back to (tuning 0xCA027307)
+		int chronicIntervalMonths = 12; // CHRONIC_RESET_INTERVAL_MONTHS: a tract reset every month counts once per this
+		bool saveWithCity = true; // SAVE_WITH_CITY: keep the cumulative populations in SC4SIM_Afterlife.ini
+	} settings;
+	std::filesystem::path stateFile;
 	bool warnedMissing = false;
 	std::mt19937 generator;
 	bool seeded = false;
@@ -105,6 +121,10 @@ namespace
 		{ L"HELL_GOETIA_ARS_GOETIA_RATIO", &Afterlife::Constants::goetiaArsGoetiaRatio },
 		{ L"FALLEN_ANGELS", &Afterlife::Constants::fallenAngels },
 		{ L"SEVEN_DEADLY_SINS", &Afterlife::Constants::sevenDeadlySins },
+		{ L"LIFE_EXPECTANCY_DEATH_SCALE", &Afterlife::Constants::lifeExpectancyDeathScale },
+		{ L"WAVE_DEATH_SHARE", &Afterlife::Constants::waveDeathShare },
+		{ L"MAX_WAVE_DEATH_FRACTION_POP", &Afterlife::Constants::maxWaveDeathFractionPop },
+		{ L"PREMATURE_SIN_BONUS", &Afterlife::Constants::prematureSinBonus },
 		{ L"HEAVEN_ANGEL_RATIO", &Afterlife::Constants::angelRatio },
 		{ L"HEAVEN_CHERUB_RATIO", &Afterlife::Constants::cherubRatio },
 		{ L"HEAVEN_EXORCIST_RATIO", &Afterlife::Constants::exorcistRatio },
@@ -215,6 +235,12 @@ namespace
 			{ "game", "ga_education", &game.education },
 		}, missing);
 
+		// game.ga_life_exp is optional: without it the old per-capita mortality is used.
+		if (!GetNumber(lua, "game", "ga_life_exp", game.lifeExpectancy))
+		{
+			game.lifeExpectancy = 0;
+		}
+
 		if (missing.empty())
 		{
 			return true;
@@ -241,6 +267,10 @@ namespace
 	// Every field of afterlife_grid_var, and the member that holds it.
 	constexpr StateField kStateFields[] = {
 		{ "HEALTH_QUALITY", &Afterlife::State::healthQuality },
+		{ "LIFE_EXPECTANCY", &Afterlife::State::lifeExpectancy },
+		{ "BASE_DEATHS", &Afterlife::State::baseDeaths },
+		{ "WAVE_DEATHS", &Afterlife::State::waveDeaths },
+		{ "PREMATURE_DEATHS", &Afterlife::State::prematureDeaths },
 		{ "SIN_RATIO", &Afterlife::State::sinRatio },
 		{ "NATURAL_DEATHS", &Afterlife::State::naturalDeaths },
 		{ "IMP_CLIENTS_THIS_CYCLE", &Afterlife::State::impClientsThisCycle },
@@ -311,13 +341,8 @@ namespace
 			return 0;
 		}
 
-		Afterlife::GameInputs game;
-		if (!ReadInputs(lua, game))
-		{
-			return 0; // nil, state unchanged
-		}
-
-		Afterlife::Step(state, game, constants, RandomInt);
+		// Since 1.9.3 the cycle runs on the game's new-month message (RunMonthlyCycle), with the residential
+		// simulator; this function only returns the current values, so calling it more than once a month is harmless.
 		MirrorState(lua);
 
 		if (lua->IsString(1))
@@ -420,6 +445,221 @@ namespace
 		return 1; // the entry is the result, on top of the stack
 	}
 
+	// ---------------------------------------------------------------- generation resets (residential simulator)
+
+	// The residential simulator keeps one average age per tract. When it passes the tract's life expectancy the game
+	// sets it back to the reset age (default 40) and cuts EQ and HQ: "a generation died" (docs/afterlife.md). Nothing
+	// of this is saved, so the DLL keeps last month's ages itself and compares.
+	struct TractMemory
+	{
+		int32_t countX = 0, countZ = 0;
+		std::vector<uint8_t> age; // last month's average age
+		std::vector<uint16_t> monthsSinceChronic; // months since a chronic (every month) reset was last counted
+		bool valid = false;
+	} tracts;
+
+	using PopulationGrid = cISC4SimGrid<uint16_t>;
+	using GetPopulationGridsFn = bool(__thiscall*)(cISC4ResidentialSimulator*, PopulationGrid**, PopulationGrid**, PopulationGrid**);
+	constexpr int kGetPopulationGridsSlot = 25; // checked in 1.1.641: three out pointers, each AddRef'd
+
+	bool loggedGrids = false;
+
+	std::vector<Afterlife::DeathWave> FindDeathWaves(cISC4City* city, uint32_t& resetTracts)
+	{
+		std::vector<Afterlife::DeathWave> waves;
+		resetTracts = 0;
+		cISC4ResidentialSimulator* const sim = city ? city->GetResidentialSimulator() : nullptr;
+		if (!sim || !settings.deathWaves)
+		{
+			return waves;
+		}
+		// slot 41 returns the age grid itself (no AddRef); gzcom-dll declares it as int32_t.
+		auto* const ageGrid = reinterpret_cast<cISC4SimGrid<uint8_t>*>(static_cast<intptr_t>(sim->GetAverageAgeMap()));
+		PopulationGrid* population[3]{};
+		const auto getGrids = reinterpret_cast<GetPopulationGridsFn>((*reinterpret_cast<void***>(sim))[kGetPopulationGridsSlot]);
+		if (!ageGrid || !getGrids(sim, &population[0], &population[1], &population[2]) || !population[0] || !population[1] || !population[2])
+		{
+			for (PopulationGrid* grid : population) if (grid) grid->Release();
+			return waves;
+		}
+
+		const int32_t countX = ageGrid->GetTractCountX(), countZ = ageGrid->GetTractCountZ();
+		const int32_t shift = ageGrid->GetTractShift();
+		const bool sameTracts = population[0]->GetTractShift() == shift && population[0]->GetTractCountX() == countX
+			&& population[0]->GetTractCountZ() == countZ;
+		if (!loggedGrids)
+		{
+			loggedGrids = true;
+			SimLog::Write(SimLog::Level::Info, "Afterlife: age grid %dx%d tracts of %d cells, population grid tract size %d, reset age %d.",
+				countX, countZ, 1 << shift, population[0]->GetTractSize(), settings.resetAge);
+		}
+
+		const size_t count = static_cast<size_t>(countX) * static_cast<size_t>(countZ);
+		const bool comparable = tracts.valid && tracts.countX == countX && tracts.countZ == countZ;
+		if (!comparable)
+		{
+			tracts.countX = countX;
+			tracts.countZ = countZ;
+			tracts.age.assign(count, 0);
+			tracts.monthsSinceChronic.assign(count, 0xFFFF);
+		}
+
+		for (int32_t z = 0; z < countZ; z++)
+		{
+			for (int32_t x = 0; x < countX; x++)
+			{
+				const size_t index = static_cast<size_t>(z) * countX + x;
+				const uint8_t age = ageGrid->GetTractValue(x, z);
+				const uint8_t previous = tracts.age[index];
+				tracts.age[index] = age;
+				if (tracts.monthsSinceChronic[index] < 0xFFFF) tracts.monthsSinceChronic[index]++;
+				if (!comparable || age != settings.resetAge)
+				{
+					continue;
+				}
+				const int32_t cellX = x << shift, cellZ = z << shift;
+				double residents[3]{};
+				double total = 0;
+				for (int w = 0; w < 3; w++)
+				{
+					residents[w] = sameTracts ? population[w]->GetTractValue(x, z) : population[w]->GetCellValue(cellX, cellZ);
+					total += residents[w];
+				}
+				if (total <= 0)
+				{
+					continue;
+				}
+				// GetCellLifeExpectancy returns a byte; gzcom-dll declares an int32_t.
+				const int32_t lifeExpectancy = sim->GetCellLifeExpectancy(cellX, cellZ) & 0xFF;
+				const bool transition = previous != age;
+				const bool chronic = lifeExpectancy < settings.resetAge; // resets on every monthly visit
+				bool counted = false, premature = false;
+				if (transition && !chronic)
+				{
+					counted = true; // old age
+				}
+				else if (chronic && (transition || tracts.monthsSinceChronic[index] >= settings.chronicIntervalMonths))
+				{
+					counted = true; // life expectancy below the reset age: illness, pollution
+					premature = true;
+					tracts.monthsSinceChronic[index] = 0;
+				}
+				if (!counted)
+				{
+					continue;
+				}
+				resetTracts++;
+				for (int w = 0; w < 3; w++)
+				{
+					if (residents[w] <= 0) continue;
+					const auto wealth = static_cast<cISC4BuildingOccupant::WealthType>(w + 1);
+					waves.push_back({ residents[w], sim->GetCellEQByWealth(cellX, cellZ, wealth), premature });
+				}
+			}
+		}
+		tracts.valid = true;
+		for (PopulationGrid* grid : population) grid->Release();
+		return waves;
+	}
+
+	// ---------------------------------------------------------------- monthly cycle
+
+	cISCLua* CityLua(cISC4City* city)
+	{
+		cISC4AdvisorSystem* const advisors = city ? city->GetAdvisorSystem() : nullptr;
+		return advisors ? advisors->GetScriptingContext() : nullptr;
+	}
+
+	// On the game's new-month message, the same message that starts the residential simulator's monthly cycle.
+	void RunMonthlyCycle()
+	{
+		cISCLua* const lua = CityLua(currentCity);
+		if (!lua)
+		{
+			return;
+		}
+		Afterlife::GameInputs game;
+		if (!ReadInputs(lua, game))
+		{
+			return; // state unchanged
+		}
+		uint32_t resetTracts = 0;
+		const std::vector<Afterlife::DeathWave> waves = FindDeathWaves(currentCity, resetTracts);
+		Afterlife::Step(state, game, waves, constants, RandomInt);
+		MirrorState(lua);
+		if (resetTracts > 0)
+		{
+			SimLog::Write(SimLog::Level::Info, "Afterlife: %u tract reset(s) this month: %.0f wave death(s), %.0f premature.",
+				resetTracts, state.waveDeaths, state.prematureDeaths);
+		}
+	}
+
+	// ---------------------------------------------------------------- saved with the city
+
+	// The game saves nothing about deaths, so the cumulative populations go to SC4SIM_Afterlife.ini (next to the DLL),
+	// one section per city serial number, written when the game saves the city and read when it opens.
+	struct SavedField
+	{
+		const wchar_t* key;
+		double Afterlife::State::* member;
+	};
+	constexpr SavedField kSavedFields[] = {
+		{ L"WINNER_POPULATION_HEAVEN", &Afterlife::State::winnerPopulationHeaven },
+		{ L"SINNER_POPULATION_HELL", &Afterlife::State::sinnerPopulationHell },
+		{ L"REDEEMED_TOTAL", &Afterlife::State::redeemedTotal },
+		{ L"IMP_KILLS_TOTAL", &Afterlife::State::impKillsTotal },
+	};
+
+	std::wstring CitySection(cISC4City* city)
+	{
+		wchar_t section[32]{};
+		swprintf(section, 32, L"City.%08X", city ? city->GetCitySerialNumber() : 0u);
+		return section;
+	}
+
+	void LoadState(cISC4City* city)
+	{
+		if (!settings.saveWithCity || !city || stateFile.empty())
+		{
+			return;
+		}
+		const std::wstring section = CitySection(city);
+		int loaded = 0;
+		for (const SavedField& field : kSavedFields)
+		{
+			wchar_t text[64]{};
+			GetPrivateProfileStringW(section.c_str(), field.key, L"", text, 64, stateFile.c_str());
+			wchar_t* end = nullptr;
+			const double value = std::wcstod(text, &end);
+			if (text[0] != L'\0' && end != text && std::isfinite(value) && value >= 0)
+			{
+				state.*field.member = std::floor(value);
+				loaded++;
+			}
+		}
+		if (loaded > 0)
+		{
+			Afterlife::UpdateNatives(state, constants);
+			SimLog::Write(SimLog::Level::Info, "Afterlife: %ls loaded: %.0f in Heaven, %.0f in Hell.", section.c_str(),
+				state.winnerPopulationHeaven, state.sinnerPopulationHell);
+		}
+	}
+
+	void SaveState(cISC4City* city)
+	{
+		if (!settings.saveWithCity || !city || stateFile.empty())
+		{
+			return;
+		}
+		const std::wstring section = CitySection(city);
+		for (const SavedField& field : kSavedFields)
+		{
+			wchar_t text[64]{};
+			swprintf(text, 64, L"%.0f", state.*field.member);
+			WritePrivateProfileStringW(section.c_str(), field.key, text, stateFile.c_str());
+		}
+	}
+
 	// ---------------------------------------------------------------- registration
 
 	void RegisterFunctions(cISC4City* city)
@@ -468,6 +708,11 @@ void Afterlife::OnStart()
 	}
 	const std::filesystem::path ini = std::filesystem::path(modulePath).replace_filename(L"SC4SIM.ini");
 	LoadConstants(ini.c_str());
+	settings.deathWaves = GetPrivateProfileIntW(L"Afterlife", L"DEATH_WAVES", 1, ini.c_str()) != 0;
+	settings.resetAge = static_cast<int>(GetPrivateProfileIntW(L"Afterlife", L"TRACT_RESET_AGE", 40, ini.c_str()));
+	settings.chronicIntervalMonths = std::max(1, static_cast<int>(GetPrivateProfileIntW(L"Afterlife", L"CHRONIC_RESET_INTERVAL_MONTHS", 12, ini.c_str())));
+	settings.saveWithCity = GetPrivateProfileIntW(L"Afterlife", L"SAVE_WITH_CITY", 1, ini.c_str()) != 0;
+	stateFile = std::filesystem::path(modulePath).replace_filename(L"SC4SIM_Afterlife.ini");
 	wchar_t value[32]{};
 	GetPrivateProfileStringW(L"Afterlife", L"Enabled", L"true", value, 32, ini.c_str());
 	std::wstring text = value;
@@ -486,12 +731,24 @@ void Afterlife::DoMessage(cIGZMessage2* message)
 	{
 	case kMessagePostCityInit:
 		state = Afterlife::State{};
+		tracts = TractMemory{};
 		warnedMissing = false;
 		warnedBuiltInRoster = false;
-		RegisterFunctions(static_cast<cISC4City*>(static_cast<cIGZMessage2Standard*>(message)->GetVoid1()));
+		currentCity = static_cast<cISC4City*>(static_cast<cIGZMessage2Standard*>(message)->GetVoid1());
+		RegisterFunctions(currentCity);
+		LoadState(currentCity);
+		if (cISCLua* const lua = CityLua(currentCity)) MirrorState(lua);
+		break;
+	case kMessageSimNewMonth:
+		RunMonthlyCycle();
+		break;
+	case kMessagePostSave:
+		SaveState(currentCity);
 		break;
 	case kMessagePreCityShutdown:
 		state = Afterlife::State{};
+		tracts = TractMemory{};
+		currentCity = nullptr;
 		break;
 	}
 }

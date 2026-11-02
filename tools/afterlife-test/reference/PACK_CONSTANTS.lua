@@ -478,7 +478,15 @@ isp_ratio = {
 
 mortality_ratio = {
    BASE_MORTALITY_RATE_PER_CAPITA = 0.0006,   -- ~0.06 % of R population per month at 100 % health coverage
-   HEALTH_COVERAGE_WEIGHT         = 1.5       -- at 0 % coverage, rate is multiplied by (1 + this)
+   HEALTH_COVERAGE_WEIGHT         = 1.5,      -- at 0 % coverage, rate is multiplied by (1 + this)
+   LIFE_EXPECTANCY_DEATH_SCALE    = 1.0       -- SC4SIM 1.9.3: deaths per month = residents * this / (12 * game.ga_life_exp)
+}
+
+-- SC4SIM 1.9.3: generation resets of the residential simulator
+death_waves = {
+   WAVE_DEATH_SHARE            = 0.05,   -- share of a reset tract's residents counted as deaths
+   MAX_WAVE_DEATH_FRACTION_POP = 0.01,   -- all wave deaths of a month never exceed this share of the residents
+   PREMATURE_SIN_BONUS         = 0.1     -- extra Sinner share for premature deaths (life expectancy below the reset age)
 }
 
 -- ============================================================
@@ -493,7 +501,7 @@ judgment_ratio = {
    BASE_SIN_RATIO       = 0.5,    -- baseline split (0.5 = 50 % Sinners, 50 % Winners)
    CRIME_WEIGHT         = 0.3,    -- how strongly game.ga_crime / 100 pushes toward Sinner
    EDUCATION_WEIGHT     = 0.3,    -- how strongly edu surplus above EDUCATION_REFERENCE pulls toward Winner
-   EDUCATION_REFERENCE  = 500,    -- baseline game.ga_education treated as "average"  (TUNE THIS)
+   EDUCATION_REFERENCE  = 100,    -- baseline game.ga_education (city EQ, 0-200) treated as "average" (SC4SIM 1.9.3; was 500)
    SIN_RATIO_MIN        = 0.1,    -- floor: at least 10 % go to Heaven regardless
    SIN_RATIO_MAX        = 0.9     -- ceiling: at least 10 % go to Hell regardless
 }
@@ -575,66 +583,68 @@ heaven_native_fixed = {
 -- ============================================================
 
 hell_news_characters = {
-   KATIE_KILLJOY       = { full_name = "Katie Killjoy", role = "Anchor, 670 News", source = "Hazbin Hotel", species = "Sinner Demon", ticker_text_id = "text@BB3C1000" },
-   TOM_TRENCH          = { full_name = "Tom Trench", role = "Co-Anchor, 670 News", source = "Hazbin Hotel", species = "Sinner Demon", ticker_text_id = "text@BB3C1001" },
-   CHARLIE_MORNINGSTAR = { full_name = "Charlie Morningstar", role = "Hotel Manager, Princess of Hell", source = "Hazbin Hotel", species = "Royal Goetia (Hellborn)", ticker_text_id = "text@BB3C1010" },
-   VAGGIE              = { full_name = "Vaggie", role = "Hotel Co-Manager, former Exorcist", source = "Hazbin Hotel", species = "Fallen Angel (former Exorcist)", ticker_text_id = "text@BB3C1011" },
-   ALASTOR             = { full_name = "Alastor", role = "Overlord, Radio Demon", source = "Hazbin Hotel", species = "Overlord (Sinner-origin)", ticker_text_id = "text@BB3C1012" },
-   VOX                 = { full_name = "Vox", role = "Overlord, VoxTek CEO", source = "Hazbin Hotel", species = "Overlord (Sinner-origin)", ticker_text_id = "text@BB3C1013" },
-   VALENTINO           = { full_name = "Valentino", role = "Overlord, Studio Owner", source = "Hazbin Hotel", species = "Overlord (Sinner-origin)", ticker_text_id = "text@BB3C1014" },
-   BLITZO              = { full_name = "Blitzo", role = "C.E.O., I.M.P.", source = "Helluva Boss", species = "Imp (Hellborn)", ticker_text_id = "text@BB3C1020" },
-   MOXXIE              = { full_name = "Moxxie", role = "Field Agent, I.M.P.", source = "Helluva Boss", species = "Imp (Hellborn)", ticker_text_id = "text@BB3C1021" },
-   MILLIE              = { full_name = "Millie", role = "Field Agent, I.M.P.", source = "Helluva Boss", species = "Imp (Hellborn)", ticker_text_id = "text@BB3C1022" },
-   LOONA               = { full_name = "Loona", role = "Receptionist, I.M.P.", source = "Helluva Boss", species = "Hellhound (Hellborn)", ticker_text_id = "text@BB3C1023" },
-   STOLAS              = { full_name = "Stolas", role = "Ars Goetia Royalty", source = "Helluva Boss", species = "Royal Goetia (Hellborn)", ticker_text_id = "text@BB3C1024" },
-   VEROSIKA_MAYDAY     = { full_name = "Verosika Mayday", role = "Pop Star", source = "Helluva Boss", species = "Succubus (Hellborn)", ticker_text_id = "text@BB3C1025" },
-   LUCIFER_MORNINGSTAR = { full_name = "Lucifer Morningstar", role = "King of Hell, Sin of Pride", source = "Hazbin Hotel", species = "Fallen Angel", ticker_text_id = "text@BB3C1030" },
-   LILITH              = { full_name = "Lilith", role = "Queen of Hell, the first woman", source = "Hazbin Hotel", species = "First Woman (Queen of Hell)", ticker_text_id = "text@BB3C1031" },
-   ANGEL_DUST          = { full_name = "Angel Dust", role = "Hotel Patron, Porn Star", source = "Hazbin Hotel", species = "Sinner Demon", ticker_text_id = "text@BB3C1032" },
-   HUSK                = { full_name = "Husk", role = "Hotel Bartender, former Overlord", source = "Hazbin Hotel", species = "Sinner Demon", ticker_text_id = "text@BB3C1033" },
-   NIFFTY              = { full_name = "Niffty", role = "Hotel Housekeeper", source = "Hazbin Hotel", species = "Sinner Demon", ticker_text_id = "text@BB3C1034" },
-   SIR_PENTIOUS        = { full_name = "Sir Pentious", role = "Hotel Patron, redeemed into Heaven", source = "Hazbin Hotel", species = "Sinner Demon (Redeemed)", ticker_text_id = "text@BB3C1035" },
-   EGG_BOIS            = { full_name = "Egg Bois", role = "Sir Pentious' Henchmen", source = "Hazbin Hotel", species = "Egg Minions", ticker_text_id = "text@BB3C1036" },
-   FAT_NUGGETS         = { full_name = "Fat Nuggets", role = "Angel Dust's Pet Pig", source = "Hazbin Hotel", species = "Pig (Hell)", ticker_text_id = "text@BB3C1037" },
-   CHERRI_BOMB         = { full_name = "Cherri Bomb", role = "Angel Dust's Friend, Arsonist", source = "Hazbin Hotel", species = "Sinner Demon", ticker_text_id = "text@BB3C1038" },
-   VELVETTE            = { full_name = "Velvette", role = "Overlord, Fashion Influencer", source = "Hazbin Hotel", species = "Overlord (Sinner-origin)", ticker_text_id = "text@BB3C1039" },
-   CARMILLA_CARMINE    = { full_name = "Carmilla Carmine", role = "Overlord, Arms Dealer", source = "Hazbin Hotel", species = "Overlord (Sinner-origin)", ticker_text_id = "text@BB3C103A" },
-   ODETTE_CARMINE      = { full_name = "Odette Carmine", role = "Carmilla's Daughter", source = "Hazbin Hotel", species = "Sinner Demon", ticker_text_id = "text@BB3C103B" },
-   CLARA_CARMINE       = { full_name = "Clara Carmine", role = "Carmilla's Daughter", source = "Hazbin Hotel", species = "Sinner Demon", ticker_text_id = "text@BB3C103C" },
-   ZESTIAL             = { full_name = "Zestial", role = "Overlord, Eldest Overlord", source = "Hazbin Hotel", species = "Overlord (Sinner-origin)", ticker_text_id = "text@BB3C103D" },
-   ROSIE               = { full_name = "Rosie", role = "Overlord, Cannibal Town", source = "Hazbin Hotel", species = "Overlord (Sinner-origin)", ticker_text_id = "text@BB3C103E" },
-   MIMZY               = { full_name = "Mimzy", role = "Singer, Alastor's Acquaintance", source = "Hazbin Hotel", species = "Sinner Demon", ticker_text_id = "text@BB3C103F" },
-   SUSAN               = { full_name = "Susan", role = "Hell Resident", source = "Hazbin Hotel", species = "Sinner Demon", ticker_text_id = "text@BB3C1040" },
-   BAXTER              = { full_name = "Baxter", role = "Hotel Guest, Scientist", source = "Hazbin Hotel", species = "Sinner Demon", ticker_text_id = "text@BB3C1041" },
-   ZEEZI               = { full_name = "Zeezi", role = "Overlord", source = "Hazbin Hotel", species = "Overlord (Sinner-origin)", ticker_text_id = "text@BB3C1042" },
-   PRICK               = { full_name = "Prick", role = "Overlord", source = "Hazbin Hotel", species = "Overlord (Sinner-origin)", ticker_text_id = "text@BB3C1043" },
-   ADAM                = { full_name = "Adam", role = "First Man, Exorcist Leader", source = "Hazbin Hotel", species = "Angel (Winner)", ticker_text_id = "text@BB3C1044" },
-   LUTE                = { full_name = "Lute", role = "Exorcist Lieutenant", source = "Hazbin Hotel", species = "Exorcist (Angel)", ticker_text_id = "text@BB3C1045" },
-   ABEL                = { full_name = "Abel", role = "Exorcist, Son of Adam", source = "Hazbin Hotel", species = "Angel (Winner)", ticker_text_id = "text@BB3C1046" },
-   SERA                = { full_name = "Sera", role = "High Seraphim of Heaven", source = "Hazbin Hotel", species = "Seraphim (Angel)", ticker_text_id = "text@BB3C1047" },
-   EMILY               = { full_name = "Emily", role = "Seraphim, Heaven", source = "Hazbin Hotel", species = "Seraphim (Angel)", ticker_text_id = "text@BB3C1048" },
-   ST_PETER            = { full_name = "St. Peter", role = "Gatekeeper of Heaven", source = "Hazbin Hotel", species = "Angel (Winner)", ticker_text_id = "text@BB3C1049" },
-   SPEAKER_OF_GOD      = { full_name = "The Speaker of God", role = "Voice of Heaven", source = "Hazbin Hotel", species = "Angel", ticker_text_id = "text@BB3C104A" },
-   OCTAVIA             = { full_name = "Octavia", role = "Stolas' Daughter", source = "Helluva Boss", species = "Royal Goetia (Hellborn)", ticker_text_id = "text@BB3C1050" },
-   STELLA              = { full_name = "Stella", role = "Stolas' Ex-Wife", source = "Helluva Boss", species = "Royal Goetia (Hellborn)", ticker_text_id = "text@BB3C1051" },
-   ANDREALPHUS         = { full_name = "Andrealphus", role = "Stella's Brother", source = "Helluva Boss", species = "Royal Goetia (Hellborn)", ticker_text_id = "text@BB3C1052" },
-   PAIMON              = { full_name = "Paimon", role = "Stolas' Father", source = "Helluva Boss", species = "Royal Goetia (Hellborn)", ticker_text_id = "text@BB3C1053" },
-   VASSAGO             = { full_name = "Vassago", role = "Stolas' Friend", source = "Helluva Boss", species = "Ars Goetia (Hellborn)", ticker_text_id = "text@BB3C1054" },
-   ASMODEUS            = { full_name = "Asmodeus", role = "Sin of Lust, Ozzie's Owner", source = "Helluva Boss", species = "Sin (Hellborn)", ticker_text_id = "text@BB3C1055" },
-   BEELZEBUB           = { full_name = "Beelzebub", role = "Sin of Gluttony", source = "Helluva Boss", species = "Sin (Hellborn)", ticker_text_id = "text@BB3C1056" },
-   SATAN               = { full_name = "Satan", role = "Sin of Wrath", source = "Helluva Boss", species = "Sin (Hellborn)", ticker_text_id = "text@BB3C1057" },
-   MAMMON              = { full_name = "Mammon", role = "Sin of Greed", source = "Helluva Boss", species = "Sin (Hellborn)", ticker_text_id = "text@BB3C1058" },
-   FIZZAROLLI          = { full_name = "Fizzarolli", role = "Performer, Ozzie's Partner", source = "Helluva Boss", species = "Imp (Hellborn)", ticker_text_id = "text@BB3C1059" },
-   ROBO_FIZZ           = { full_name = "Robo Fizz", role = "Mammon's Robot Merchandise", source = "Helluva Boss", species = "Robot", ticker_text_id = "text@BB3C105A" },
-   STRIKER             = { full_name = "Striker", role = "Imp Assassin", source = "Helluva Boss", species = "Imp (Hellborn)", ticker_text_id = "text@BB3C105B" },
-   CRIMSON             = { full_name = "Crimson", role = "Imp Mob Boss, Moxxie's Father", source = "Helluva Boss", species = "Imp (Hellborn)", ticker_text_id = "text@BB3C105C" },
-   CASH_BUCKZO         = { full_name = "Cash Buckzo", role = "Blitzo's Father", source = "Helluva Boss", species = "Imp (Hellborn)", ticker_text_id = "text@BB3C105D" },
-   BARBIE_WIRE         = { full_name = "Barbie Wire", role = "Blitzo's Twin Sister", source = "Helluva Boss", species = "Imp (Hellborn)", ticker_text_id = "text@BB3C105E" },
-   SALLIE_MAY          = { full_name = "Sallie May", role = "Millie's Sister", source = "Helluva Boss", species = "Imp (Hellborn)", ticker_text_id = "text@BB3C105F" },
-   VORTEX              = { full_name = "Vortex", role = "Loona's Friend", source = "Helluva Boss", species = "Hellhound (Hellborn)", ticker_text_id = "text@BB3C1060" },
-   GLITZ_AND_GLAM      = { full_name = "Glitz & Glam", role = "Imp Twin Performers", source = "Helluva Boss", species = "Imp (Hellborn)", ticker_text_id = "text@BB3C1061" },
-   LEVIATHAN           = { full_name = "Leviathan", role = "Sin of Envy", source = "Helluva Boss", species = "Sin (Hellborn)", ticker_text_id = "text@BB3C1062" },
-   BELPHEGOR           = { full_name = "Belphegor", role = "Sin of Sloth", source = "Helluva Boss", species = "Sin (Hellborn)", ticker_text_id = "text@BB3C1063" }
+   KATIE_KILLJOY        = { full_name = "Katie Killjoy", role = "Anchor, 670 News", source = "Hazbin Hotel", species = "Sinner Demon", ticker_text_id = "text@BB3C1000" },
+   TOM_TRENCH           = { full_name = "Tom Trench", role = "Co-Anchor, 670 News", source = "Hazbin Hotel", species = "Sinner Demon", ticker_text_id = "text@BB3C1001" },
+   CHARLIE_MORNINGSTAR  = { full_name = "Charlie Morningstar", role = "Hotel Manager, Princess of Hell", source = "Hazbin Hotel", species = "Royal Goetia (Hellborn)", ticker_text_id = "text@BB3C1010" },
+   VAGGIE               = { full_name = "Vaggie", role = "Hotel Co-Manager, former Exorcist", source = "Hazbin Hotel", species = "Fallen Angel (former Exorcist)", ticker_text_id = "text@BB3C1011" },
+   ALASTOR              = { full_name = "Alastor", role = "Overlord, Radio Demon", source = "Hazbin Hotel", species = "Overlord (Sinner-origin)", ticker_text_id = "text@BB3C1012" },
+   VOX                  = { full_name = "Vox", role = "Overlord, VoxTek CEO", source = "Hazbin Hotel", species = "Overlord (Sinner-origin)", ticker_text_id = "text@BB3C1013" },
+   VALENTINO            = { full_name = "Valentino", role = "Overlord, Studio Owner", source = "Hazbin Hotel", species = "Overlord (Sinner-origin)", ticker_text_id = "text@BB3C1014" },
+   BLITZO               = { full_name = "Blitzo", role = "C.E.O., I.M.P.", source = "Helluva Boss", species = "Imp (Hellborn)", ticker_text_id = "text@BB3C1020" },
+   MOXXIE               = { full_name = "Moxxie", role = "Field Agent, I.M.P.", source = "Helluva Boss", species = "Imp (Hellborn)", ticker_text_id = "text@BB3C1021" },
+   MILLIE               = { full_name = "Millie", role = "Field Agent, I.M.P.", source = "Helluva Boss", species = "Imp (Hellborn)", ticker_text_id = "text@BB3C1022" },
+   LOONA                = { full_name = "Loona", role = "Receptionist, I.M.P.", source = "Helluva Boss", species = "Hellhound (Hellborn)", ticker_text_id = "text@BB3C1023" },
+   STOLAS               = { full_name = "Stolas", role = "Ars Goetia Royalty", source = "Helluva Boss", species = "Royal Goetia (Hellborn)", ticker_text_id = "text@BB3C1024" },
+   VEROSIKA_MAYDAY      = { full_name = "Verosika Mayday", role = "Pop Star", source = "Helluva Boss", species = "Succubus (Hellborn)", ticker_text_id = "text@BB3C1025" },
+   LUCIFER_MORNINGSTAR  = { full_name = "Lucifer Morningstar", role = "King of Hell, Sin of Pride", source = "Hazbin Hotel", species = "Fallen Angel", ticker_text_id = "text@BB3C1030" },
+   LILITH               = { full_name = "Lilith", role = "Queen of Hell, the first woman", source = "Hazbin Hotel", species = "First Woman (Queen of Hell)", ticker_text_id = "text@BB3C1031" },
+   ANGEL_DUST           = { full_name = "Angel Dust", role = "Hotel Patron, Porn Star", source = "Hazbin Hotel", species = "Sinner Demon", ticker_text_id = "text@BB3C1032" },
+   HUSK                 = { full_name = "Husk", role = "Hotel Bartender, former Overlord", source = "Hazbin Hotel", species = "Sinner Demon", ticker_text_id = "text@BB3C1033" },
+   NIFFTY               = { full_name = "Niffty", role = "Hotel Housekeeper", source = "Hazbin Hotel", species = "Sinner Demon", ticker_text_id = "text@BB3C1034" },
+   SIR_PENTIOUS         = { full_name = "Sir Pentious", role = "Hotel Patron, redeemed into Heaven", source = "Hazbin Hotel", species = "Sinner Demon (Redeemed)", ticker_text_id = "text@BB3C1035" },
+   EGG_BOIS             = { full_name = "Egg Bois", role = "Sir Pentious' Henchmen", source = "Hazbin Hotel", species = "Egg Minions", ticker_text_id = "text@BB3C1036" },
+   FAT_NUGGETS          = { full_name = "Fat Nuggets", role = "Angel Dust's Pet Pig", source = "Hazbin Hotel", species = "Pig (Hell)", ticker_text_id = "text@BB3C1037" },
+   CHERRI_BOMB          = { full_name = "Cherri Bomb", role = "Angel Dust's Friend, Arsonist", source = "Hazbin Hotel", species = "Sinner Demon", ticker_text_id = "text@BB3C1038" },
+   VELVETTE             = { full_name = "Velvette", role = "Overlord, Fashion Influencer", source = "Hazbin Hotel", species = "Overlord (Sinner-origin)", ticker_text_id = "text@BB3C1039" },
+   CARMILLA_CARMINE     = { full_name = "Carmilla Carmine", role = "Overlord, Arms Dealer", source = "Hazbin Hotel", species = "Overlord (Sinner-origin)", ticker_text_id = "text@BB3C103A" },
+   ODETTE_CARMINE       = { full_name = "Odette Carmine", role = "Carmilla's Daughter", source = "Hazbin Hotel", species = "Sinner Demon", ticker_text_id = "text@BB3C103B" },
+   CLARA_CARMINE        = { full_name = "Clara Carmine", role = "Carmilla's Daughter", source = "Hazbin Hotel", species = "Sinner Demon", ticker_text_id = "text@BB3C103C" },
+   ZESTIAL              = { full_name = "Zestial", role = "Overlord, Eldest Overlord", source = "Hazbin Hotel", species = "Overlord (Sinner-origin)", ticker_text_id = "text@BB3C103D" },
+   ROSIE                = { full_name = "Rosie", role = "Overlord, Cannibal Town", source = "Hazbin Hotel", species = "Overlord (Sinner-origin)", ticker_text_id = "text@BB3C103E" },
+   MIMZY                = { full_name = "Mimzy", role = "Singer, Alastor's Acquaintance", source = "Hazbin Hotel", species = "Sinner Demon", ticker_text_id = "text@BB3C103F" },
+   SUSAN                = { full_name = "Susan", role = "Hell Resident", source = "Hazbin Hotel", species = "Sinner Demon", ticker_text_id = "text@BB3C1040" },
+   BAXTER               = { full_name = "Baxter", role = "Hotel Guest, Scientist", source = "Hazbin Hotel", species = "Sinner Demon", ticker_text_id = "text@BB3C1041" },
+   ZEEZI                = { full_name = "Zeezi", role = "Overlord", source = "Hazbin Hotel", species = "Overlord (Sinner-origin)", ticker_text_id = "text@BB3C1042" },
+   PRICK                = { full_name = "Prick", role = "Overlord", source = "Hazbin Hotel", species = "Overlord (Sinner-origin)", ticker_text_id = "text@BB3C1043" },
+   ADAM                 = { full_name = "Adam", role = "First Man, Exorcist Leader", source = "Hazbin Hotel", species = "Angel (Winner)", ticker_text_id = "text@BB3C1044" },
+   LUTE                 = { full_name = "Lute", role = "Exorcist Lieutenant", source = "Hazbin Hotel", species = "Exorcist (Angel)", ticker_text_id = "text@BB3C1045" },
+   ABEL                 = { full_name = "Abel", role = "Exorcist, Son of Adam", source = "Hazbin Hotel", species = "Angel (Winner)", ticker_text_id = "text@BB3C1046" },
+   SERA                 = { full_name = "Sera", role = "High Seraphim of Heaven", source = "Hazbin Hotel", species = "Seraphim (Angel)", ticker_text_id = "text@BB3C1047" },
+   EMILY                = { full_name = "Emily", role = "Seraphim, Heaven", source = "Hazbin Hotel", species = "Seraphim (Angel)", ticker_text_id = "text@BB3C1048" },
+   ST_PETER             = { full_name = "St. Peter", role = "Gatekeeper of Heaven", source = "Hazbin Hotel", species = "Angel (Winner)", ticker_text_id = "text@BB3C1049" },
+   SPEAKER_OF_GOD       = { full_name = "The Speaker of God", role = "Voice of Heaven", source = "Hazbin Hotel", species = "Angel", ticker_text_id = "text@BB3C104A" },
+   OCTAVIA              = { full_name = "Octavia", role = "Stolas' Daughter", source = "Helluva Boss", species = "Royal Goetia (Hellborn)", ticker_text_id = "text@BB3C1050" },
+   STELLA               = { full_name = "Stella", role = "Stolas' Ex-Wife", source = "Helluva Boss", species = "Royal Goetia (Hellborn)", ticker_text_id = "text@BB3C1051" },
+   ANDREALPHUS          = { full_name = "Andrealphus", role = "Stella's Brother", source = "Helluva Boss", species = "Royal Goetia (Hellborn)", ticker_text_id = "text@BB3C1052" },
+   PAIMON               = { full_name = "Paimon", role = "Stolas' Father", source = "Helluva Boss", species = "Royal Goetia (Hellborn)", ticker_text_id = "text@BB3C1053" },
+   VASSAGO              = { full_name = "Vassago", role = "Stolas' Friend", source = "Helluva Boss", species = "Ars Goetia (Hellborn)", ticker_text_id = "text@BB3C1054" },
+   ASMODEUS             = { full_name = "Asmodeus", role = "Sin of Lust, Ozzie's Owner", source = "Helluva Boss", species = "Sin (Hellborn)", ticker_text_id = "text@BB3C1055" },
+   BEELZEBUB            = { full_name = "Beelzebub", role = "Sin of Gluttony", source = "Helluva Boss", species = "Sin (Hellborn)", ticker_text_id = "text@BB3C1056" },
+   SATAN                = { full_name = "Satan", role = "Sin of Wrath", source = "Helluva Boss", species = "Sin (Hellborn)", ticker_text_id = "text@BB3C1057" },
+   MAMMON               = { full_name = "Mammon", role = "Sin of Greed", source = "Helluva Boss", species = "Sin (Hellborn)", ticker_text_id = "text@BB3C1058" },
+   FIZZAROLLI           = { full_name = "Fizzarolli", role = "Performer, Ozzie's Partner", source = "Helluva Boss", species = "Imp (Hellborn)", ticker_text_id = "text@BB3C1059" },
+   ROBO_FIZZ            = { full_name = "Robo Fizz", role = "Mammon's Robot Merchandise", source = "Helluva Boss", species = "Robot", ticker_text_id = "text@BB3C105A" },
+   STRIKER              = { full_name = "Striker", role = "Imp Assassin", source = "Helluva Boss", species = "Imp (Hellborn)", ticker_text_id = "text@BB3C105B" },
+   CRIMSON              = { full_name = "Crimson", role = "Imp Mob Boss, Moxxie's Father", source = "Helluva Boss", species = "Imp (Hellborn)", ticker_text_id = "text@BB3C105C" },
+   CASH_BUCKZO          = { full_name = "Cash Buckzo", role = "Blitzo's Father", source = "Helluva Boss", species = "Imp (Hellborn)", ticker_text_id = "text@BB3C105D" },
+   BARBIE_WIRE          = { full_name = "Barbie Wire", role = "Blitzo's Twin Sister", source = "Helluva Boss", species = "Imp (Hellborn)", ticker_text_id = "text@BB3C105E" },
+   SALLIE_MAY           = { full_name = "Sallie May", role = "Millie's Sister", source = "Helluva Boss", species = "Imp (Hellborn)", ticker_text_id = "text@BB3C105F" },
+   VORTEX               = { full_name = "Vortex", role = "Loona's Friend", source = "Helluva Boss", species = "Hellhound (Hellborn)", ticker_text_id = "text@BB3C1060" },
+   GLITZ_AND_GLAM       = { full_name = "Glitz & Glam", role = "Imp Twin Performers", source = "Helluva Boss", species = "Imp (Hellborn)", ticker_text_id = "text@BB3C1061" },
+   LEVIATHAN            = { full_name = "Leviathan", role = "Sin of Envy", source = "Helluva Boss", species = "Sin (Hellborn)", ticker_text_id = "text@BB3C1062" },
+   BELPHEGOR            = { full_name = "Belphegor", role = "Sin of Sloth", source = "Helluva Boss", species = "Sin (Hellborn)", ticker_text_id = "text@BB3C1063" },
+   NEWS_670_HEALTH_DESK = { full_name = "670 News Health Desk", role = "Health Desk, 670 News", source = "SC4SIM", species = "Sinner Demon", ticker_text_id = "text@BB3C1064" },
+   GATE_INTAKE_CLERK    = { full_name = "Hell's Intake Clerk", role = "Intake Clerk, Gates of Hell", source = "SC4SIM", species = "Sinner Demon", ticker_text_id = "text@BB3C1065" }
 }
 
 -- ============================================================
@@ -651,7 +661,8 @@ news_ticker_event_characters = {
    OVERLORD_REPORT          = { "ALASTOR", "VOX", "VALENTINO", "VELVETTE", "CARMILLA_CARMINE", "ODETTE_CARMINE", "CLARA_CARMINE", "ZESTIAL", "ROSIE", "ZEEZI", "PRICK", "MIMZY", "SUSAN" },
    HELL_NATIVE_REPORT       = { "STOLAS", "LOONA", "VEROSIKA_MAYDAY", "OCTAVIA", "STELLA", "ANDREALPHUS", "PAIMON", "VASSAGO", "FIZZAROLLI", "ROBO_FIZZ", "CRIMSON", "CASH_BUCKZO", "BARBIE_WIRE", "SALLIE_MAY", "VORTEX", "GLITZ_AND_GLAM" },
    SEVEN_DEADLY_SINS_REPORT = { "LUCIFER_MORNINGSTAR", "LILITH", "ASMODEUS", "BEELZEBUB", "SATAN", "MAMMON", "LEVIATHAN", "BELPHEGOR" },
-   HEAVEN_REPORT            = { "ADAM", "LUTE", "ABEL", "SERA", "EMILY", "ST_PETER", "SPEAKER_OF_GOD" }
+   HEAVEN_REPORT            = { "ADAM", "LUTE", "ABEL", "SERA", "EMILY", "ST_PETER", "SPEAKER_OF_GOD" },
+   PREMATURE_DEATH_REPORT   = { "NEWS_670_HEALTH_DESK", "GATE_INTAKE_CLERK" }
 }
 
 

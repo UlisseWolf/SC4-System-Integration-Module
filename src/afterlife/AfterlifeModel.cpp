@@ -1,4 +1,5 @@
-// SC4 SIM: Afterlife calculation. A line-by-line port of run_afterlife_balance_variables() of AFTERLIFE.lua.
+// SC4 SIM: Afterlife calculation. Started as a line-by-line port of run_afterlife_balance_variables() of AFTERLIFE.lua;
+// tools/afterlife-test/reference/AFTERLIFE.lua is kept in step with it as the test reference.
 // Lua numbers are doubles, so every value here is a double and math.floor is std::floor.
 #include "AfterlifeModel.h"
 
@@ -7,17 +8,56 @@
 #include <cstring>
 #include <iterator>
 
-void Afterlife::Step(State& s, const GameInputs& game, const Constants& k, const RandomInt& random)
+namespace
 {
-	// Natural mortality, worsened by poor health coverage.
-	s.healthQuality = std::max(std::min(game.healthCoverage / 100, 1.0), 0.0);
-	const double mortalityRate = k.baseMortalityRatePerCapita * (1 + k.healthCoverageWeight * (1 - s.healthQuality));
-	s.naturalDeaths = std::floor(game.residentPopulation * mortalityRate);
+	double Clamp(double value, double lo, double hi) { return std::max(lo, std::min(hi, value)); }
 
-	// Winner/Sinner judgment ratio, shifted by crime and education, clamped away from 0% and 100%.
-	const double educationFactor = (game.education / k.educationReference) - 1;
-	s.sinRatio = k.baseSinRatio + (k.crimeWeight * (game.crime / 100)) - (k.educationWeight * educationFactor);
-	s.sinRatio = std::max(k.sinRatioMin, std::min(k.sinRatioMax, s.sinRatio));
+	// Winner/Sinner judgment ratio for a given EQ, shifted by crime, clamped away from 0% and 100%.
+	double SinRatio(const Afterlife::Constants& k, double crime, double education, double bonus)
+	{
+		const double educationFactor = (education / k.educationReference) - 1;
+		const double ratio = k.baseSinRatio + (k.crimeWeight * (crime / 100)) - (k.educationWeight * educationFactor) + bonus;
+		return Clamp(ratio, k.sinRatioMin, k.sinRatioMax);
+	}
+}
+
+void Afterlife::Step(State& s, const GameInputs& game, const std::vector<DeathWave>& waves, const Constants& k,
+	const RandomInt& random)
+{
+	// Base mortality. With the game's life expectancy: each generation is replaced about once per life expectancy,
+	// so residents / (12 * life expectancy) die each month. Without it, the old per-capita rate worsened by poor health
+	// coverage.
+	s.healthQuality = Clamp(game.healthCoverage / 100, 0.0, 1.0);
+	s.lifeExpectancy = game.lifeExpectancy;
+	if (game.lifeExpectancy > 0)
+	{
+		s.baseDeaths = std::floor(game.residentPopulation * k.lifeExpectancyDeathScale / (12 * game.lifeExpectancy));
+	}
+	else
+	{
+		const double mortalityRate = k.baseMortalityRatePerCapita * (1 + k.healthCoverageWeight * (1 - s.healthQuality));
+		s.baseDeaths = std::floor(game.residentPopulation * mortalityRate);
+	}
+
+	// City judgment ratio: base deaths and I.M.P. victims.
+	s.sinRatio = SinRatio(k, game.crime, game.education, 0);
+
+	// Generation resets of the residential simulator: a share of each reset tract's residents, judged with the EQ of
+	// their wealth level (plus a Sinner bonus for premature deaths), up to a monthly cap.
+	double waveCap = std::floor(game.residentPopulation * k.maxWaveDeathFractionPop);
+	double oldAgeWaveDeaths = 0, waveWinners = 0;
+	s.prematureDeaths = 0;
+	for (const DeathWave& wave : waves)
+	{
+		const double deaths = std::min(std::floor(wave.population * k.waveDeathShare), waveCap);
+		if (deaths <= 0) continue;
+		waveCap -= deaths;
+		(wave.premature ? s.prematureDeaths : oldAgeWaveDeaths) += deaths;
+		const double ratio = SinRatio(k, game.crime, wave.education, wave.premature ? k.prematureSinBonus : 0);
+		waveWinners += std::floor(deaths * (1 - ratio));
+	}
+	s.waveDeaths = oldAgeWaveDeaths + s.prematureDeaths;
+	s.naturalDeaths = s.baseDeaths + oldAgeWaveDeaths;
 
 	// I.M.P.: a share of the STANDING Hell population (as it was at the start of the cycle) hires a hit.
 	s.impClientsThisCycle = std::floor(s.sinnerPopulationHell * k.impClientRatio);
@@ -35,9 +75,9 @@ void Afterlife::Step(State& s, const GameInputs& game, const Constants& k, const
 	s.winnerPopulationHeaven += s.redeemedThisCycle;
 	s.redeemedTotal += s.redeemedThisCycle;
 
-	// Deaths of this cycle, judged with the same ratio.
-	s.totalDeathsThisCycle = s.naturalDeaths + s.impKillsThisCycle;
-	s.winnerCountThisCycle = std::floor(s.totalDeathsThisCycle * (1 - s.sinRatio));
+	// Deaths of this cycle and their judgment.
+	s.totalDeathsThisCycle = s.naturalDeaths + s.prematureDeaths + s.impKillsThisCycle;
+	s.winnerCountThisCycle = std::floor((s.baseDeaths + s.impKillsThisCycle) * (1 - s.sinRatio)) + waveWinners;
 	s.sinnerCountThisCycle = s.totalDeathsThisCycle - s.winnerCountThisCycle;
 
 	// Standing populations (cumulative).
@@ -45,6 +85,11 @@ void Afterlife::Step(State& s, const GameInputs& game, const Constants& k, const
 	s.sinnerPopulationHell += s.sinnerCountThisCycle;
 	s.impKillsTotal += s.impKillsThisCycle;
 
+	UpdateNatives(s, k);
+}
+
+void Afterlife::UpdateNatives(State& s, const Constants& k)
+{
 	// Hell's native population: a fresh snapshot of the Sinner population, not accumulated.
 	s.impPopulation = std::floor(s.sinnerPopulationHell * k.impRatio);
 	s.hellhoundPopulation = std::floor(s.sinnerPopulationHell * k.hellhoundRatio);
@@ -163,6 +208,8 @@ namespace
 		{ "GLITZ_AND_GLAM", "Glitz & Glam", "Imp Twin Performers", "Helluva Boss", "Imp (Hellborn)", "text@BB3C1061" },
 		{ "LEVIATHAN", "Leviathan", "Sin of Envy", "Helluva Boss", "Sin (Hellborn)", "text@BB3C1062" },
 		{ "BELPHEGOR", "Belphegor", "Sin of Sloth", "Helluva Boss", "Sin (Hellborn)", "text@BB3C1063" },
+		{ "NEWS_670_HEALTH_DESK", "670 News Health Desk", "Health Desk, 670 News", "SC4SIM", "Sinner Demon", "text@BB3C1064" },
+		{ "GATE_INTAKE_CLERK", "Hell's Intake Clerk", "Intake Clerk, Gates of Hell", "SC4SIM", "Sinner Demon", "text@BB3C1065" },
 	};
 
 	constexpr const char* kEvent_NATURAL_DEATH_REPORT[] = { "KATIE_KILLJOY", "TOM_TRENCH" };
@@ -172,6 +219,7 @@ namespace
 	constexpr const char* kEvent_HELL_NATIVE_REPORT[] = { "STOLAS", "LOONA", "VEROSIKA_MAYDAY", "OCTAVIA", "STELLA", "ANDREALPHUS", "PAIMON", "VASSAGO", "FIZZAROLLI", "ROBO_FIZZ", "CRIMSON", "CASH_BUCKZO", "BARBIE_WIRE", "SALLIE_MAY", "VORTEX", "GLITZ_AND_GLAM" };
 	constexpr const char* kEvent_SEVEN_DEADLY_SINS_REPORT[] = { "LUCIFER_MORNINGSTAR", "LILITH", "ASMODEUS", "BEELZEBUB", "SATAN", "MAMMON", "LEVIATHAN", "BELPHEGOR" };
 	constexpr const char* kEvent_HEAVEN_REPORT[] = { "ADAM", "LUTE", "ABEL", "SERA", "EMILY", "ST_PETER", "SPEAKER_OF_GOD" };
+	constexpr const char* kEvent_PREMATURE_DEATH_REPORT[] = { "NEWS_670_HEALTH_DESK", "GATE_INTAKE_CLERK" };
 
 	constexpr NewsEvent kEvents[] = {
 		Event("NATURAL_DEATH_REPORT", kEvent_NATURAL_DEATH_REPORT),
@@ -181,6 +229,7 @@ namespace
 		Event("HELL_NATIVE_REPORT", kEvent_HELL_NATIVE_REPORT),
 		Event("SEVEN_DEADLY_SINS_REPORT", kEvent_SEVEN_DEADLY_SINS_REPORT),
 		Event("HEAVEN_REPORT", kEvent_HEAVEN_REPORT),
+		Event("PREMATURE_DEATH_REPORT", kEvent_PREMATURE_DEATH_REPORT),
 	};
 	// END GENERATED ROSTER
 

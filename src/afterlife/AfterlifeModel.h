@@ -3,6 +3,7 @@
 // simulation. See docs/afterlife.md.
 #pragma once
 #include <functional>
+#include <vector>
 
 namespace Afterlife
 {
@@ -12,7 +13,17 @@ namespace Afterlife
 		double healthCoverage = 0; // game.g_health_coverage_p (0-100)
 		double residentPopulation = 0; // game.g_city_r_population
 		double crime = 0; // game.ga_crime
-		double education = 0; // game.ga_education
+		double education = 0; // game.ga_education: city EQ, 0-200
+		double lifeExpectancy = 0; // game.ga_life_exp (years); 0 = not available, the old per-capita rate is used
+	};
+
+	// One generation reset of the residential simulator (a tract whose average age went past its life expectancy and
+	// was set back to the reset age), for one wealth level. SC4SIM.dll finds them in the age and population grids.
+	struct DeathWave
+	{
+		double population = 0; // residents of that wealth in the tract
+		double education = 0; // their EQ (0-200)
+		bool premature = false; // the tract's life expectancy was below the reset age: illness / pollution, not old age
 	};
 
 	// Balance constants. They live in the DLL; SC4SIM.ini ([Afterlife], same names) overrides each one.
@@ -23,8 +34,14 @@ namespace Afterlife
 	{
 		// mortality_ratio
 		double baseMortalityRatePerCapita = 0.0006, healthCoverageWeight = 1.5;
-		// judgment_ratio (Winner / Sinner split)
-		double educationReference = 500, baseSinRatio = 0.5, crimeWeight = 0.3, educationWeight = 0.3,
+		// mortality_ratio (1.9.3): with game.ga_life_exp, deaths per month = residents * this / (12 * life expectancy)
+		double lifeExpectancyDeathScale = 1.0;
+		// death_waves (1.9.3): share of a reset tract's residents counted as deaths, cap on all wave deaths of a month
+		// (share of the residents), extra Sinner share for premature deaths
+		double waveDeathShare = 0.05, maxWaveDeathFractionPop = 0.01, prematureSinBonus = 0.1;
+		// judgment_ratio (Winner / Sinner split). EDUCATION_REFERENCE is an EQ (0-200): 100 since 1.9.3 (was 500,
+		// above the scale, so education always pushed toward Sinner)
+		double educationReference = 100, baseSinRatio = 0.5, crimeWeight = 0.3, educationWeight = 0.3,
 			sinRatioMin = 0.1, sinRatioMax = 0.9;
 		// imp_ratio
 		double impClientRatio = 0.002, impSuccessChance = 0.15, impKillRandomVariance = 2, maxImpKillFractionPop = 0.01;
@@ -45,7 +62,8 @@ namespace Afterlife
 	// Mirror of afterlife_grid_var. The CUMULATIVE members survive from one cycle to the next.
 	struct State
 	{
-		double healthQuality = 0, sinRatio = 0;
+		double healthQuality = 0, sinRatio = 0, lifeExpectancy = 0;
+		double baseDeaths = 0, waveDeaths = 0, prematureDeaths = 0; // naturalDeaths = baseDeaths + old-age wave deaths
 		double naturalDeaths = 0, impClientsThisCycle = 0, impKillsThisCycle = 0, totalDeathsThisCycle = 0;
 		double winnerCountThisCycle = 0, sinnerCountThisCycle = 0, redeemedThisCycle = 0;
 		double winnerPopulationHeaven = 0, sinnerPopulationHell = 0, redeemedTotal = 0, impKillsTotal = 0; // cumulative
@@ -59,8 +77,13 @@ namespace Afterlife
 	// Same as math.random(lo, hi) of Lua: an integer in [lo, hi].
 	using RandomInt = std::function<int(int lo, int hi)>;
 
-	// run_afterlife_balance_variables(): one cycle, same order of operations as AFTERLIFE.lua.
-	void Step(State& state, const GameInputs& game, const Constants& constants, const RandomInt& random);
+	// One monthly cycle, same order of operations as tools/afterlife-test/reference/AFTERLIFE.lua.
+	void Step(State& state, const GameInputs& game, const std::vector<DeathWave>& waves, const Constants& constants,
+		const RandomInt& random);
+
+	// Hell's and Heaven's native populations from the standing Sinner and Winner populations (the end of Step; also
+	// used after the cumulative populations are loaded with a city).
+	void UpdateNatives(State& state, const Constants& constants);
 
 	// One entry of hell_news_characters (PACK_CONSTANTS.lua). `key` is the table key, e.g. "BLITZO".
 	struct NewsCharacter

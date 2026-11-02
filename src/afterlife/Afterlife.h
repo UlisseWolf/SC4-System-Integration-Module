@@ -9,7 +9,7 @@ namespace Afterlife
 {
 	// Reads the [Afterlife] section of SC4SIM.ini.
 	void OnStart();
-	// PostCityInit and PreCityShutdown messages received by the director. When a city opens, the module registers
+	// PostCityInit, PreCityShutdown, SimNewMonth and PostSave messages received by the director. When a city opens, the module registers
 	// run_afterlife_balance_variables and get_news_ticker_character in the city's advisor Lua, over the Lua ones.
 	void DoMessage(cIGZMessage2* message);
 }

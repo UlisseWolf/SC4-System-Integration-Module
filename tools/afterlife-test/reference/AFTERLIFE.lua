@@ -87,6 +87,16 @@ afterlife_grid_var = {
    HEAVEN_NATIVE_TOTAL             = 0    -- sum of the five Heaven native subclasses
 }
 
+-- Judgment ratio for an EQ (0-200), shifted by crime, plus a Sinner bonus, clamped.
+function afterlife_sin_ratio(education, bonus)
+    local education_factor = (education / judgment_ratio.EDUCATION_REFERENCE) - 1
+    local ratio = judgment_ratio.BASE_SIN_RATIO
+                  + (judgment_ratio.CRIME_WEIGHT * (game.ga_crime / 100))
+                  - (judgment_ratio.EDUCATION_WEIGHT * education_factor)
+                  + bonus
+    return math.max(judgment_ratio.SIN_RATIO_MIN, math.min(judgment_ratio.SIN_RATIO_MAX, ratio))
+end
+
 -- Main function to call to recalculate this cycle's fictitious mortality/afterlife statistics.
 -- Purely additive/read-only with respect to the real game state (see design note above).
 function run_afterlife_balance_variables(ret_type)
@@ -96,19 +106,47 @@ function run_afterlife_balance_variables(ret_type)
         afterlife_seeded = true
     end
 
-    -- Natural mortality, worsened by poor health coverage (native, read-only) --
+    -- Base mortality (SC4SIM 1.9.3): with game.ga_life_exp, residents / (12 * life expectancy) die each month;
+    -- without it, the old per-capita rate worsened by poor health coverage.
     afterlife_grid_var.HEALTH_QUALITY = math.max(math.min(game.g_health_coverage_p / 100, 1), 0)
-    local mortality_rate = mortality_ratio.BASE_MORTALITY_RATE_PER_CAPITA
-                          * (1 + mortality_ratio.HEALTH_COVERAGE_WEIGHT * (1 - afterlife_grid_var.HEALTH_QUALITY))
-    afterlife_grid_var.NATURAL_DEATHS = math.floor(game.g_city_r_population * mortality_rate)
+    local life_exp = game.ga_life_exp or 0
+    afterlife_grid_var.LIFE_EXPECTANCY = life_exp
+    if (life_exp > 0) then
+        afterlife_grid_var.BASE_DEATHS = math.floor(game.g_city_r_population * mortality_ratio.LIFE_EXPECTANCY_DEATH_SCALE / (12 * life_exp))
+    else
+        local mortality_rate = mortality_ratio.BASE_MORTALITY_RATE_PER_CAPITA
+                              * (1 + mortality_ratio.HEALTH_COVERAGE_WEIGHT * (1 - afterlife_grid_var.HEALTH_QUALITY))
+        afterlife_grid_var.BASE_DEATHS = math.floor(game.g_city_r_population * mortality_rate)
+    end
 
-    -- Winner/Sinner judgment ratio, shifted by crime (native, read-only) and education (native,
-    -- read-only), then clamped so it never reaches a degenerate 0% or 100% split.
-    local education_factor = (game.ga_education / judgment_ratio.EDUCATION_REFERENCE) - 1
-    afterlife_grid_var.SIN_RATIO = judgment_ratio.BASE_SIN_RATIO
-                                  + (judgment_ratio.CRIME_WEIGHT * (game.ga_crime / 100))
-                                  - (judgment_ratio.EDUCATION_WEIGHT * education_factor)
-    afterlife_grid_var.SIN_RATIO = math.max(judgment_ratio.SIN_RATIO_MIN, math.min(judgment_ratio.SIN_RATIO_MAX, afterlife_grid_var.SIN_RATIO))
+    -- City Winner/Sinner judgment ratio (base deaths and I.M.P. victims).
+    afterlife_grid_var.SIN_RATIO = afterlife_sin_ratio(game.ga_education, 0)
+
+    -- Generation resets of the residential simulator (SC4SIM 1.9.3): afterlife_waves lists, per reset tract and
+    -- wealth, { population, education, premature }. A share of them dies, judged with their own EQ, up to a cap.
+    local wave_cap = math.floor(game.g_city_r_population * death_waves.MAX_WAVE_DEATH_FRACTION_POP)
+    local old_age_wave_deaths = 0
+    local wave_winners = 0
+    afterlife_grid_var.PREMATURE_DEATHS = 0
+    local i = 1
+    while (afterlife_waves ~= nil and afterlife_waves[i] ~= nil) do
+        local wave = afterlife_waves[i]
+        local deaths = math.min(math.floor(wave.population * death_waves.WAVE_DEATH_SHARE), wave_cap)
+        if (deaths > 0) then
+            wave_cap = wave_cap - deaths
+            local bonus = 0
+            if (wave.premature) then
+                afterlife_grid_var.PREMATURE_DEATHS = afterlife_grid_var.PREMATURE_DEATHS + deaths
+                bonus = death_waves.PREMATURE_SIN_BONUS
+            else
+                old_age_wave_deaths = old_age_wave_deaths + deaths
+            end
+            wave_winners = wave_winners + math.floor(deaths * (1 - afterlife_sin_ratio(wave.education, bonus)))
+        end
+        i = i + 1
+    end
+    afterlife_grid_var.WAVE_DEATHS = old_age_wave_deaths + afterlife_grid_var.PREMATURE_DEATHS
+    afterlife_grid_var.NATURAL_DEATHS = afterlife_grid_var.BASE_DEATHS + old_age_wave_deaths
 
     -- I.M.P.: a small share of the STANDING Hell population (accumulated from previous cycles,
     -- not just this cycle's new Sinners) commissions a hit on a living Sim this cycle. Uses an
@@ -140,9 +178,11 @@ function run_afterlife_balance_variables(ret_type)
     -- Total deaths this cycle: natural causes plus I.M.P. murder victims, all judged with the same
     -- Winner/Sinner ratio computed above (murder victims are not automatically assumed to be
     -- Sinners themselves -- they are judged the same way as everyone else who died this cycle).
-    afterlife_grid_var.TOTAL_DEATHS_THIS_CYCLE = afterlife_grid_var.NATURAL_DEATHS + afterlife_grid_var.IMP_KILLS_THIS_CYCLE
+    afterlife_grid_var.TOTAL_DEATHS_THIS_CYCLE = afterlife_grid_var.NATURAL_DEATHS + afterlife_grid_var.PREMATURE_DEATHS
+                                               + afterlife_grid_var.IMP_KILLS_THIS_CYCLE
 
-    afterlife_grid_var.WINNER_COUNT_THIS_CYCLE = math.floor(afterlife_grid_var.TOTAL_DEATHS_THIS_CYCLE * (1 - afterlife_grid_var.SIN_RATIO))
+    afterlife_grid_var.WINNER_COUNT_THIS_CYCLE = math.floor((afterlife_grid_var.BASE_DEATHS + afterlife_grid_var.IMP_KILLS_THIS_CYCLE)
+                                                 * (1 - afterlife_grid_var.SIN_RATIO)) + wave_winners
     afterlife_grid_var.SINNER_COUNT_THIS_CYCLE = afterlife_grid_var.TOTAL_DEATHS_THIS_CYCLE - afterlife_grid_var.WINNER_COUNT_THIS_CYCLE
 
     -- Accumulate into the standing afterlife populations. SINNER_POPULATION_HELL grows here AFTER
