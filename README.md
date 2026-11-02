@@ -234,6 +234,11 @@ SC4SIM includes only the power-pole module: it does not contain SC4RenderService
   or the `[PowerPoles.FAR]` defaults. Hold **Shift** for a regular line. See
   [`docs/far-power-lines-design.md`](docs/far-power-lines-design.md).
 - **`keepwires` cheat.** Toggles whether power lines are rerouted when the zoning underneath changes.
+- **P3 poles** *(SIM Experimental package)*. `CAM_PowerPoles.dat` holds 20 pole prop exemplars from the sample of
+  sc4-render-services that use the meshes of MTO's P3 pack (*MTO P3 Models Vol01*, needed in Plugins): wood H-frame and
+  Texas steel V poles, and wood H-frame tangents for the four FAR angles. `SC4SIM.ini` defines the styles
+  `[PowerPoles.P3Wood]` (with the FAR tangents) and `[PowerPoles.P3Steel]`; a commented `[PowerPoles.FAR]` section uses
+  the tangents for every style.
 - **Across zones and farm fields** *(SC4SIM addition, not in the original sample)*. In the base game a pole can
   never stand on a zoned cell, so a zone or a farm field wider than the pole spacing cuts the line. SC4SIM lets
   poles stand on empty zones and on farm fields; lots with a building still block. `CrossZones=false` turns it
