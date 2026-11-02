@@ -235,7 +235,8 @@ SC4SIM includes only the power-pole module: it does not contain SC4RenderService
   [`docs/far-power-lines-design.md`](docs/far-power-lines-design.md).
 - **`keepwires` cheat.** Toggles whether power lines are rerouted when the zoning underneath changes.
 - **P3 poles** *(SIM Experimental package)*. `CAM_PowerPoles.dat` holds 20 pole prop exemplars from the sample of
-  sc4-render-services that use the meshes of MTO's P3 pack (*MTO P3 Models Vol01*, needed in Plugins): wood H-frame and
+  sc4-render-services; their meshes, from Metarvo's P3 set (MTO P3) and included with his permission, are in
+  `CAM_PowerPoles_Models.dat`: wood H-frame and
   Texas steel V poles, and wood H-frame tangents for the four FAR angles. `SC4SIM.ini` defines the styles
   `[PowerPoles.P3Wood]` (with the FAR tangents) and `[PowerPoles.P3Steel]`; a commented `[PowerPoles.FAR]` section uses
   the tangents for every style.
