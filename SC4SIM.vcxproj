@@ -115,6 +115,7 @@
     <ClInclude Include="src\afterlife\Afterlife.h" />
     <ClInclude Include="src\afterlife\AfterlifeModel.h" />
     <ClInclude Include="src\afterlife\Deathcare.h" />
+    <ClInclude Include="src\water\QueryUIHooks\cIBuildingQueryDialogHookTarget.h" />
     <ClInclude Include="src\water\QueryUIHooks\cIBuildingQueryHookServer.h" />
     <ClInclude Include="src\water\QueryUIHooks\cIBuildingQueryCustomToolTipHookTarget.h" />
     <ClInclude Include="src\version.h" />

@@ -319,6 +319,9 @@ namespace
 			{ "GRAVES_USED", care.gravesUsed },
 			{ "GRAVES_TOTAL", care.gravesTotal },
 			{ "CREMATION_CAPACITY", care.cremationCapacity },
+			{ "DEATHCARE_RELOCATION", care.relocation },
+			{ "DEATHCARE_EMPTIED", care.emptied },
+			{ "CEMETERIES_NEARLY_FULL", care.cemeteriesNearlyFull },
 		};
 		for (const auto& [name, value] : deathcare)
 		{
@@ -644,7 +647,7 @@ namespace
 		Afterlife::Step(state, game, waves, constants, RandomInt);
 		if (Deathcare::Enabled() && !grid.population.empty())
 		{
-			Deathcare::RunMonth(currentCity, grid, DeathsPerTract(grid, waves, waveTract));
+			Deathcare::RunMonth(grid, DeathsPerTract(grid, waves, waveTract));
 		}
 		MirrorState(lua);
 		if (resetTracts > 0)
@@ -829,10 +832,10 @@ void Afterlife::DoMessage(cIGZMessage2* message)
 	case kMessagePostCityInit:
 		state = Afterlife::State{};
 		tracts = TractMemory{};
-		Deathcare::Reset();
 		warnedMissing = false;
 		warnedBuiltInRoster = false;
 		currentCity = static_cast<cISC4City*>(static_cast<cIGZMessage2Standard*>(message)->GetVoid1());
+		Deathcare::SetCity(currentCity);
 		RegisterFunctions(currentCity);
 		LoadState(currentCity);
 		if (cISCLua* const lua = CityLua(currentCity)) MirrorState(lua);
@@ -846,7 +849,7 @@ void Afterlife::DoMessage(cIGZMessage2* message)
 	case kMessagePreCityShutdown:
 		state = Afterlife::State{};
 		tracts = TractMemory{};
-		Deathcare::Reset();
+		Deathcare::SetCity(nullptr);
 		currentCity = nullptr;
 		break;
 	}

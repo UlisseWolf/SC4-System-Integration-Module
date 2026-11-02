@@ -51,6 +51,7 @@
     <ClInclude Include="src\afterlife\Afterlife.h"><Filter>Afterlife</Filter></ClInclude>
     <ClInclude Include="src\afterlife\AfterlifeModel.h"><Filter>Afterlife</Filter></ClInclude>
     <ClInclude Include="src\afterlife\Deathcare.h"><Filter>Afterlife</Filter></ClInclude>
+    <ClInclude Include="src\water\QueryUIHooks\cIBuildingQueryDialogHookTarget.h"><Filter>Water</Filter></ClInclude>
     <ClInclude Include="src\water\QueryUIHooks\cIBuildingQueryHookServer.h"><Filter>Water</Filter></ClInclude>
     <ClInclude Include="src\water\QueryUIHooks\cIBuildingQueryCustomToolTipHookTarget.h"><Filter>Water</Filter></ClInclude>
     <ClInclude Include="src\version.h"><Filter>Source</Filter></ClInclude>

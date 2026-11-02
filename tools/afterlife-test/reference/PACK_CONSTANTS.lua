@@ -644,7 +644,11 @@ hell_news_characters = {
    LEVIATHAN            = { full_name = "Leviathan", role = "Sin of Envy", source = "Helluva Boss", species = "Sin (Hellborn)", ticker_text_id = "text@BB3C1062" },
    BELPHEGOR            = { full_name = "Belphegor", role = "Sin of Sloth", source = "Helluva Boss", species = "Sin (Hellborn)", ticker_text_id = "text@BB3C1063" },
    NEWS_670_HEALTH_DESK = { full_name = "670 News Health Desk", role = "Health Desk, 670 News", source = "SC4SIM", species = "Sinner Demon", ticker_text_id = "text@BB3C1064" },
-   GATE_INTAKE_CLERK    = { full_name = "Hell's Intake Clerk", role = "Intake Clerk, Gates of Hell", source = "SC4SIM", species = "Sinner Demon", ticker_text_id = "text@BB3C1065" }
+   GATE_INTAKE_CLERK    = { full_name = "Hell's Intake Clerk", role = "Intake Clerk, Gates of Hell", source = "SC4SIM", species = "Sinner Demon", ticker_text_id = "text@BB3C1065" },
+   NEWS_670_CITY_DESK   = { full_name = "670 News City Desk", role = "City Desk, 670 News", source = "SC4SIM", species = "Sinner Demon", ticker_text_id = "text@BB3C1066" },
+   GRAVEDIGGERS_UNION   = { full_name = "Gravediggers' Union", role = "Union of Gravediggers", source = "SC4SIM", species = "Human (Earth)", ticker_text_id = "text@BB3C1067" },
+   CEMETERY_CARETAKER   = { full_name = "Cemetery Caretaker", role = "Caretaker, City Cemetery", source = "SC4SIM", species = "Human (Earth)", ticker_text_id = "text@BB3C1068" },
+   CREMATORIUM_MANAGER  = { full_name = "Crematorium Manager", role = "Manager, City Crematorium", source = "SC4SIM", species = "Human (Earth)", ticker_text_id = "text@BB3C1069" }
 }
 
 -- ============================================================
@@ -662,7 +666,9 @@ news_ticker_event_characters = {
    HELL_NATIVE_REPORT       = { "STOLAS", "LOONA", "VEROSIKA_MAYDAY", "OCTAVIA", "STELLA", "ANDREALPHUS", "PAIMON", "VASSAGO", "FIZZAROLLI", "ROBO_FIZZ", "CRIMSON", "CASH_BUCKZO", "BARBIE_WIRE", "SALLIE_MAY", "VORTEX", "GLITZ_AND_GLAM" },
    SEVEN_DEADLY_SINS_REPORT = { "LUCIFER_MORNINGSTAR", "LILITH", "ASMODEUS", "BEELZEBUB", "SATAN", "MAMMON", "LEVIATHAN", "BELPHEGOR" },
    HEAVEN_REPORT            = { "ADAM", "LUTE", "ABEL", "SERA", "EMILY", "ST_PETER", "SPEAKER_OF_GOD" },
-   PREMATURE_DEATH_REPORT   = { "NEWS_670_HEALTH_DESK", "GATE_INTAKE_CLERK" }
+   PREMATURE_DEATH_REPORT   = { "NEWS_670_HEALTH_DESK", "GATE_INTAKE_CLERK" },
+   UNCOLLECTED_DEAD_REPORT  = { "NEWS_670_CITY_DESK", "GRAVEDIGGERS_UNION" },
+   CEMETERY_FULL_REPORT     = { "CEMETERY_CARETAKER", "CREMATORIUM_MANAGER" }
 }
 
 

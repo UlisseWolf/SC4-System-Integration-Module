@@ -211,6 +211,10 @@ namespace
 		{ "BELPHEGOR", "Belphegor", "Sin of Sloth", "Helluva Boss", "Sin (Hellborn)", "text@BB3C1063" },
 		{ "NEWS_670_HEALTH_DESK", "670 News Health Desk", "Health Desk, 670 News", "SC4SIM", "Sinner Demon", "text@BB3C1064" },
 		{ "GATE_INTAKE_CLERK", "Hell's Intake Clerk", "Intake Clerk, Gates of Hell", "SC4SIM", "Sinner Demon", "text@BB3C1065" },
+		{ "NEWS_670_CITY_DESK", "670 News City Desk", "City Desk, 670 News", "SC4SIM", "Sinner Demon", "text@BB3C1066" },
+		{ "GRAVEDIGGERS_UNION", "Gravediggers' Union", "Union of Gravediggers", "SC4SIM", "Human (Earth)", "text@BB3C1067" },
+		{ "CEMETERY_CARETAKER", "Cemetery Caretaker", "Caretaker, City Cemetery", "SC4SIM", "Human (Earth)", "text@BB3C1068" },
+		{ "CREMATORIUM_MANAGER", "Crematorium Manager", "Manager, City Crematorium", "SC4SIM", "Human (Earth)", "text@BB3C1069" },
 	};
 
 	constexpr const char* kEvent_NATURAL_DEATH_REPORT[] = { "KATIE_KILLJOY", "TOM_TRENCH" };
@@ -221,6 +225,8 @@ namespace
 	constexpr const char* kEvent_SEVEN_DEADLY_SINS_REPORT[] = { "LUCIFER_MORNINGSTAR", "LILITH", "ASMODEUS", "BEELZEBUB", "SATAN", "MAMMON", "LEVIATHAN", "BELPHEGOR" };
 	constexpr const char* kEvent_HEAVEN_REPORT[] = { "ADAM", "LUTE", "ABEL", "SERA", "EMILY", "ST_PETER", "SPEAKER_OF_GOD" };
 	constexpr const char* kEvent_PREMATURE_DEATH_REPORT[] = { "NEWS_670_HEALTH_DESK", "GATE_INTAKE_CLERK" };
+	constexpr const char* kEvent_UNCOLLECTED_DEAD_REPORT[] = { "NEWS_670_CITY_DESK", "GRAVEDIGGERS_UNION" };
+	constexpr const char* kEvent_CEMETERY_FULL_REPORT[] = { "CEMETERY_CARETAKER", "CREMATORIUM_MANAGER" };
 
 	constexpr NewsEvent kEvents[] = {
 		Event("NATURAL_DEATH_REPORT", kEvent_NATURAL_DEATH_REPORT),
@@ -231,6 +237,8 @@ namespace
 		Event("SEVEN_DEADLY_SINS_REPORT", kEvent_SEVEN_DEADLY_SINS_REPORT),
 		Event("HEAVEN_REPORT", kEvent_HEAVEN_REPORT),
 		Event("PREMATURE_DEATH_REPORT", kEvent_PREMATURE_DEATH_REPORT),
+		Event("UNCOLLECTED_DEAD_REPORT", kEvent_UNCOLLECTED_DEAD_REPORT),
+		Event("CEMETERY_FULL_REPORT", kEvent_CEMETERY_FULL_REPORT),
 	};
 	// END GENERATED ROSTER
 

@@ -29,20 +29,19 @@ namespace Deathcare
 	// City totals of the month, copied to afterlife_grid_var.
 	struct Totals
 	{
-		double collected = 0, cremated = 0, buried = 0, uncollected = 0;
+		double collected = 0, cremated = 0, buried = 0, uncollected = 0, relocation = 0, emptied = 0;
 		double gravesUsed = 0, gravesTotal = 0, cremationCapacity = 0;
-		double cemeteries = 0, crematoria = 0;
+		double cemeteries = 0, crematoria = 0, cemeteriesNearlyFull = 0;
 	};
 
 	// [Afterlife] keys of SC4SIM.ini (DEATHCARE, DEATHCARE_EFFECTS, ...).
 	void LoadSettings(const wchar_t* ini);
 	bool Enabled();
-	// Forget every city-scoped value (city opened or closed).
-	void Reset();
+	// The open city (nullptr when it closes): registers the query hook and forgets every city-scoped value.
+	void SetCity(cISC4City* city);
 	// One month: places deathsPerTract (and the uncollected dead of earlier months) in cemeteries and crematoria in
-	// range, keeps the rest as uncollected and, with DEATHCARE_EFFECTS, lowers the health of tracts with uncollected
-	// dead.
-	void RunMonth(cISC4City* city, const TractGrid& tracts, const std::vector<double>& deathsPerTract);
+	// range, empties full cemeteries into crematoria, keeps the rest as uncollected and applies the effects.
+	void RunMonth(const TractGrid& tracts, const std::vector<double>& deathsPerTract);
 	const Totals& GetTotals();
 
 	// Saved with the city (the Afterlife's section of SC4SIM_Afterlife.ini).

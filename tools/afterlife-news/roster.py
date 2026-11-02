@@ -133,6 +133,15 @@ CHARACTERS = [
   "670 News Health Desk: smog and empty hospital beds on Earth send a wave of early arrivals to the gates below."),
  ("GATE_INTAKE_CLERK","Hell's Intake Clerk","Intake Clerk, Gates of Hell","SC4SIM","Sinner Demon",0xBB3C1065,
   "Hell's intake clerk logs a run of young newcomers: unhealthy districts on Earth are emptying early."),
+ # SC4SIM 1.9.4: deathcare (uncollected dead, full cemeteries). Original characters of the mod, on Earth.
+ ("NEWS_670_CITY_DESK","670 News City Desk","City Desk, 670 News","SC4SIM","Sinner Demon",0xBB3C1066,
+  "670 News City Desk: the living city leaves its dead uncollected. Down here, the paperwork piles up just the same."),
+ ("GRAVEDIGGERS_UNION","Gravediggers' Union","Union of Gravediggers","SC4SIM","Human (Earth)",0xBB3C1067,
+  "The Gravediggers' Union warns the mayor: there are more dead than places to put them."),
+ ("CEMETERY_CARETAKER","Cemetery Caretaker","Caretaker, City Cemetery","SC4SIM","Human (Earth)",0xBB3C1068,
+  "A cemetery caretaker hangs a 'No Vacancy' sign on the gate: the graves are almost all taken."),
+ ("CREMATORIUM_MANAGER","Crematorium Manager","Manager, City Crematorium","SC4SIM","Human (Earth)",0xBB3C1069,
+  "The city crematorium offers to take the overflow as the cemeteries run out of graves."),
 ]
 
 # event type -> characters on topic. The first five are the events of PACK_CONSTANTS.lua (extended); every character
@@ -151,6 +160,8 @@ EVENTS = [
                                "BELPHEGOR"]),
  ("HEAVEN_REPORT", ["ADAM","LUTE","ABEL","SERA","EMILY","ST_PETER","SPEAKER_OF_GOD"]),
  ("PREMATURE_DEATH_REPORT", ["NEWS_670_HEALTH_DESK","GATE_INTAKE_CLERK"]),
+ ("UNCOLLECTED_DEAD_REPORT", ["NEWS_670_CITY_DESK","GRAVEDIGGERS_UNION"]),
+ ("CEMETERY_FULL_REPORT", ["CEMETERY_CARETAKER","CREMATORIUM_MANAGER"]),
 ]
 
 keys=[c[0] for c in CHARACTERS]
