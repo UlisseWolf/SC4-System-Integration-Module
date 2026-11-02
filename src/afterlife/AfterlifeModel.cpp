@@ -60,6 +60,15 @@ void Afterlife::Step(State& s, const GameInputs& game, const Constants& k, const
 	s.hellNativeTotal = s.impPopulation + s.hellhoundPopulation + s.succubusPopulation + s.infestorPopulation
 		+ s.possessorPopulation + s.baphometPopulation + s.reaperPopulation + s.goetiaArsGoetiaPopulation
 		+ s.fallenAngelsPopulation + s.sevenDeadlySinsPopulation;
+
+	// Hell's natives always outnumber the Sinners. The default ratios already give about 2.3 natives per Sinner plus
+	// the fixed 9; if SC4SIM.ini lowers them, the missing natives are Imps, the most common kind.
+	if (s.hellNativeTotal <= s.sinnerPopulationHell)
+	{
+		const double shortfall = s.sinnerPopulationHell + 1 - s.hellNativeTotal;
+		s.impPopulation += shortfall;
+		s.hellNativeTotal += shortfall;
+	}
 }
 
 // ------------------------------------------------------------------ news ticker roster (PACK_CONSTANTS.lua)

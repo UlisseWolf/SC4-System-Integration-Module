@@ -172,6 +172,13 @@ function run_afterlife_balance_variables(ret_type)
                                           + afterlife_grid_var.REAPER_POPULATION + afterlife_grid_var.GOETIA_ARS_GOETIA_POPULATION
                                           + afterlife_grid_var.FALLEN_ANGELS_POPULATION + afterlife_grid_var.SEVEN_DEADLY_SINS_POPULATION
 
+    -- Hell's natives always outnumber the Sinners: any shortfall is made up with Imps.
+    if (afterlife_grid_var.HELL_NATIVE_TOTAL <= afterlife_grid_var.SINNER_POPULATION_HELL) then
+        local shortfall = afterlife_grid_var.SINNER_POPULATION_HELL + 1 - afterlife_grid_var.HELL_NATIVE_TOTAL
+        afterlife_grid_var.IMP_POPULATION = afterlife_grid_var.IMP_POPULATION + shortfall
+        afterlife_grid_var.HELL_NATIVE_TOTAL = afterlife_grid_var.HELL_NATIVE_TOTAL + shortfall
+    end
+
     -- Function call return values --
     if (ret_type == "D") then
         return afterlife_grid_var.TOTAL_DEATHS_THIS_CYCLE      -- total Sims who died this cycle (natural + I.M.P.)

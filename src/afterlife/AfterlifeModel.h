@@ -17,7 +17,8 @@ namespace Afterlife
 
 	// Balance constants. They live in the DLL; SC4SIM.ini ([Afterlife], same names) overrides each one.
 	// Defaults = the AFTERLIFE section of PACK_CONSTANTS.lua (package 0BB33100): mortality_ratio, judgment_ratio,
-	// imp_ratio, redemption_ratio, hell_native_ratio and hell_native_fixed. tools/afterlife-test checks they match.
+	// imp_ratio, redemption_ratio, hell_native_ratio and hell_native_fixed; since 1.9.2 the hell_native_ratio values are
+	// 20 times the original ones, so Hell's natives outnumber the Sinners. tools/afterlife-test checks they match.
 	struct Constants
 	{
 		// mortality_ratio
@@ -29,9 +30,9 @@ namespace Afterlife
 		double impClientRatio = 0.002, impSuccessChance = 0.15, impKillRandomVariance = 2, maxImpKillFractionPop = 0.01;
 		// redemption_ratio
 		double redemptionRatio = 0.0015;
-		// hell_native_ratio: Hell's native population, share of the Sinner population
-		double impRatio = 0.05, hellhoundRatio = 0.03, succubusRatio = 0.02, infestorRatio = 0.008,
-			possessorRatio = 0.005, baphometRatio = 0.001, reaperRatio = 0.0005, goetiaArsGoetiaRatio = 0.00005;
+		// hell_native_ratio: Hell's natives per Sinner (sum 2.291, so the natives always outnumber the Sinners)
+		double impRatio = 1.0, hellhoundRatio = 0.6, succubusRatio = 0.4, infestorRatio = 0.16,
+			possessorRatio = 0.1, baphometRatio = 0.02, reaperRatio = 0.01, goetiaArsGoetiaRatio = 0.001;
 		// hell_native_fixed: Hell's fixed population
 		double fallenAngels = 2, sevenDeadlySins = 7;
 	};

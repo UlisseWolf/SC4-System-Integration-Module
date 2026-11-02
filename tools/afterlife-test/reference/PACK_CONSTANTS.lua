@@ -532,14 +532,14 @@ redemption_ratio = {
 -- ============================================================
 
 hell_native_ratio = {
-   IMP_RATIO               = 0.05,      -- Imps:                ~5 % of Sinner population
-   HELLHOUND_RATIO         = 0.03,      -- Hellhounds:          ~3 %
-   SUCCUBUS_RATIO          = 0.02,      -- Succubi:             ~2 %
-   INFESTOR_RATIO          = 0.008,     -- Infestors:           ~0.8 %
-   POSSESSOR_RATIO         = 0.005,     -- Possessors:          ~0.5 %
-   BAPHOMET_RATIO          = 0.001,     -- Baphomets:           ~0.1 %
-   REAPER_RATIO            = 0.0005,    -- Reapers:             ~0.05 %
-   GOETIA_ARS_GOETIA_RATIO = 0.00005    -- Goetia & Ars Goetia: ~0.005 %
+   IMP_RATIO               = 1.0,       -- Imps:                1 per Sinner
+   HELLHOUND_RATIO         = 0.6,       -- Hellhounds:          0.6 per Sinner
+   SUCCUBUS_RATIO          = 0.4,       -- Succubi:             0.4 per Sinner
+   INFESTOR_RATIO          = 0.16,      -- Infestors:           0.16 per Sinner
+   POSSESSOR_RATIO         = 0.1,       -- Possessors:          0.1 per Sinner
+   BAPHOMET_RATIO          = 0.02,      -- Baphomets:           0.02 per Sinner
+   REAPER_RATIO            = 0.01,      -- Reapers:             0.01 per Sinner
+   GOETIA_ARS_GOETIA_RATIO = 0.001     -- Goetia & Ars Goetia: 0.001 per Sinner
 }
 
 -- ============================================================
