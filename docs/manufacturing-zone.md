@@ -1,8 +1,7 @@
 # Manufacturing (I-M) zone
 
-> **Experimental, off by default.** Compiled, checked against the 1.1.641 executable and emulated, not yet tested
-> in game. Test it on a copy of a
-> region, and read [Saved cities](#saved-cities) first.
+> **On by default** (`Enabled=true`). Checked against the 1.1.641 executable, emulated and tested in game. Try it on
+> a copy of a region first, and read [Saved cities](#saved-cities).
 
 SC4SIM 1.8.0 can give manufacturing industry (I-M) a zone of its own, as wanted by the Industrial Revolution Mod
 (IRM) concept. This page explains the game rules it changes, how each hook is made safe, and what still has to be
@@ -158,7 +157,7 @@ nothing grows. Keep a copy of the region before trying it.
 
 ```ini
 [ManufacturingZone]
-Enabled=false        ; experimental: off by default
+Enabled=true         ; on by default; false turns the module off
 ZoneSlot=13          ; 13 Spaceport (default) or 10 Military
 StageHook=true       ; required for the redirect: without it the module changes nothing
 RCIZoneHook=true     ; IsRCIZone true for the slot

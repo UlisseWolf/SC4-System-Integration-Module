@@ -151,9 +151,8 @@ Analisi completa in `docs/mixed-occupancy.md`. Impostazioni: `[MixedOccupancy] E
 
 ## Zona industriale manifatturiera I-M (1.8.0)
 
-**Sperimentale e disattivata di default: compilata, verificata sull'eseguibile 1.1.641 (disassemblato ed emulato),
-non ancora provata in gioco. Provarla
-su una copia della regione.**
+**Attiva di default (`Enabled=true` in `[ManufacturingZone]`; `false` la disattiva). Verificata sull'eseguibile
+1.1.641 (disassemblato ed emulato) e provata in gioco. Provarla prima su una copia della regione.**
 
 Nel gioco base gli sviluppatori I-D, I-M e I-HT chiedono tutti la zona 8, e la zona 9 accetta gli edifici della zona 8:
 niente separa l'industria manifatturiera. Il gioco ha 16 tipi di zona fissi e il salvataggio è dimensionato su 16,

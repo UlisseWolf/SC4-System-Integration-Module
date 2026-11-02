@@ -109,7 +109,7 @@ namespace
 
 	struct Settings
 	{
-		bool enabled = false;
+		bool enabled = true;
 		uint32_t slot = 13;
 		bool stageHook = true;
 		bool rciZoneHook = true;
@@ -1039,7 +1039,7 @@ void ManufacturingZone::OnStart()
 	GetModuleFileNameW(reinterpret_cast<HMODULE>(&__ImageBase), modulePath, MAX_PATH);
 	const std::filesystem::path ini = std::filesystem::path(modulePath).replace_filename(L"SC4SIM.ini");
 
-	settings.enabled = ParseBool(ReadIni(ini, L"Enabled", L"false"), false);
+	settings.enabled = ParseBool(ReadIni(ini, L"Enabled", L"true"), true);
 	settings.stageHook = ParseBool(ReadIni(ini, L"StageHook", L"true"), true);
 	settings.rciZoneHook = ParseBool(ReadIni(ini, L"RCIZoneHook", L"true"), true);
 	settings.ignoreLandValue = ParseBool(ReadIni(ini, L"IgnoreLandValue", L"true"), true);
@@ -1063,7 +1063,7 @@ void ManufacturingZone::PostAppInit()
 {
 	if (!settings.enabled)
 	{
-		SimLog::Write(SimLog::Level::Info, "ManufacturingZone: disabled in SC4SIM.ini (experimental, Enabled=false).");
+		SimLog::Write(SimLog::Level::Info, "ManufacturingZone: disabled in SC4SIM.ini (Enabled=false).");
 		return;
 	}
 	if (settings.slot == 11 || settings.slot == 12)

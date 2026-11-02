@@ -42,7 +42,7 @@ such as NEON.
 | Power lines across zones | 1.3.0 | Power poles can stand on empty zones and farm fields, so lines are no longer cut by zones wider than the pole spacing. |
 | Dezoning under poles | 1.4.0 | The cell under every new pole loses its zone (optionally also on farm fields). |
 | Mixed R, C and I occupancy | 1.5.0 | Residents, commercial and industrial jobs in one building (RC, RI, CI or RCI) with independent capacities, census demand for all of them, and the `MixedOccupancy` cheat. 1.5.1: the game itself fills the secondary types. 1.6.0: industry. 1.7.0: trips for the secondary classes. 1.7.1: secondary jobs as commute destinations. *Experimental, not yet tested in game.* |
-| Manufacturing (I-M) zone | 1.8.0 | A zone of its own for manufacturing industry, on a reused zone slot (Spaceport by default): I-M grows only there, I-D and I-HT never do. `IMZone`, `IMZoneConvert` and `IMZoneInfo` cheats. *Experimental, off by default, not yet tested in game.* |
+| Manufacturing (I-M) zone | 1.8.0 | A zone of its own for manufacturing industry, on a reused zone slot (Spaceport by default): I-M grows only there, I-D and I-HT never do. `IMZone`, `IMZoneConvert` and `IMZoneInfo` cheats. |
 | Afterlife | 1.9.0 | The DLL version of `AFTERLIFE.lua`: fictitious Winner / Sinner / I.M.P. statistics, registered over the Lua functions, with the balance constants in the DLL and in `SC4SIM.ini`. 1.9.1: the real constants, a 60-character news roster and Afterlife headlines in the news ticker; `AFTERLIFE.lua` and `PACK_CONSTANTS.lua` are no longer needed. *Calculation checked against the Lua, bridge and news not yet tested in game.* |
 | Advanced Water Management | 1.2.0 | The real efficiency of water buildings in the query dialog and tool tip, a monthly warning for fresh or salt water pumps that produce nothing, and the `ScanPumps` cheat. |
 
@@ -188,7 +188,7 @@ The reverse-engineering notes are in [`docs/mixed-occupancy.md`](docs/mixed-occu
 
 ## Manufacturing (I-M) zone
 
-> **Experimental, off by default:** compiled and checked against the 1.1.641 executable, not yet tested in game.
+> **On by default.** Set `Enabled=false` in `[ManufacturingZone]` to turn it off. Checked against the 1.1.641 executable and tested in game.
 > Test it on a copy of a region.
 
 In the base game the I-D, I-M and I-HT developers all ask for the same zone, so dirty, manufacturing and high-tech
@@ -294,7 +294,7 @@ Details, the news events and the tests are in [`docs/afterlife.md`](docs/afterli
 | | `DebugLog` | `false` | Writes the cheat's report of the mixed lots to `SC4SIM.log` at the start of every month. |
 | | `MixedTraffic` | `true` | Commuters and freight for the secondary classes, and secondary jobs as commute destinations. |
 | `[Afterlife]` | `Enabled` | `true` | Registers the DLL version of the Afterlife functions in the advisor Lua. |
-| `[ManufacturingZone]` | `Enabled` | `false` | Turns the I-M zone on (experimental). |
+| `[ManufacturingZone]` | `Enabled` | `true` | Turns the I-M zone on or off. |
 | | `ZoneSlot` | `13` | Zone slot reused for the I-M zone: 13 Spaceport or 10 Military. |
 | | `StageHook` | `true` | Every growth stage fits the slot; required for the I-M redirect. |
 | | `RCIZoneHook` | `true` | `IsRCIZone` answers true for the slot. |
