@@ -15,10 +15,10 @@ It rewrites:
 - the roster tables of `tools/afterlife-test/reference/PACK_CONSTANTS.lua` (test fixture);
 - with `--dat`: `CAM_LUA_Controller.dat` with the news script added as `CA63E2A3-4A5E8EF6-8BB3C100` (every other entry
   copied unchanged, written uncompressed), and `CAM_Afterlife_News_en.dat` with one LTEXT per character
-  (`2026960B-6A231EAA-BB3C1000`...`BB3C1063`).
+  (`2026960B-6A231EA4-BB3C1000`...`BB3C1063`).
 
 With `--ui CEMETERY_AND_CHURCH_IN OUT` it also adds the Afterlife rows (`UI_ROWS`) to the church and cemetery query UIs;
 their label and value LTEXT (group `EA5524EB`, `BB3C3000`+) go in `CAM_Afterlife_News_en.dat`.
 
-`LTEXT_GROUP` in `build_news.py` must match the group of the pack's other advisor strings: see `docs/afterlife.md`.
+`LTEXT_GROUP` in `build_news.py` is `6A231EA4`, the group of the game's and CAM's advisor strings: see `docs/afterlife.md`.
 `dbpf2.py` reads DBPF 1.0 files, including QFS-compressed entries, and writes them uncompressed.

@@ -19,7 +19,7 @@ ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 LUA_TYPE, LUA_GROUP = 0xCA63E2A3, 0x4A5E8EF6
 NEWS_LUA_INSTANCE = 0x8BB3C100            # package signature 0BB3C100 (the old AFTERLIFE.lua range), high bit set as the pack does
 LTEXT_TYPE = 0x2026960B
-LTEXT_GROUP = 0x6A231EAA                  # !! must match the group the pack's other text@ strings use (see docs/afterlife.md)
+LTEXT_GROUP = 0x6A231EA4                  # advisor text group: every text@ string of the game and of CAM is in it
 ADVICE_BASE = 0xBB3C2000                  # advice GUIDs: BB3C2000 + index of the character
 
 # Query UIs of Cemetery_and_Church.dat: one new row per Afterlife value under the game's own "goofy stat" row.
