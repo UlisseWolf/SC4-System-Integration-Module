@@ -110,6 +110,11 @@ monthly cycle (before 1.9.3 the cycle ran when the news script first asked for i
 `BASE_DEATHS`, `WAVE_DEATHS`, `PREMATURE_DEATHS` (`NATURAL_DEATHS` = base deaths + old-age wave deaths;
 `TOTAL_DEATHS_THIS_CYCLE` also counts premature deaths and I.M.P. victims).
 
+## Deathcare (1.9.4)
+
+Cemeteries and crematoria collect the dead of each month by radius and capacity; uncollected dead lower the health
+of their tract. See [deathcare.md](deathcare.md).
+
 ## Saved with the city (1.9.3)
 
 The game saves nothing about deaths. When it saves a city, the DLL writes the cumulative populations

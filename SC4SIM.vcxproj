@@ -74,6 +74,7 @@
     <ClCompile Include="src\fixes\TripCapacityFix.cpp" />
     <ClCompile Include="src\afterlife\Afterlife.cpp" />
     <ClCompile Include="src\afterlife\AfterlifeModel.cpp" />
+    <ClCompile Include="src\afterlife\Deathcare.cpp" />
     <ClCompile Include="vendor\gzcom-dll\gzcom-dll\src\cRZBaseString.cpp">
       <WarningLevel>Level3</WarningLevel>
     </ClCompile>
@@ -113,6 +114,7 @@
     <ClInclude Include="src\fixes\TripCapacityFix.h" />
     <ClInclude Include="src\afterlife\Afterlife.h" />
     <ClInclude Include="src\afterlife\AfterlifeModel.h" />
+    <ClInclude Include="src\afterlife\Deathcare.h" />
     <ClInclude Include="src\water\QueryUIHooks\cIBuildingQueryHookServer.h" />
     <ClInclude Include="src\water\QueryUIHooks\cIBuildingQueryCustomToolTipHookTarget.h" />
     <ClInclude Include="src\version.h" />

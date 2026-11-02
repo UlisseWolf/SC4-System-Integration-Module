@@ -27,6 +27,7 @@
 
 #include "Afterlife.h"
 #include "AfterlifeModel.h"
+#include "Deathcare.h"
 #include "SimLog.h"
 
 #include "cIGZMessage2Standard.h"
@@ -44,6 +45,7 @@
 #include <cwctype>
 #include <cwchar>
 #include <filesystem>
+#include <map>
 #include <random>
 #include <string>
 #include <vector>
@@ -308,6 +310,20 @@ namespace
 		{
 			SetNumber(lua, "afterlife_grid_var", field.name, state.*field.member);
 		}
+		const Deathcare::Totals& care = Deathcare::GetTotals();
+		const std::pair<const char*, double> deathcare[] = {
+			{ "DEATHCARE_COLLECTED", care.collected },
+			{ "DEATHCARE_CREMATED", care.cremated },
+			{ "DEATHCARE_BURIED", care.buried },
+			{ "DEATHCARE_UNCOLLECTED", care.uncollected },
+			{ "GRAVES_USED", care.gravesUsed },
+			{ "GRAVES_TOTAL", care.gravesTotal },
+			{ "CREMATION_CAPACITY", care.cremationCapacity },
+		};
+		for (const auto& [name, value] : deathcare)
+		{
+			SetNumber(lua, "afterlife_grid_var", name, value);
+		}
 	}
 
 	// ret_type letter -> value, as in the Lua. nullptr for an unknown letter.
@@ -464,12 +480,16 @@ namespace
 
 	bool loggedGrids = false;
 
-	std::vector<Afterlife::DeathWave> FindDeathWaves(cISC4City* city, uint32_t& resetTracts)
+	// Also fills `grid` (residents per tract, for deathcare) and `waveTract` (the tract index of each wave).
+	std::vector<Afterlife::DeathWave> FindDeathWaves(cISC4City* city, uint32_t& resetTracts, Deathcare::TractGrid& grid,
+		std::vector<size_t>& waveTract)
 	{
 		std::vector<Afterlife::DeathWave> waves;
 		resetTracts = 0;
+		grid = Deathcare::TractGrid{};
+		waveTract.clear();
 		cISC4ResidentialSimulator* const sim = city ? city->GetResidentialSimulator() : nullptr;
-		if (!sim || !settings.deathWaves)
+		if (!sim || (!settings.deathWaves && !Deathcare::Enabled()))
 		{
 			return waves;
 		}
@@ -495,7 +515,11 @@ namespace
 		}
 
 		const size_t count = static_cast<size_t>(countX) * static_cast<size_t>(countZ);
-		const bool comparable = tracts.valid && tracts.countX == countX && tracts.countZ == countZ;
+		grid.countX = countX;
+		grid.countZ = countZ;
+		grid.shift = shift;
+		grid.population.assign(count, 0.0);
+		const bool comparable = settings.deathWaves && tracts.valid && tracts.countX == countX && tracts.countZ == countZ;
 		if (!comparable)
 		{
 			tracts.countX = countX;
@@ -513,10 +537,6 @@ namespace
 				const uint8_t previous = tracts.age[index];
 				tracts.age[index] = age;
 				if (tracts.monthsSinceChronic[index] < 0xFFFF) tracts.monthsSinceChronic[index]++;
-				if (!comparable || age != settings.resetAge)
-				{
-					continue;
-				}
 				const int32_t cellX = x << shift, cellZ = z << shift;
 				double residents[3]{};
 				double total = 0;
@@ -525,7 +545,8 @@ namespace
 					residents[w] = sameTracts ? population[w]->GetTractValue(x, z) : population[w]->GetCellValue(cellX, cellZ);
 					total += residents[w];
 				}
-				if (total <= 0)
+				grid.population[index] = total;
+				if (!comparable || age != settings.resetAge || total <= 0)
 				{
 					continue;
 				}
@@ -554,11 +575,12 @@ namespace
 					if (residents[w] <= 0) continue;
 					const auto wealth = static_cast<cISC4BuildingOccupant::WealthType>(w + 1);
 					waves.push_back({ residents[w], sim->GetCellEQByWealth(cellX, cellZ, wealth), premature });
+					waveTract.push_back(index);
 				}
 			}
 		}
-		tracts.valid = true;
-		for (PopulationGrid* grid : population) grid->Release();
+		tracts.valid = settings.deathWaves;
+		for (PopulationGrid* populationGrid : population) populationGrid->Release();
 		return waves;
 	}
 
@@ -568,6 +590,38 @@ namespace
 	{
 		cISC4AdvisorSystem* const advisors = city ? city->GetAdvisorSystem() : nullptr;
 		return advisors ? advisors->GetScriptingContext() : nullptr;
+	}
+
+	// Where this month's dead are: each wave's deaths in its tract, the rest (base deaths, premature deaths beyond the
+	// waves never happen, I.M.P. victims) spread over the populated tracts by population, largest remainders first.
+	std::vector<double> DeathsPerTract(const Deathcare::TractGrid& grid, const std::vector<Afterlife::DeathWave>& waves,
+		const std::vector<size_t>& waveTract)
+	{
+		std::vector<double> deaths(grid.population.size(), 0.0);
+		double placed = 0;
+		for (size_t i = 0; i < waves.size() && i < waveTract.size(); i++)
+		{
+			deaths[waveTract[i]] += waves[i].deaths;
+			placed += waves[i].deaths;
+		}
+		const double rest = std::max(0.0, state.totalDeathsThisCycle - placed);
+		double residents = 0;
+		for (double p : grid.population) residents += p;
+		if (rest <= 0 || residents <= 0) return deaths;
+		std::vector<std::pair<double, size_t>> remainders;
+		double given = 0;
+		for (size_t i = 0; i < grid.population.size(); i++)
+		{
+			if (grid.population[i] <= 0) continue;
+			const double share = rest * grid.population[i] / residents;
+			const double whole = std::floor(share);
+			deaths[i] += whole;
+			given += whole;
+			remainders.emplace_back(share - whole, i);
+		}
+		std::sort(remainders.begin(), remainders.end(), [](const auto& a, const auto& b) { return a.first > b.first; });
+		for (size_t k = 0; k < remainders.size() && given < rest; k++, given++) deaths[remainders[k].second] += 1;
+		return deaths;
 	}
 
 	// On the game's new-month message, the same message that starts the residential simulator's monthly cycle.
@@ -584,8 +638,14 @@ namespace
 			return; // state unchanged
 		}
 		uint32_t resetTracts = 0;
-		const std::vector<Afterlife::DeathWave> waves = FindDeathWaves(currentCity, resetTracts);
+		Deathcare::TractGrid grid;
+		std::vector<size_t> waveTract;
+		std::vector<Afterlife::DeathWave> waves = FindDeathWaves(currentCity, resetTracts, grid, waveTract);
 		Afterlife::Step(state, game, waves, constants, RandomInt);
+		if (Deathcare::Enabled() && !grid.population.empty())
+		{
+			Deathcare::RunMonth(currentCity, grid, DeathsPerTract(grid, waves, waveTract));
+		}
 		MirrorState(lua);
 		if (resetTracts > 0)
 		{
@@ -617,6 +677,29 @@ namespace
 		return section;
 	}
 
+	// The whole section as key -> value (keys upper case).
+	std::map<std::wstring, std::wstring> ReadSection(const std::wstring& section)
+	{
+		std::map<std::wstring, std::wstring> keys;
+		std::vector<wchar_t> buffer(1 << 15);
+		for (;;)
+		{
+			const DWORD length = GetPrivateProfileSectionW(section.c_str(), buffer.data(), static_cast<DWORD>(buffer.size()),
+				stateFile.c_str());
+			if (length + 2 < buffer.size() || buffer.size() >= (1u << 24)) break;
+			buffer.resize(buffer.size() * 2);
+		}
+		for (const wchar_t* line = buffer.data(); *line; line += std::wcslen(line) + 1)
+		{
+			const wchar_t* equals = std::wcschr(line, L'=');
+			if (!equals) continue;
+			std::wstring key(line, equals);
+			for (wchar_t& c : key) c = static_cast<wchar_t>(std::towupper(c));
+			keys[key] = equals + 1;
+		}
+		return keys;
+	}
+
 	void LoadState(cISC4City* city)
 	{
 		if (!settings.saveWithCity || !city || stateFile.empty())
@@ -624,19 +707,21 @@ namespace
 			return;
 		}
 		const std::wstring section = CitySection(city);
+		const std::map<std::wstring, std::wstring> keys = ReadSection(section);
 		int loaded = 0;
 		for (const SavedField& field : kSavedFields)
 		{
-			wchar_t text[64]{};
-			GetPrivateProfileStringW(section.c_str(), field.key, L"", text, 64, stateFile.c_str());
+			const auto it = keys.find(field.key);
+			if (it == keys.end()) continue;
 			wchar_t* end = nullptr;
-			const double value = std::wcstod(text, &end);
-			if (text[0] != L'\0' && end != text && std::isfinite(value) && value >= 0)
+			const double value = std::wcstod(it->second.c_str(), &end);
+			if (end != it->second.c_str() && std::isfinite(value) && value >= 0)
 			{
 				state.*field.member = std::floor(value);
 				loaded++;
 			}
 		}
+		Deathcare::LoadKeys(keys);
 		if (loaded > 0)
 		{
 			Afterlife::UpdateNatives(state, constants);
@@ -645,19 +730,30 @@ namespace
 		}
 	}
 
+	// Rewrites the whole section, so cemeteries that are gone and tracts with no uncollected dead leave no stale keys.
 	void SaveState(cISC4City* city)
 	{
 		if (!settings.saveWithCity || !city || stateFile.empty())
 		{
 			return;
 		}
-		const std::wstring section = CitySection(city);
+		std::wstring text;
+		const auto write = [&text](const std::wstring& key, const std::wstring& value)
+		{
+			text += key;
+			text += L'=';
+			text += value;
+			text += L'\0';
+		};
 		for (const SavedField& field : kSavedFields)
 		{
-			wchar_t text[64]{};
-			swprintf(text, 64, L"%.0f", state.*field.member);
-			WritePrivateProfileStringW(section.c_str(), field.key, text, stateFile.c_str());
+			wchar_t value[64]{};
+			swprintf(value, 64, L"%.0f", state.*field.member);
+			write(field.key, value);
 		}
+		Deathcare::SaveKeys(write);
+		text += L'\0';
+		WritePrivateProfileSectionW(CitySection(city).c_str(), text.c_str(), stateFile.c_str());
 	}
 
 	// ---------------------------------------------------------------- registration
@@ -713,6 +809,7 @@ void Afterlife::OnStart()
 	settings.chronicIntervalMonths = std::max(1, static_cast<int>(GetPrivateProfileIntW(L"Afterlife", L"CHRONIC_RESET_INTERVAL_MONTHS", 12, ini.c_str())));
 	settings.saveWithCity = GetPrivateProfileIntW(L"Afterlife", L"SAVE_WITH_CITY", 1, ini.c_str()) != 0;
 	stateFile = std::filesystem::path(modulePath).replace_filename(L"SC4SIM_Afterlife.ini");
+	Deathcare::LoadSettings(ini.c_str());
 	wchar_t value[32]{};
 	GetPrivateProfileStringW(L"Afterlife", L"Enabled", L"true", value, 32, ini.c_str());
 	std::wstring text = value;
@@ -732,6 +829,7 @@ void Afterlife::DoMessage(cIGZMessage2* message)
 	case kMessagePostCityInit:
 		state = Afterlife::State{};
 		tracts = TractMemory{};
+		Deathcare::Reset();
 		warnedMissing = false;
 		warnedBuiltInRoster = false;
 		currentCity = static_cast<cISC4City*>(static_cast<cIGZMessage2Standard*>(message)->GetVoid1());
@@ -748,6 +846,7 @@ void Afterlife::DoMessage(cIGZMessage2* message)
 	case kMessagePreCityShutdown:
 		state = Afterlife::State{};
 		tracts = TractMemory{};
+		Deathcare::Reset();
 		currentCity = nullptr;
 		break;
 	}

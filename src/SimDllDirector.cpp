@@ -55,6 +55,10 @@
 // Version 1.9.3:
 //  * Game fix: cSC4Lot::UpdateJobs reads the $$ and $$$ trip capacities for their own wealth (the "high-tech
 //    industry has no $$$ jobs" bug; src/fixes, [GameFixes] in SC4SIM.ini). See docs/game-fixes.md.
+//
+// Version 1.9.4:
+//  * Deathcare: cemeteries and crematoria collect the Afterlife's dead by radius and capacity (src/afterlife/Deathcare.cpp,
+//    [Afterlife] DEATHCARE keys). See docs/deathcare.md.
 // The reward creators themselves are Lua (create_reward_utilities, ...): reward scripts call them while the game
 // compiles them, before any DLL can reach the city's Lua, so they live in the SIM Lua package 0x0151A000.
 #include "SimLog.h"

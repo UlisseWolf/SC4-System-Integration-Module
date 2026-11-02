@@ -34,7 +34,11 @@ dofile("adv_fluffnews.lua")
 if (afterlife_grid_var == nil) then
    afterlife_grid_var = {}
 end
+if (afterlife_grid_var.DEATHCARE_CREMATED == nil) then afterlife_grid_var.DEATHCARE_CREMATED = 0 end
+if (afterlife_grid_var.DEATHCARE_UNCOLLECTED == nil) then afterlife_grid_var.DEATHCARE_UNCOLLECTED = 0 end
 if (afterlife_grid_var.FALLEN_ANGELS_POPULATION == nil) then afterlife_grid_var.FALLEN_ANGELS_POPULATION = 0 end
+if (afterlife_grid_var.GRAVES_TOTAL == nil) then afterlife_grid_var.GRAVES_TOTAL = 0 end
+if (afterlife_grid_var.GRAVES_USED == nil) then afterlife_grid_var.GRAVES_USED = 0 end
 if (afterlife_grid_var.HEAVEN_NATIVE_TOTAL == nil) then afterlife_grid_var.HEAVEN_NATIVE_TOTAL = 0 end
 if (afterlife_grid_var.HELL_NATIVE_TOTAL == nil) then afterlife_grid_var.HELL_NATIVE_TOTAL = 0 end
 if (afterlife_grid_var.IMP_KILLS_THIS_CYCLE == nil) then afterlife_grid_var.IMP_KILLS_THIS_CYCLE = 0 end

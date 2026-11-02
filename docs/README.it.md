@@ -1,6 +1,6 @@
 # SC4SIM.dll – SC4 System Integration Module (CAM)
 
-DLL del **SC4 System Integration Module (SIM)** del Colossus Addon Mod. Versione **1.9.3**.
+DLL del **SC4 System Integration Module (SIM)** del Colossus Addon Mod. Versione **1.9.4**.
 
 ## Ricompense dei consiglieri (Lua del SIM)
 
@@ -43,7 +43,7 @@ a.message = [[text@...]]
   `SC4SIM.log`, accanto alla DLL:
 
 ```
-[INFO] SC4 SIM DLL 1.9.3
+[INFO] SC4 SIM DLL 1.9.4
 [INFO] SIM Lua advisor rewards 1.0 loaded.
 [INFO] create_reward_utilities: available
 ...
@@ -194,7 +194,7 @@ Limiti: una città salvata con zone I-M e aperta senza il modulo le vede come Sp
 inquinamento, traffico e crimine potrebbero trattare la zona come lo slot originale. Analisi completa e punti da
 verificare in gioco in `docs/manufacturing-zone.md`. Impostazioni: `[ManufacturingZone]`.
 
-## Afterlife (1.9.0-1.9.3)
+## Afterlife (1.9.0-1.9.4)
 
 Versione DLL dell'Afterlife del pacchetto (Winners in Paradiso, Sinners all'Inferno, popolazioni native, clienti e
 vittime I.M.P., redenzioni), con le notizie nel ticker e righe nelle query di chiesa e cimitero. Le statistiche sono
@@ -204,7 +204,10 @@ vittime I.M.P., redenzioni), con le notizie nel ticker e righe nelle query di ch
   l'età di reset);
 - il giudizio usa l'istruzione (EQ, scala 0-200, riferimento 100) della fascia di ricchezza dei morti;
 - Hellborn e Heavenborn superano sempre le anime all'Inferno e in Paradiso;
-- i totali vengono salvati in `SC4SIM_Afterlife.ini` quando si salva la città.
+- i totali vengono salvati in `SC4SIM_Afterlife.ini` quando si salva la città;
+- servizi funerari (1.9.4): cimiteri e crematori raccolgono i morti dei quartieri nel loro raggio (capacità in tombe o
+  in salme al mese, dalle proprietà `0x5C4DD001`-`0x5C4DD003` di New_Properties.xml-patches); i morti non raccolti
+  abbassano la salute del loro quartiere e una notifica avvisa. Dettagli in `docs/deathcare.md`.
 
 Dettagli in `docs/afterlife.md`. Impostazioni: `[Afterlife]` di `SC4SIM.ini`.
 

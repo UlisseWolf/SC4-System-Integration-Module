@@ -24,6 +24,7 @@ namespace Afterlife
 		double population = 0; // residents of that wealth in the tract
 		double education = 0; // their EQ (0-200)
 		bool premature = false; // the tract's life expectancy was below the reset age: illness / pollution, not old age
+		double deaths = 0; // output of Step: the deaths counted for this wave (deathcare places them in the tract)
 	};
 
 	// Balance constants. They live in the DLL; SC4SIM.ini ([Afterlife], same names) overrides each one.
@@ -78,7 +79,7 @@ namespace Afterlife
 	using RandomInt = std::function<int(int lo, int hi)>;
 
 	// One monthly cycle, same order of operations as tools/afterlife-test/reference/AFTERLIFE.lua.
-	void Step(State& state, const GameInputs& game, const std::vector<DeathWave>& waves, const Constants& constants,
+	void Step(State& state, const GameInputs& game, std::vector<DeathWave>& waves, const Constants& constants,
 		const RandomInt& random);
 
 	// Hell's and Heaven's native populations from the standing Sinner and Winner populations (the end of Step; also

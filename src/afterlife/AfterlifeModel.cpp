@@ -21,7 +21,7 @@ namespace
 	}
 }
 
-void Afterlife::Step(State& s, const GameInputs& game, const std::vector<DeathWave>& waves, const Constants& k,
+void Afterlife::Step(State& s, const GameInputs& game, std::vector<DeathWave>& waves, const Constants& k,
 	const RandomInt& random)
 {
 	// Base mortality. With the game's life expectancy: each generation is replaced about once per life expectancy,
@@ -47,9 +47,10 @@ void Afterlife::Step(State& s, const GameInputs& game, const std::vector<DeathWa
 	double waveCap = std::floor(game.residentPopulation * k.maxWaveDeathFractionPop);
 	double oldAgeWaveDeaths = 0, waveWinners = 0;
 	s.prematureDeaths = 0;
-	for (const DeathWave& wave : waves)
+	for (DeathWave& wave : waves)
 	{
 		const double deaths = std::min(std::floor(wave.population * k.waveDeathShare), waveCap);
+		wave.deaths = std::max(deaths, 0.0);
 		if (deaths <= 0) continue;
 		waveCap -= deaths;
 		(wave.premature ? s.prematureDeaths : oldAgeWaveDeaths) += deaths;

@@ -26,6 +26,7 @@
     <ClCompile Include="src\fixes\TripCapacityFix.cpp"><Filter>Fixes</Filter></ClCompile>
     <ClCompile Include="src\afterlife\Afterlife.cpp"><Filter>Afterlife</Filter></ClCompile>
     <ClCompile Include="src\afterlife\AfterlifeModel.cpp"><Filter>Afterlife</Filter></ClCompile>
+    <ClCompile Include="src\afterlife\Deathcare.cpp"><Filter>Afterlife</Filter></ClCompile>
     <ClCompile Include="vendor\gzcom-dll\gzcom-dll\src\cRZBaseString.cpp"><Filter>Vendor</Filter></ClCompile>
     <ClCompile Include="vendor\gzcom-dll\gzcom-dll\src\cRZBaseVariant.cpp"><Filter>Vendor</Filter></ClCompile>
     <ClCompile Include="vendor\gzcom-dll\gzcom-dll\src\cRZCOMDllDirector.cpp"><Filter>Vendor</Filter></ClCompile>
@@ -49,6 +50,7 @@
     <ClInclude Include="src\fixes\TripCapacityFix.h"><Filter>Fixes</Filter></ClInclude>
     <ClInclude Include="src\afterlife\Afterlife.h"><Filter>Afterlife</Filter></ClInclude>
     <ClInclude Include="src\afterlife\AfterlifeModel.h"><Filter>Afterlife</Filter></ClInclude>
+    <ClInclude Include="src\afterlife\Deathcare.h"><Filter>Afterlife</Filter></ClInclude>
     <ClInclude Include="src\water\QueryUIHooks\cIBuildingQueryHookServer.h"><Filter>Water</Filter></ClInclude>
     <ClInclude Include="src\water\QueryUIHooks\cIBuildingQueryCustomToolTipHookTarget.h"><Filter>Water</Filter></ClInclude>
     <ClInclude Include="src\version.h"><Filter>Source</Filter></ClInclude>

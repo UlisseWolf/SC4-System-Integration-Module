@@ -28,6 +28,7 @@ add_library(SC4SIM SHARED
   src/fixes/TripCapacityFix.cpp
   src/afterlife/Afterlife.cpp
   src/afterlife/AfterlifeModel.cpp
+  src/afterlife/Deathcare.cpp
   ${GZCOM}/src/cRZBaseString.cpp
   ${GZCOM}/src/cRZBaseVariant.cpp
   ${GZCOM}/src/cRZCOMDllDirector.cpp

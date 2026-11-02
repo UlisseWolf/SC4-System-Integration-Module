@@ -28,22 +28,39 @@ ADVICE_BASE = 0xBB3C2000                  # advice GUIDs: BB3C2000 + index of th
 UI_TYPE, UI_GROUP = 0x00000000, 0x96A006B0
 UI_TEXT_GROUP = 0xEA5524EB
 UI_TEXT_BASE = 0xBB3C3000                 # label = base + 2n, value = base + 2n + 1
+# Each row: (label, afterlife_grid_var field, row number). The row number fixes the LTEXT instances (label
+# UI_TEXT_BASE + 2n, value + 2n + 1), so adding rows never renumbers the existing ones.
 UI_ROWS = {
     0xCA8B9AA2: [  # Church (Weddings Per Week)
-        ("Winners This Month", "WINNER_COUNT_THIS_CYCLE"),
-        ("Souls in Heaven", "WINNER_POPULATION_HEAVEN"),
-        ("Sinners Redeemed", "REDEEMED_TOTAL"),
-        ("Heavenborn Population", "HEAVEN_NATIVE_TOTAL"),
+        ("Winners This Month", "WINNER_COUNT_THIS_CYCLE", 5),
+        ("Souls in Heaven", "WINNER_POPULATION_HEAVEN", 6),
+        ("Sinners Redeemed", "REDEEMED_TOTAL", 7),
+        ("Heavenborn Population", "HEAVEN_NATIVE_TOTAL", 8),
     ],
-    0xCA8B96C2: [  # Cemetery (Misplaced Coffins)
-        ("Deaths This Month", "TOTAL_DEATHS_THIS_CYCLE"),
-        ("I.M.P. Victims This Month", "IMP_KILLS_THIS_CYCLE"),
-        ("Sinners This Month", "SINNER_COUNT_THIS_CYCLE"),
-        ("Souls in Hell", "SINNER_POPULATION_HELL"),
-        ("Hellborn Population", "HELL_NATIVE_TOTAL"),
+    0xCA8B96C2: [  # Cemetery (Misplaced Coffins), also the query of the crematoria
+        ("Deaths This Month", "TOTAL_DEATHS_THIS_CYCLE", 0),
+        ("I.M.P. Victims This Month", "IMP_KILLS_THIS_CYCLE", 1),
+        ("Sinners This Month", "SINNER_COUNT_THIS_CYCLE", 2),
+        ("Souls in Hell", "SINNER_POPULATION_HELL", 3),
+        ("Hellborn Population", "HELL_NATIVE_TOTAL", 4),
+        ("City Graves Used", "GRAVES_USED", 9),            # deathcare (1.9.4)
+        ("City Grave Capacity", "GRAVES_TOTAL", 10),
+        ("Cremated This Month", "DEATHCARE_CREMATED", 11),
+        ("Uncollected Dead", "DEATHCARE_UNCOLLECTED", 12),
     ],
 }
 UI_ROW_STEP = 20
+
+# Deathcare notifications (src/afterlife/Deathcare.cpp), advisor text group.
+DEATHCARE_TEXTS = [
+    (0xBB3C4000, "Uncollected Dead"),
+    (0xBB3C4001, "The dead of some neighborhoods have nowhere to go: no cemetery or crematorium in range has room. "
+                 "Until they are collected, the health of those neighborhoods keeps falling. Build a cemetery or a "
+                 "crematorium nearby."),
+    (0xBB3C4002, "Cemeteries Full"),
+    (0xBB3C4003, "Every cemetery in the city is full and there is no crematorium. The dead are left uncollected and the "
+                 "health of their neighborhoods keeps falling. Build a new cemetery or a crematorium."),
+]
 
 
 def cpp_roster():
@@ -69,7 +86,7 @@ def write_cpp():
 
 
 def news_lua():
-    fields = sorted({f for rows in UI_ROWS.values() for _, f in rows} | {
+    fields = sorted({row[1] for rows in UI_ROWS.values() for row in rows} | {
         "IMP_KILLS_THIS_CYCLE", "REDEEMED_THIS_CYCLE", "WINNER_COUNT_THIS_CYCLE", "NATURAL_DEATHS",
         "SINNER_POPULATION_HELL", "HELL_NATIVE_TOTAL", "FALLEN_ANGELS_POPULATION", "SEVEN_DEADLY_SINS_POPULATION",
         "PREMATURE_DEATHS"})
@@ -206,13 +223,12 @@ def write_reference_constants():
 
 def ui_texts():
     """(instance, text) of every UI label and value LTEXT, in UI_ROWS order."""
-    out, n = [], 0
+    out = []
     for iid in sorted(UI_ROWS):
-        for label, field in UI_ROWS[iid]:
+        for label, field, n in UI_ROWS[iid]:
             out.append((UI_TEXT_BASE + 2 * n, label))
             out.append((UI_TEXT_BASE + 2 * n + 1, f"#afterlife_grid_var.{field}#"))
-            n += 1
-    return out
+    return sorted(out)
 
 
 def _shift(line, key, dy, dh=0):
@@ -234,8 +250,8 @@ def patch_ui(text, iid, texts):
     rows = UI_ROWS[iid]
     grow = UI_ROW_STEP * len(rows)
     new = []
-    for k, (label, field) in enumerate(rows):
-        lab_id, val_id = next(t for t in texts if t[1] == label)[0], next(t for t in texts if t[1] == f"#afterlife_grid_var.{field}#")[0]
+    for k, (label, field, n) in enumerate(rows):
+        lab_id, val_id = UI_TEXT_BASE + 2 * n, UI_TEXT_BASE + 2 * n + 1
         dy = UI_ROW_STEP * (k + 1)
         lab = _shift(lines[li], "area", dy)
         lab = re.sub(r'caption="[^"]*" captionres=\{ea5524eb,[0-9a-f]+\}', f'caption="{label}" captionres={{ea5524eb,{lab_id:08x}}}', lab)
@@ -274,6 +290,7 @@ def write_dats(controller_in, controller_out, ltext_out, lua_text):
     dbpf2.write(controller_out, entries, header)
     texts = [dict(t=LTEXT_TYPE, g=LTEXT_GROUP, i=c[5], data=ltext(c[6])) for c in roster.CHARACTERS]
     texts += [dict(t=LTEXT_TYPE, g=UI_TEXT_GROUP, i=i, data=ltext(t)) for i, t in ui_texts()]
+    texts += [dict(t=LTEXT_TYPE, g=LTEXT_GROUP, i=i, data=ltext(t)) for i, t in DEATHCARE_TEXTS]
     dbpf2.write(ltext_out, texts, header)
 
 
