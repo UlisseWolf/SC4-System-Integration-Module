@@ -4,7 +4,7 @@
 
 ## What FUN is
 
-**Fixed Underfunded Notices (FUN)** by CoriBoom (v1.0, 2021) is included in CAM: Lua `0x4A5E8EF6` / `0x434FA499` in
+**Fixed Underfunded Notices (FUN)** by CoriBoom (CorinaMarie and Cyclone Boom, v1.0, 2021) is included in CAM: Lua `0x4A5E8EF6` / `0x434FA499` in
 `CAM_LUA_Controller.dat`, with its texts in the CAM locale. It deletes eight advisor notices and recreates them:
 
 | Notice | GUID | Urgent file | Med-High file | `SC4SIM.ini` key |
@@ -20,7 +20,11 @@
 
 The underfunded notices fire when a building of that kind has more users than its capacity, and link the camera to
 it (also with the game paused). CoriBoom released two files that differ only in the four priorities above; CAM ships
-the Urgent one. With SC4SIM the choice moves to `SC4SIM.ini`, and every notice can have its own priority.
+the Urgent one ([standalone release](https://community.simtropolis.com/forums/topic/760743-local-hospital-pockets-picked-and-other-fun-dialog-boxes/)). With SC4SIM the choice moves to `SC4SIM.ini`, and every notice can have its own priority.
+
+Medium-High is the vanilla-like choice: the four notices it lowers pop up only on the easier levels (hospital on
+Easy, school on Easy and Medium, library and museum never) and otherwise stay in the news ticker and the advisor
+panel. Thanks to TiepiNL for the comparison with the standalone files (issue #1).
 
 ## Settings
 

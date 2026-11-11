@@ -391,7 +391,7 @@ SC4SIM.ini           settings template
   and [sc4-query-ui-hooks](https://github.com/0xC0000054/sc4-query-ui-hooks), and
   [sc4-remove-phantom-budget-items](https://github.com/0xC0000054/sc4-remove-phantom-budget-items), merged into
   SC4SIM with his consent.
-- **CoriBoom**: Fixed Underfunded Notices (FUN), included in CAM.
+- **CoriBoom (CorinaMarie and Cyclone Boom)**: [Fixed Underfunded Notices (FUN)](https://community.simtropolis.com/forums/topic/760743-local-hospital-pockets-picked-and-other-fun-dialog-boxes/), included in CAM.
 - **nsgomez**: [gzcom-dll](https://github.com/nsgomez/gzcom-dll).
 - **metayeti**: [mINI](https://github.com/metayeti/mINI).
 

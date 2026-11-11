@@ -242,7 +242,7 @@ di Nicholas Hayes (MIT), integrato con il consenso dell'autore. Se `SC4RemovePha
 
 ## Priorità degli avvisi di sottofinanziamento (1.10.0)
 
-Il CAM include **Fixed Underfunded Notices (FUN)** di CoriBoom, che rifà otto avvisi dei consiglieri:
+Il CAM include **Fixed Underfunded Notices (FUN)** di CoriBoom (CorinaMarie e Cyclone Boom), che rifà otto avvisi dei consiglieri:
 - il sottofinanziamento di ospedali, scuole, biblioteche e musei;
 - gli scioperi di ospedali, scuole, pompieri e polizia.
 
