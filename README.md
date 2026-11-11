@@ -68,13 +68,14 @@ it and says so in the log:
    [Building](#building)).
 2. Copy `SC4SIM.dll` and, optionally, `SC4SIM.ini` to your SimCity 4 **Plugins** folder.
 3. Start the game. `SC4SIM.log`, created next to the DLL, should report:
-   - `SC4 SIM DLL 1.10.0`;
+   - `SC4 SIM DLL 1.11.0`;
    - `PowerPoleCustomization: installed N of N patches`;
    - `AdvancedWater: installed the water building query UI hook`;
    - `MixedOccupancy: enabled (...)`;
    - `ManufacturingZone: enabled, zone slot 13 ...` (on by default);
    - `Afterlife: run_afterlife_balance_variables registered` when a city opens;
    - `FundingSliderFix: department budgets resync full funding with the buildings' current costs every month.`
+   - `PortUpgradeFix: port upgrades remove the old stage's demand effects before the new stage replaces it.`
 
 ## Advisor rewards
 
@@ -317,6 +318,7 @@ Details, the news events and the tests are in [`docs/afterlife.md`](docs/afterli
 | | `FundingSliderFix` | `true` | Fixes the phantom funding sliders: department budgets resync full funding with the buildings' current costs. |
 | | `FundingSliderResetStuck` | `false` | When a city opens and a department needed a resync, a department left at 0 % or at its maximum goes back to 100 %. |
 | | `RemovePhantomBudgetItems` | `true` | Registers the `RemovePhantomBudgetItems` cheat. |
+| | `PortUpgradeFix` | `true` | Fixes port upgrades: a staged seaport no longer loses its industrial cap relief at every upgrade. |
 | `[UnderfundedNotices]` | `Enabled` | `true` | Sets the priorities of the Fixed Underfunded Notices (FUN) when a city opens. |
 | | `Preset` | `Urgent` | `Urgent` or `MedHigh`, as CoriBoom's two files. |
 | | `HospitalUnderfunded`, `SchoolUnderfunded`, `LibraryUnderfunded`, `MuseumUnderfunded`, `HealthStrike`, `SchoolStrike`, `FireStrike`, `PoliceStrike` | empty | Priority of one notice over the preset: `VeryLow`, `Low`, `MedLow`, `MedMedLow`, `Medium`, `MedHigh`, `High`, `Urgent` or 0–100. |

@@ -70,6 +70,12 @@
 //  * Fixed Underfunded Notices (FUN) by CoriBoom, included in CAM: the priority of each of its eight notices comes
 //    from SC4SIM.ini ([UnderfundedNotices]: Urgent or MedHigh preset, per-notice overrides), set in the advisor Lua
 //    when a city opens (src/advisors). See docs/underfunded-notices.md.
+//
+// Version 1.11.0:
+//  * Game fix: port upgrades. A staged port (BSC Functional Seaports) no longer loses its Demand Satisfied relief
+//    (industrial caps) and jobs at every upgrade: the old stage's demand effects are removed with its own building
+//    type before the next stage replaces it (src/fixes/PortUpgradeFix.cpp, [GameFixes] PortUpgradeFix).
+//    See docs/game-fixes.md.
 // The reward creators themselves are Lua (create_reward_utilities, ...): reward scripts call them while the game
 // compiles them, before any DLL can reach the city's Lua, so they live in the SIM Lua package 0x0151A000.
 #include "SimLog.h"
@@ -80,6 +86,7 @@
 #include "zones/ManufacturingZone.h"
 #include "fixes/TripCapacityFix.h"
 #include "fixes/BudgetFixes.h"
+#include "fixes/PortUpgradeFix.h"
 #include "advisors/UnderfundedNotices.h"
 #include "version.h"
 
@@ -160,6 +167,7 @@ public:
 		ManufacturingZone::OnStart();
 		TripCapacityFix::OnStart();
 		BudgetFixes::OnStart();
+		PortUpgradeFix::OnStart();
 		UnderfundedNotices::OnStart();
 		Afterlife::OnStart();
 		cIGZFrameWork* const framework = pCOM->FrameWork();
@@ -193,6 +201,7 @@ public:
 		ManufacturingZone::PostAppInit();
 		TripCapacityFix::PostAppInit();
 		BudgetFixes::PostAppInit();
+		PortUpgradeFix::PostAppInit();
 
 		// Cheat codes (keepwires, ScanPumps, MixedOccupancy, IMZone, RemovePhantomBudgetItems...) are registered by the modules; the notification is added once here.
 		cISC4AppPtr app;
@@ -214,6 +223,7 @@ public:
 			cheatManager->RemoveNotification2(this, 0);
 			cheatManager.Reset();
 		}
+		PortUpgradeFix::PostAppShutdown();
 		BudgetFixes::PostAppShutdown();
 		TripCapacityFix::PostAppShutdown();
 		ManufacturingZone::PostAppShutdown();

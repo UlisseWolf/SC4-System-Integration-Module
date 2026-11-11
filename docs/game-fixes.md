@@ -141,3 +141,57 @@ Differences from the standalone DLL:
 
 A removed plugin also feeds the funding slider bug: the game can no longer read the cost of those buildings, so the
 cost leaves C but stays in F. The resync keeps the slider steady until the entries are removed.
+
+## Port upgrades (1.11.0)
+
+`[GameFixes] PortUpgradeFix=true` (default) in `SC4SIM.ini`. Source: `src/fixes/PortUpgradeFix.cpp`. SimCity 4 1.1.641
+only.
+
+### The bug
+
+The port developer (`cSC4PortDeveloper`, vtable `0x00AB2790`) keeps one entry per seaport or airport, with the lot
+and the utilisation (usage / capacity) last applied to the demand simulator (`+0x1C`). A building whose exemplar has
+`0x27812844 = true` gets its Demand Satisfied (`0x27812840`) and Demand Created (`0x27812841`) from the port developer,
+not from the demand simulator's lot state handler (`0x006A9470` skips it). Every month (`0x006E9980`) the port
+developer calls `cSC4DemandSimulator::UpdateOccupantEffects` (vtable slot 7, `0x006A6C90`) with the lot's current
+building type, the old and the new utilisation: the demand simulator removes old × values and adds new × values of
+that building type (`0x006A5920`).
+
+Maxis and PEG seaports have none of these properties. The BSC Functional Seaports give every stage Demand Satisfied on
+the industrial caps `0x4A00`, `0x4B00` and `0x4C00` that grows with the stage (BRT Seaport: 2400, 7200, 12000, 16400,
+21200, 25600, 30400, 35200), plus jobs, all with `0x27812844 = true`.
+
+The upgrade (`0x006E92A0`, called from `0x006E9C0E`) sets the entry's "upgrade in progress" flag (`+0x18`), demolishes
+the old lot and builds the next stage in the same entry, keeping `+0x1C`. The old lot's demolition (`0x006E9EA0`,
+state 5) sees the flag, clears it and removes nothing. On the next month the port developer passes the new building
+type, so the demand simulator removes old utilisation × the new stage's values instead of the old stage's. Each upgrade
+loses utilisation × (new value − old value) of every cap, saved with the city:
+
+| BRT Seaport, utilisation about 1 at each upgrade | Net relief of the port on each industrial cap |
+|---|---|
+| Stage 1 | +2400 |
+| Stage 8, utilisation 1 | 35200 − 32800 = +2400: the stages added nothing |
+| Stage 8, utilisation 0.5 (the upgrades added capacity) | 17600 − 32800 = −15200 |
+| Demolished | −32800, for good |
+
+This is the long-known "upgradeable seaports eat industrial cap relief" behaviour: it needs relief that changes with
+the stage, which only the staged ports have.
+
+### The fix
+
+The call at `0x006E9C0E` goes to SC4SIM first. If the entry has a utilisation applied, SC4SIM calls
+`UpdateOccupantEffects(old stage's building type, utilisation, 0)` and sets `+0x1C` to 0, then lets the game upgrade.
+The next monthly update adds the new stage's values from zero, so each stage takes out exactly what it put in. Before
+patching, SC4SIM checks the game version, that the call still targets `0x006E92A0` and that slot 7 of the demand
+simulator's vtable is `0x006A6C90`; the original call is restored when the game closes. Each corrected upgrade is
+written to `SC4SIM.log`.
+
+Cities saved with the bug keep the relief already lost; the fix only stops further losses. Nicholas Hayes's
+SeaportDemandCapFix changes the seaport trips term of the monthly connection demand (`0x006A3ED0`): it is a different
+part of the code and works together with this fix.
+
+### To check in game
+
+Use a seaport of the BSC Functional Seaports with enough freight to upgrade. When it upgrades, `SC4SIM.log` shows
+`PortUpgradeFix: port at cell (x, z) upgrading from building 0x...`. The I-D, I-M and I-HT cap relief (data view or
+demand cheats) should grow with the stages instead of staying at the stage 1 value or dropping.

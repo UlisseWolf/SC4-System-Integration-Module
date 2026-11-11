@@ -240,6 +240,15 @@ di Nicholas Hayes (MIT), integrato con il consenso dell'autore. Se `SC4RemovePha
 `SC4SIM.dll`, SC4SIM lascia il cheat alla DLL separata: rimuovila per usare la versione integrata. Impostazione:
 `[GameFixes] RemovePhantomBudgetItems`. Dettagli in `docs/game-fixes.md`.
 
+**Upgrade dei porti (1.11.0).** I porti a stadi (BSC Functional Seaports) danno sollievo ai cap industriali (Demand
+Satisfied) che cresce a ogni stadio. Quando un porto passa allo stadio successivo, il gioco toglie il contributo dello
+stadio vecchio usando i valori del nuovo: ogni upgrade fa perdere sollievo per sempre, e il porto può finire per
+consumare sollievo invece di darlo, fino a bloccare la crescita industriale. Con la correzione, prima dell'upgrade il
+contributo dello stadio vecchio viene tolto con i suoi valori. I porti Maxis e PEG non sono colpiti. Le città già
+salvate conservano il sollievo perso finora. È compatibile con SeaportDemandCapFix di Nicholas Hayes (interviene su
+un'altra parte del codice). Solo SimCity 4 1.1.641. Impostazione: `[GameFixes] PortUpgradeFix` (attiva di default).
+Dettagli in `docs/game-fixes.md`.
+
 ## Priorità degli avvisi di sottofinanziamento (1.10.0)
 
 Il CAM include **Fixed Underfunded Notices (FUN)** di CoriBoom (CorinaMarie e Cyclone Boom), che rifà otto avvisi dei consiglieri:
