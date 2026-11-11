@@ -24,6 +24,7 @@
     <ClCompile Include="src\mixed\MixedOccupancy.cpp"><Filter>Mixed occupancy</Filter></ClCompile>
     <ClCompile Include="src\zones\ManufacturingZone.cpp"><Filter>Zones</Filter></ClCompile>
     <ClCompile Include="src\fixes\TripCapacityFix.cpp"><Filter>Fixes</Filter></ClCompile>
+    <ClCompile Include="src\fixes\BudgetFixes.cpp"><Filter>Fixes</Filter></ClCompile>
     <ClCompile Include="src\afterlife\Afterlife.cpp"><Filter>Afterlife</Filter></ClCompile>
     <ClCompile Include="src\afterlife\AfterlifeModel.cpp"><Filter>Afterlife</Filter></ClCompile>
     <ClCompile Include="src\afterlife\Deathcare.cpp"><Filter>Afterlife</Filter></ClCompile>
@@ -48,6 +49,7 @@
     <ClInclude Include="src\mixed\MixedOccupancy.h"><Filter>Mixed occupancy</Filter></ClInclude>
     <ClInclude Include="src\zones\ManufacturingZone.h"><Filter>Zones</Filter></ClInclude>
     <ClInclude Include="src\fixes\TripCapacityFix.h"><Filter>Fixes</Filter></ClInclude>
+    <ClInclude Include="src\fixes\BudgetFixes.h"><Filter>Fixes</Filter></ClInclude>
     <ClInclude Include="src\afterlife\Afterlife.h"><Filter>Afterlife</Filter></ClInclude>
     <ClInclude Include="src\afterlife\AfterlifeModel.h"><Filter>Afterlife</Filter></ClInclude>
     <ClInclude Include="src\afterlife\Deathcare.h"><Filter>Afterlife</Filter></ClInclude>

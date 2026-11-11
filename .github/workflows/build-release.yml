@@ -61,6 +61,7 @@ jobs:
           Copy-Item LICENSE package/Licenses/LICENSE-SC4SIM-LGPL-3.0.txt
           Copy-Item src/powerpoles/LICENSE-sc4-render-services.txt package/Licenses/LICENSE-sc4-render-services-LGPL-2.1.txt
           Copy-Item src/water/LICENSE-sc4-advanced-water-management.txt package/Licenses/LICENSE-sc4-advanced-water-management-MIT.txt
+          Copy-Item src/fixes/LICENSE-sc4-remove-phantom-budget-items.txt package/Licenses/LICENSE-sc4-remove-phantom-budget-items-MIT.txt
           Copy-Item vendor/gzcom-dll/LICENSE package/Licenses/LICENSE-gzcom-dll-LGPL-2.1.txt
           Copy-Item vendor/mINI/LICENSE package/Licenses/LICENSE-mINI-MIT.txt
           @(
@@ -71,6 +72,7 @@ jobs:
             "It includes code from other projects, which keeps its own license:",
             "- custom power poles: sc4-render-services by caspervg, LGPL 2.1 (LICENSE-sc4-render-services-LGPL-2.1.txt)",
             "- Advanced Water Management: sc4-advanced-water-management by Nicholas Hayes, MIT (LICENSE-sc4-advanced-water-management-MIT.txt)",
+            "- RemovePhantomBudgetItems cheat: sc4-remove-phantom-budget-items by Nicholas Hayes, MIT (LICENSE-sc4-remove-phantom-budget-items-MIT.txt)",
             "- gzcom-dll: LGPL 2.1 (LICENSE-gzcom-dll-LGPL-2.1.txt)",
             "- mINI: MIT (LICENSE-mINI-MIT.txt)"
           ) | Set-Content -Path package/Licenses/README.txt -Encoding utf8

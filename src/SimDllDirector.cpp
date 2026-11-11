@@ -59,6 +59,14 @@
 // Version 1.9.4:
 //  * Deathcare: cemeteries and crematoria collect the Afterlife's dead by radius and capacity (src/afterlife/Deathcare.cpp,
 //    [Afterlife] DEATHCARE keys). See docs/deathcare.md.
+//
+// Version 1.10.0:
+//  * Game fix: phantom funding sliders. Department budgets resync each locally funded line item's full funding with
+//    the buildings' current costs before the monthly recalculation, so a mod that changes a civic building's monthly
+//    cost no longer drives its funding slider to 0 % or 120 % (src/fixes/BudgetFixes.cpp, [GameFixes]
+//    FundingSliderFix; FundingResync and FundingReset cheats). See docs/game-fixes.md.
+//  * RemovePhantomBudgetItems cheat: port of sc4-remove-phantom-budget-items by Nicholas Hayes (MIT), merged with the
+//    author's consent.
 // The reward creators themselves are Lua (create_reward_utilities, ...): reward scripts call them while the game
 // compiles them, before any DLL can reach the city's Lua, so they live in the SIM Lua package 0x0151A000.
 #include "SimLog.h"
@@ -68,6 +76,7 @@
 #include "water/AdvancedWater.h"
 #include "zones/ManufacturingZone.h"
 #include "fixes/TripCapacityFix.h"
+#include "fixes/BudgetFixes.h"
 #include "version.h"
 
 #include "cIGZCOM.h"
@@ -146,6 +155,7 @@ public:
 		MixedOccupancy::OnStart();
 		ManufacturingZone::OnStart();
 		TripCapacityFix::OnStart();
+		BudgetFixes::OnStart();
 		Afterlife::OnStart();
 		cIGZFrameWork* const framework = pCOM->FrameWork();
 		if (framework->GetState() < cIGZFrameWork::kStatePreAppInit) framework->AddHook(this);
@@ -177,8 +187,9 @@ public:
 		MixedOccupancy::PostAppInit();
 		ManufacturingZone::PostAppInit();
 		TripCapacityFix::PostAppInit();
+		BudgetFixes::PostAppInit();
 
-		// Cheat codes (keepwires, ScanPumps, MixedOccupancy, IMZone...) are registered by the modules; the notification is added once here.
+		// Cheat codes (keepwires, ScanPumps, MixedOccupancy, IMZone, RemovePhantomBudgetItems...) are registered by the modules; the notification is added once here.
 		cISC4AppPtr app;
 		if (app)
 		{
@@ -198,6 +209,7 @@ public:
 			cheatManager->RemoveNotification2(this, 0);
 			cheatManager.Reset();
 		}
+		BudgetFixes::PostAppShutdown();
 		TripCapacityFix::PostAppShutdown();
 		ManufacturingZone::PostAppShutdown();
 		MixedOccupancy::PostAppShutdown();
@@ -216,6 +228,7 @@ public:
 			MixedOccupancy::DoMessage(message);
 			ManufacturingZone::DoMessage(message);
 			Afterlife::DoMessage(message);
+			BudgetFixes::DoMessage(message);
 		}
 		else if (type == kMsgPreCityShutdown || type == kMsgCheatIssued)
 		{
@@ -224,6 +237,7 @@ public:
 			MixedOccupancy::DoMessage(message);
 			ManufacturingZone::DoMessage(message);
 			Afterlife::DoMessage(message);
+			BudgetFixes::DoMessage(message);
 		}
 		else if (type == AdvancedWater::kMessageSimNewMonth)
 		{

@@ -1,7 +1,7 @@
 # SC4SIM — SC4 System Integration Module DLL for SimCity 4
 
 [![License: LGPL v3](https://img.shields.io/badge/License-LGPL_v3-blue.svg)](LICENSE)
-![Version](https://img.shields.io/badge/version-1.9.4-informational)
+![Version](https://img.shields.io/badge/version-1.10.0-informational)
 ![Game](https://img.shields.io/badge/SimCity_4-1.1.641-success)
 ![Platform](https://img.shields.io/badge/platform-Windows_x86-lightgrey)
 [![Build and release](https://github.com/UlisseWolf/SC4-System-Integration-Module/actions/workflows/build-release.yml/badge.svg?branch=master)](https://github.com/UlisseWolf/SC4-System-Integration-Module/actions/workflows/build-release.yml)
@@ -11,7 +11,7 @@
 SIM collects shared game systems that any mod can rely on, without forcing players to install a specific mod
 such as NEON.
 
-> **Status:** version 1.9.4, built with MSVC. Advisor rewards, power poles, water management, mixed occupancy and the manufacturing zone are tested in game; the 1.9.3 Afterlife changes (generation resets, saved totals) and the 1.9.4 deathcare are not yet.
+> **Status:** version 1.10.0, built with MSVC. Advisor rewards, power poles, water management, mixed occupancy and the manufacturing zone are tested in game; the 1.9.3 Afterlife changes (generation resets, saved totals), the 1.9.4 deathcare and the 1.10.0 budget fixes are not yet.
 
 ---
 
@@ -44,7 +44,7 @@ such as NEON.
 | Mixed R, C and I occupancy | 1.5.0 | Residents, commercial and industrial jobs in one building (RC, RI, CI or RCI) with independent capacities, census demand for all of them, and the `MixedOccupancy` cheat. 1.5.1: the game itself fills the secondary types. 1.6.0: industry. 1.7.0: trips for the secondary classes. 1.7.1: secondary jobs as commute destinations. Tested in game with the test lots. |
 | Manufacturing (I-M) zone | 1.8.0 | A zone of its own for manufacturing industry, on a reused zone slot (Spaceport by default): I-M grows only there, I-D and I-HT never do. `IMZone`, `IMZoneConvert` and `IMZoneInfo` cheats. |
 | Afterlife | 1.9.0 | The DLL version of `AFTERLIFE.lua`: fictitious Winner / Sinner / I.M.P. statistics, registered over the Lua functions, with the balance constants in the DLL and in `SC4SIM.ini`. 1.9.1: the real constants, a 60-character news roster and Afterlife headlines in the news ticker; `AFTERLIFE.lua` and `PACK_CONSTANTS.lua` are no longer needed. 1.9.2: Hell's natives (Hellborn) always outnumber the Souls in Hell, and Heaven gets its own native population (Heavenborn), always larger than the Souls in Heaven, shown in the church query. 1.9.3: deaths from the game's life expectancy and from the residential simulator's generation resets (old age or premature), judgment by the EQ of each wealth level, the education reference fixed (100 on the 0-200 EQ scale), the totals saved with the city. 1.9.4: deathcare, cemeteries and crematoria that collect the dead by radius and capacity, with uncollected dead lowering the health of their tract (see `docs/deathcare.md`). *Calculation checked against the reference Lua; news and queries tested in game, the 1.9.3 tract reading not yet.* |
-| Game fixes | 1.9.3 | `cSC4Lot::UpdateJobs` reads the $$ and $$$ trip capacities for their own wealth: fixes the "high-tech industry has no $$$ jobs" bug for every building (also the Medical Clinic, the solar and nuclear plants and mixed lots). Two bytes, checked before patching. See `docs/game-fixes.md`. |
+| Game fixes | 1.9.3 | `cSC4Lot::UpdateJobs` reads the $$ and $$$ trip capacities for their own wealth: fixes the "high-tech industry has no $$$ jobs" bug for every building (also the Medical Clinic, the solar and nuclear plants and mixed lots). Two bytes, checked before patching. 1.10.0: phantom funding sliders. A mod that changes the monthly cost of civic buildings already in the city no longer drives their funding sliders to 0 % or 120 %. The `FundingResync` and `FundingReset` cheats are included, along with `RemovePhantomBudgetItems`, merged from [sc4-remove-phantom-budget-items](https://github.com/0xC0000054/sc4-remove-phantom-budget-items) with the author's consent. See `docs/game-fixes.md`. *1.10.0 not yet tested in game.* |
 | Advanced Water Management | 1.2.0 | The real efficiency of water buildings in the query dialog and tool tip, a monthly warning for fresh or salt water pumps that produce nothing, and the `ScanPumps` cheat. |
 
 ## Requirements
@@ -67,12 +67,13 @@ it and says so in the log:
    [Building](#building)).
 2. Copy `SC4SIM.dll` and, optionally, `SC4SIM.ini` to your SimCity 4 **Plugins** folder.
 3. Start the game. `SC4SIM.log`, created next to the DLL, should report:
-   - `SC4 SIM DLL 1.9.4`;
+   - `SC4 SIM DLL 1.10.0`;
    - `PowerPoleCustomization: installed N of N patches`;
    - `AdvancedWater: installed the water building query UI hook`;
    - `MixedOccupancy: enabled (...)`;
    - `ManufacturingZone: enabled, zone slot 13 ...` (on by default);
-   - `Afterlife: run_afterlife_balance_variables registered` when a city opens.
+   - `Afterlife: run_afterlife_balance_variables registered` when a city opens;
+   - `FundingSliderFix: department budgets resync full funding with the buildings' current costs every month.`
 
 ## Advisor rewards
 
@@ -302,7 +303,6 @@ Details, the news events and the tests are in [`docs/afterlife.md`](docs/afterli
 | | `MixedTraffic` | `true` | Commuters and freight for the secondary classes, and secondary jobs as commute destinations. |
 | `[Afterlife]` | `Enabled` | `true` | Registers the DLL version of the Afterlife functions in the advisor Lua. |
 | `[ManufacturingZone]` | `Enabled` | `true` | Turns the I-M zone on or off. |
-| `[GameFixes]` | `TripCapacityWealthFix` | `true` | Fixes the $$ / $$$ trip capacity bug of `cSC4Lot::UpdateJobs` (no $$$ high-tech jobs). |
 | | `ZoneSlot` | `13` | Zone slot reused for the I-M zone: 13 Spaceport or 10 Military. |
 | | `StageHook` | `true` | Every growth stage fits the slot; required for the I-M redirect. |
 | | `RCIZoneHook` | `true` | `IsRCIZone` answers true for the slot. |
@@ -312,6 +312,10 @@ Details, the news events and the tests are in [`docs/afterlife.md`](docs/afterli
 | | `DragColour` | `0xDE681CFF` | Drag colour, RRGGBBAA. |
 | | `Cursor` | `0x5C4D0D20` | Zone tool cursor (in `SC4SIM_ManufacturingZone.dat`); `0` = game cursor. |
 | | `ZoneName` | `0x5C4D0D04` | Zone name in the hover tooltip (LTEXT in group `0xEA5524EB`); `0` = the slot's game name. |
+| `[GameFixes]` | `TripCapacityWealthFix` | `true` | Fixes the $$ / $$$ trip capacity bug of `cSC4Lot::UpdateJobs` (no $$$ high-tech jobs). |
+| | `FundingSliderFix` | `true` | Fixes the phantom funding sliders: department budgets resync full funding with the buildings' current costs. |
+| | `FundingSliderResetStuck` | `false` | When a city opens and a department needed a resync, a department left at 0 % or at its maximum goes back to 100 %. |
+| | `RemovePhantomBudgetItems` | `true` | Registers the `RemovePhantomBudgetItems` cheat. |
 | `[SC4PowerPoleCustomization]` | `Enabled` | `true` | Turns the custom power poles on or off. |
 | | `CrossZones` | `true` | Lets poles stand on empty zones and farm fields. |
 | | `DezoneUnderPoles` | `true` | Removes the zone from the cell of every new pole when the drag ends. |
@@ -366,7 +370,7 @@ src/water/           Advanced Water Management module (ported from sc4-advanced-
 src/mixed/           mixed R, C and I occupancy module
 src/zones/           manufacturing (I-M) zone module
 src/afterlife/       Afterlife module (statistics and news roster)
-src/fixes/           game bug fixes (trip capacity by wealth)
+src/fixes/           game bug fixes (trip capacity by wealth, budget: phantom funding sliders and phantom budget items)
 lua/                 sim_advisor_rewards.lua (advisor reward creators)
 docs/                power-pole, mixed occupancy, I-M zone and Afterlife documentation and README.it.md (Italian notes)
 vendor/              gzcom-dll, mINI
@@ -379,7 +383,9 @@ SC4SIM.ini           settings template
 - **caspervg**: [sc4-render-services](https://github.com/caspervg/sc4-render-services) and the custom power-line
   research and implementation this DLL ports.
 - **null 45 (Nicholas Hayes)**: [sc4-advanced-water-management](https://github.com/0xC0000054/sc4-advanced-water-management)
-  and [sc4-query-ui-hooks](https://github.com/0xC0000054/sc4-query-ui-hooks).
+  and [sc4-query-ui-hooks](https://github.com/0xC0000054/sc4-query-ui-hooks), and
+  [sc4-remove-phantom-budget-items](https://github.com/0xC0000054/sc4-remove-phantom-budget-items), merged into
+  SC4SIM with his consent.
 - **nsgomez**: [gzcom-dll](https://github.com/nsgomez/gzcom-dll).
 - **metayeti**: [mINI](https://github.com/metayeti/mINI).
 
@@ -393,6 +399,8 @@ Third-party code keeps its own license:
   ([`src/powerpoles/LICENSE-sc4-render-services.txt`](src/powerpoles/LICENSE-sc4-render-services.txt));
 - `src/water`: ported from sc4-advanced-water-management, including the sc4-query-ui-hooks interface headers,
   MIT ([`src/water/LICENSE-sc4-advanced-water-management.txt`](src/water/LICENSE-sc4-advanced-water-management.txt));
+- `src/fixes/BudgetFixes.cpp`, `RemovePhantomBudgetItems` cheat: ported from sc4-remove-phantom-budget-items, MIT
+  ([`src/fixes/LICENSE-sc4-remove-phantom-budget-items.txt`](src/fixes/LICENSE-sc4-remove-phantom-budget-items.txt));
 - `vendor/gzcom-dll`: LGPL 2.1;
 - `vendor/mINI`: MIT.
 

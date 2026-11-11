@@ -26,6 +26,7 @@ add_library(SC4SIM SHARED
   src/mixed/MixedOccupancy.cpp
   src/zones/ManufacturingZone.cpp
   src/fixes/TripCapacityFix.cpp
+  src/fixes/BudgetFixes.cpp
   src/afterlife/Afterlife.cpp
   src/afterlife/AfterlifeModel.cpp
   src/afterlife/Deathcare.cpp

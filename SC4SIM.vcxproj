@@ -72,6 +72,7 @@
     <ClCompile Include="src\mixed\MixedOccupancy.cpp" />
     <ClCompile Include="src\zones\ManufacturingZone.cpp" />
     <ClCompile Include="src\fixes\TripCapacityFix.cpp" />
+    <ClCompile Include="src\fixes\BudgetFixes.cpp" />
     <ClCompile Include="src\afterlife\Afterlife.cpp" />
     <ClCompile Include="src\afterlife\AfterlifeModel.cpp" />
     <ClCompile Include="src\afterlife\Deathcare.cpp" />
@@ -112,6 +113,7 @@
     <ClInclude Include="src\mixed\MixedOccupancy.h" />
     <ClInclude Include="src\zones\ManufacturingZone.h" />
     <ClInclude Include="src\fixes\TripCapacityFix.h" />
+    <ClInclude Include="src\fixes\BudgetFixes.h" />
     <ClInclude Include="src\afterlife\Afterlife.h" />
     <ClInclude Include="src\afterlife\AfterlifeModel.h" />
     <ClInclude Include="src\afterlife\Deathcare.h" />

@@ -1,6 +1,6 @@
 # SC4SIM.dll – SC4 System Integration Module (CAM)
 
-DLL del **SC4 System Integration Module (SIM)** del Colossus Addon Mod. Versione **1.9.4**.
+DLL del **SC4 System Integration Module (SIM)** del Colossus Addon Mod. Versione **1.10.0**.
 
 ## Ricompense dei consiglieri (Lua del SIM)
 
@@ -43,7 +43,7 @@ a.message = [[text@...]]
   `SC4SIM.log`, accanto alla DLL:
 
 ```
-[INFO] SC4 SIM DLL 1.9.4
+[INFO] SC4 SIM DLL 1.10.0
 [INFO] SIM Lua advisor rewards 1.0 loaded.
 [INFO] create_reward_utilities: available
 ...
@@ -211,13 +211,34 @@ vittime I.M.P., redenzioni), con le notizie nel ticker e righe nelle query di ch
 
 Dettagli in `docs/afterlife.md`. Impostazioni: `[Afterlife]` di `SC4SIM.ini`.
 
-## Correzioni del gioco (1.9.3)
+## Correzioni del gioco (1.9.3, 1.10.0)
 
 `cSC4Lot::UpdateJobs` confronta i posti di lavoro $$ e $$$ con la capacità di viaggio $: se differiscono da quella di
 meno del 10% non vengono mai scritti, e i pendolari di quella ricchezza non trovano lavoro lì (il bug "l'industria
 high-tech non ha posti $$$", che colpisce anche la clinica, le centrali solari e nucleari e i lotti misti). Due byte
 fanno leggere a ogni controllo la propria ricchezza; non servono correzioni ai dati. Impostazione:
 `[GameFixes] TripCapacityWealthFix` (attiva di default). Dettagli in `docs/game-fixes.md`.
+
+**Slider di finanziamento fantasma (1.10.0).** Quando una mod cambia il costo mensile di edifici civici già presenti in
+città (scuole, ospedali, polizia, pompieri, centrali), la somma dei costi salvata dal gioco per ogni tipo di edificio
+non coincide più con i costi reali. Il ricalcolo mensile allora sposta gli slider verso lo 0 % o il 120 %. Con la
+correzione, all'apertura della città e prima di ogni ricalcolo mensile, i dipartimenti riallineano quella somma ai
+costi attuali degli edifici, contati come li conta il gioco. Gli slider restano dove li hai messi, il nuovo costo vale
+subito anche per gli edifici esistenti e non serve demolire nulla. Solo SimCity 4 1.1.641.
+
+- `[GameFixes] FundingSliderFix` (attiva di default).
+- `FundingSliderResetStuck` (disattivata di default): all'apertura della città riporta al 100 % i dipartimenti
+  corretti che erano a 0 % o al massimo.
+- Cheat `FundingResync`: riallinea subito.
+- Cheat `FundingReset [percentuale]`: imposta tutti gli slider, 100 di default. Serve a ripristinare gli slider già
+  spostati dal bug.
+
+**Voci di budget fantasma (1.10.0).** Il cheat `RemovePhantomBudgetItems <categoria> [all]` (Fire, Police, Jail,
+Power, Education, Health) toglie dal budget gli edifici il cui plugin non è più installato, oppure tutta la categoria
+con `all`. È il port di [sc4-remove-phantom-budget-items](https://github.com/0xC0000054/sc4-remove-phantom-budget-items)
+di Nicholas Hayes (MIT), integrato con il consenso dell'autore. Se `SC4RemovePhantomBudgetItems.dll` è accanto a
+`SC4SIM.dll`, SC4SIM lascia il cheat alla DLL separata: rimuovila per usare la versione integrata. Impostazione:
+`[GameFixes] RemovePhantomBudgetItems`. Dettagli in `docs/game-fixes.md`.
 
 ## Advanced Water Management (1.2.0)
 

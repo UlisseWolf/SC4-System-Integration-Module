@@ -43,3 +43,101 @@ call at `0x006C0CE1`).
 `SC4SIM.log`: `TripCapacityFix: cSC4Lot::UpdateJobs reads the $$ and $$$ trip capacities for their own wealth (2 of 2
 sites).` On a stock high-tech lot, lot property `0x8A0B4100` index 2 (the $$$ trip capacity) should become nonzero
 after the patch; without it, it stays 0.
+
+## Phantom funding sliders (1.10.0)
+
+`[GameFixes] FundingSliderFix=true` (default) in `SC4SIM.ini`. Source: `src/fixes/BudgetFixes.cpp`. SimCity 4 1.1.641
+only. *Static analysis; not yet tested in game.*
+
+### The bug
+
+A mod changes the monthly cost (`Budget Item: Cost`, `0xEA54D286`) of a civic building that is already in the city:
+a school, a hospital, a police or fire station, a power plant. From then on, every month, the funding slider of those
+buildings, and of the other buildings in the same department, moves the same way until it reaches 0 % or 120 %.
+The usual remedies are to bulldoze the buildings plopped after the mod and remove the mod, or to bulldoze every
+building of that type.
+
+The game keeps two figures that should agree and never compares them:
+
+| Figure | Where | Value |
+| --- | --- | --- |
+| Full funding of the line item (F) | `cSC4LineItem` `+0x38`, saved with the city (`Write` `0x006A9AA0`) | Sum of the costs **at the time each building was plopped**: `AddLocallyFundedObject` (`0x006AB0C0`) adds the cost, `RemoveLocallyFundedObject` (`0x006AA530`) subtracts the cost the building has when it is demolished. |
+| Current cost of each building (H) | Property `0xEA54D286` | Usually not copied into the building: `cSCExemplarPropertyHolder::GetProperty` (`0x005FEDA0`) falls back to the exemplar, so after a mod it is the mod's cost. |
+
+Every month `cSC4BudgetSimulator` (`0x00692510`) calls `RecalculateAllLineItemCurrentExpenses` (`0x006ABB50`, vtable
+slot `+0x74`) on every department. It sums cost × local funding of the department's locally funded buildings into C
+and FullExpenses of every line item into F, and sets the department to p′ = C / F if |p′ − p| > 0.5 points and
+|C − p·F| > n + 2 §. It then writes p′ into every building's slider (`0x006AB810` with propagate = true). With H ≠ F,
+p′ = p · (H<sub>local</sub> + F<sub>fixed</sub>) / (F<sub>local</sub> + F<sub>fixed</sub>), every month, until the
+120 % cap or until one of the two tolerances stops it (about 3 % in a decay).
+
+Not affected: water producers and pollution buildings, whose cost the game changes while they stand and copies into
+the building, keeping F in step (`ChangeBudgetItemCost` from `0x006DED5A` and `0x006E41CE`); transit lots, whose
+budget item is copied (`CopyBudgetItemProperties` from `0x00724037` / `0x007240C4`).
+
+Why the remedies work: a building plopped and bulldozed while the mod is active adds and removes the same cost. When
+the last building of a type is bulldozed, `cSC4ResidentialSimulator::DoBuildingChanged` (`0x006FB120`) removes the
+line item and its F (`0x006FB25A`). The power simulator (`0x006EBF60`) does not, so the second remedy can leave a
+residue for power plants.
+
+### The fix
+
+The module replaces vtable slot `0x00AB0F24` (`cSC4DepartmentBudget::RecalculateAllLineItemCurrentExpenses`,
+`0x006ABB50`) with a function that resyncs the department, then calls the game's function. The resync sets
+FullExpenses of every locally funded expense line item to the sum of the current costs of its buildings. It counts
+them exactly as the game does: it walks the department's set of (property holder, purpose) pairs (`+0x58`, count
+`+0x5C`) and adds every budget item of this department whose line is one of those line items, with no purpose
+filter. C / F then equals the buildings' own funding, so the slider stays where the player put it. The resync also
+runs when a city opens.
+
+- A mod's new cost applies to the buildings already in the city at once. Installing or removing the mod no longer
+  needs any bulldozing.
+- A line item whose buildings are all gone (power plants), or whose plugin was removed, goes back to 0.
+- The save format does not change. Without the DLL, a save loads as before.
+- The module checks the game version (1.1.641), the slot (it must hold `0x006ABB50`) and the vtables of the budget
+  simulator (`0x00AB0908`) and of each department (`0x00AB0EB0`) before reading them. Otherwise it does nothing and
+  `SC4SIM.log` says why. The slot is restored when the game closes.
+
+Sliders the bug has already moved stay where they are. To repair them, use `FundingReset` (every slider to 100 %) or
+`FundingReset <percent>`, or set the sliders again in the budget window. `FundingSliderResetStuck=true` does it
+automatically when a city opens, for departments that needed a resync and sit at 0 % or at their maximum.
+
+### Cheats
+
+| Cheat | Effect |
+| --- | --- |
+| `FundingResync` | Resyncs every department now and shows how many line items changed. |
+| `FundingReset [percent]` | Sets every department with locally funded buildings to `percent` (0–120, default 100), and every building's slider with it. |
+| `RemovePhantomBudgetItems <category> [all]` | See below. |
+
+### To check in game
+
+`SC4SIM.log`: `FundingSliderFix: department budgets resync full funding with the buildings' current costs every
+month.`, then, when a city opens, `FundingSliderFix: city opened, N line item(s) corrected in M department(s).` Every
+corrected line item is logged with its old and new full funding.
+
+Test: a city with 10 elementary schools; install a mod that lowers their cost; advance 3 months. Without the fix the
+education slider falls every month; with it, it stays put and the log shows the corrected full funding.
+
+## Phantom budget items (1.10.0)
+
+`[GameFixes] RemovePhantomBudgetItems=true` (default). Port of
+[sc4-remove-phantom-budget-items](https://github.com/0xC0000054/sc4-remove-phantom-budget-items) by Nicholas Hayes
+(MIT, `src/fixes/LICENSE-sc4-remove-phantom-budget-items.txt`), merged into SC4SIM with the author's consent.
+
+When a building's plugin is removed, the building stays in its department's budget list. The cheat
+`RemovePhantomBudgetItems <category> [all]` (category: `Fire`, `Police`, `Jail`, `Power`, `Education` or `Health`)
+removes from that category the buildings without an Exemplar Type property (`0x10`), that is, whose plugin is no
+longer installed, together with their line items. With `all` it clears the whole category. This is meant for
+entries that remain after every building of the category has been demolished. The buildings, lots and their other
+effects are not removed.
+
+Differences from the standalone DLL:
+
+- After a removal, SC4SIM resyncs the department at once, so the funding of the remaining buildings is right without
+  waiting for the next month.
+- If `SC4RemovePhantomBudgetItems.dll` is next to `SC4SIM.dll`, SC4SIM leaves the cheat to it and says so in the log.
+  Remove the standalone DLL to use the SC4SIM version.
+
+A removed plugin also feeds the funding slider bug: the game can no longer read the cost of those buildings, so the
+cost leaves C but stays in F. The resync keeps the slider steady until the entries are removed.
