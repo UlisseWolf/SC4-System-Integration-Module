@@ -249,6 +249,14 @@ salvate conservano il sollievo perso finora. È compatibile con SeaportDemandCap
 un'altra parte del codice). Solo SimCity 4 1.1.641. Impostazione: `[GameFixes] PortUpgradeFix` (attiva di default).
 Dettagli in `docs/game-fixes.md`.
 
+**Cap dei porti marittimi (1.11.0).** Il gioco moltiplica i viaggi dei porti per il fattore commerciale nel sollievo
+industriale e per quello industriale nel sollievo commerciale: con i valori di default ogni viaggio dà 2 di sollievo
+industriale invece di 20. La correzione fa usare a ciascun termine il proprio fattore. È il port di
+sc4-seaport-demand-cap-fix di Nicholas Hayes (LGPL 2.1), integrato con il consenso dell'autore. Il cheat
+`LogIndustrialDemandValues` scrive in `SC4SIM.log` domande e cap industriali. Se `SC4SeaportDemandCapFix.dll` è
+accanto a `SC4SIM.dll`, SC4SIM lascia la correzione alla DLL separata. Impostazione: `[GameFixes] SeaportDemandCapFix`
+(attiva di default).
+
 ## Priorità degli avvisi di sottofinanziamento (1.10.0)
 
 Il CAM include **Fixed Underfunded Notices (FUN)** di CoriBoom (CorinaMarie e Cyclone Boom), che rifà otto avvisi dei consiglieri:

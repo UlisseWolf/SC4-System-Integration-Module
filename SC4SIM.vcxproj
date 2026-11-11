@@ -74,6 +74,7 @@
     <ClCompile Include="src\fixes\TripCapacityFix.cpp" />
     <ClCompile Include="src\fixes\BudgetFixes.cpp" />
     <ClCompile Include="src\fixes\PortUpgradeFix.cpp" />
+    <ClCompile Include="src\fixes\SeaportDemandCapFix.cpp" />
     <ClCompile Include="src\advisors\UnderfundedNotices.cpp" />
     <ClCompile Include="src\afterlife\Afterlife.cpp" />
     <ClCompile Include="src\afterlife\AfterlifeModel.cpp" />
@@ -117,6 +118,7 @@
     <ClInclude Include="src\fixes\TripCapacityFix.h" />
     <ClInclude Include="src\fixes\BudgetFixes.h" />
     <ClInclude Include="src\fixes\PortUpgradeFix.h" />
+    <ClInclude Include="src\fixes\SeaportDemandCapFix.h" />
     <ClInclude Include="src\advisors\UnderfundedNotices.h" />
     <ClInclude Include="src\afterlife\Afterlife.h" />
     <ClInclude Include="src\afterlife\AfterlifeModel.h" />

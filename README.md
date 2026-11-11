@@ -319,6 +319,7 @@ Details, the news events and the tests are in [`docs/afterlife.md`](docs/afterli
 | | `FundingSliderResetStuck` | `false` | When a city opens and a department needed a resync, a department left at 0 % or at its maximum goes back to 100 %. |
 | | `RemovePhantomBudgetItems` | `true` | Registers the `RemovePhantomBudgetItems` cheat. |
 | | `PortUpgradeFix` | `true` | Fixes port upgrades: a staged seaport no longer loses its industrial cap relief at every upgrade. |
+| | `SeaportDemandCapFix` | `true` | Seaport trips give industrial cap relief with the industrial factor (port of sc4-seaport-demand-cap-fix); `LogIndustrialDemandValues` cheat. |
 | `[UnderfundedNotices]` | `Enabled` | `true` | Sets the priorities of the Fixed Underfunded Notices (FUN) when a city opens. |
 | | `Preset` | `Urgent` | `Urgent` or `MedHigh`, as CoriBoom's two files. |
 | | `HospitalUnderfunded`, `SchoolUnderfunded`, `LibraryUnderfunded`, `MuseumUnderfunded`, `HealthStrike`, `SchoolStrike`, `FireStrike`, `PoliceStrike` | empty | Priority of one notice over the preset: `VeryLow`, `Low`, `MedLow`, `MedMedLow`, `Medium`, `MedHigh`, `High`, `Urgent` or 0–100. |
@@ -409,6 +410,8 @@ Third-party code keeps its own license:
   MIT ([`src/water/LICENSE-sc4-advanced-water-management.txt`](src/water/LICENSE-sc4-advanced-water-management.txt));
 - `src/fixes/BudgetFixes.cpp`, `RemovePhantomBudgetItems` cheat: ported from sc4-remove-phantom-budget-items, MIT
   ([`src/fixes/LICENSE-sc4-remove-phantom-budget-items.txt`](src/fixes/LICENSE-sc4-remove-phantom-budget-items.txt));
+- `src/fixes/SeaportDemandCapFix.cpp`: ported from sc4-seaport-demand-cap-fix by Nicholas Hayes, LGPL 2.1, merged with
+  the author's consent ([`src/fixes/LICENSE-sc4-seaport-demand-cap-fix.txt`](src/fixes/LICENSE-sc4-seaport-demand-cap-fix.txt));
 - `vendor/gzcom-dll`: LGPL 2.1;
 - `vendor/mINI`: MIT.
 

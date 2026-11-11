@@ -76,6 +76,10 @@
 //    (industrial caps) and jobs at every upgrade: the old stage's demand effects are removed with its own building
 //    type before the next stage replaces it (src/fixes/PortUpgradeFix.cpp, [GameFixes] PortUpgradeFix).
 //    See docs/game-fixes.md.
+//  * Seaport demand cap fix: port of sc4-seaport-demand-cap-fix by Nicholas Hayes (LGPL 2.1), merged with the
+//    author's consent. Seaport trips use the industrial factor for industrial cap relief and the commercial factor
+//    for commercial relief (src/fixes/SeaportDemandCapFix.cpp, [GameFixes] SeaportDemandCapFix;
+//    LogIndustrialDemandValues cheat).
 // The reward creators themselves are Lua (create_reward_utilities, ...): reward scripts call them while the game
 // compiles them, before any DLL can reach the city's Lua, so they live in the SIM Lua package 0x0151A000.
 #include "SimLog.h"
@@ -87,6 +91,7 @@
 #include "fixes/TripCapacityFix.h"
 #include "fixes/BudgetFixes.h"
 #include "fixes/PortUpgradeFix.h"
+#include "fixes/SeaportDemandCapFix.h"
 #include "advisors/UnderfundedNotices.h"
 #include "version.h"
 
@@ -168,6 +173,7 @@ public:
 		TripCapacityFix::OnStart();
 		BudgetFixes::OnStart();
 		PortUpgradeFix::OnStart();
+		SeaportDemandCapFix::OnStart();
 		UnderfundedNotices::OnStart();
 		Afterlife::OnStart();
 		cIGZFrameWork* const framework = pCOM->FrameWork();
@@ -202,6 +208,7 @@ public:
 		TripCapacityFix::PostAppInit();
 		BudgetFixes::PostAppInit();
 		PortUpgradeFix::PostAppInit();
+		SeaportDemandCapFix::PostAppInit();
 
 		// Cheat codes (keepwires, ScanPumps, MixedOccupancy, IMZone, RemovePhantomBudgetItems...) are registered by the modules; the notification is added once here.
 		cISC4AppPtr app;
@@ -223,6 +230,7 @@ public:
 			cheatManager->RemoveNotification2(this, 0);
 			cheatManager.Reset();
 		}
+		SeaportDemandCapFix::PostAppShutdown();
 		PortUpgradeFix::PostAppShutdown();
 		BudgetFixes::PostAppShutdown();
 		TripCapacityFix::PostAppShutdown();
@@ -254,6 +262,7 @@ public:
 			ManufacturingZone::DoMessage(message);
 			Afterlife::DoMessage(message);
 			BudgetFixes::DoMessage(message);
+			SeaportDemandCapFix::DoMessage(message);
 		}
 		else if (type == AdvancedWater::kMessageSimNewMonth)
 		{

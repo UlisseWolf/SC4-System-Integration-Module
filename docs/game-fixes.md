@@ -187,11 +187,50 @@ simulator's vtable is `0x006A6C90`; the original call is restored when the game 
 written to `SC4SIM.log`.
 
 Cities saved with the bug keep the relief already lost; the fix only stops further losses. Nicholas Hayes's
-SeaportDemandCapFix changes the seaport trips term of the monthly connection demand (`0x006A3ED0`): it is a different
-part of the code and works together with this fix.
+SeaportDemandCapFix (included in SC4SIM, see below) changes the seaport trips term of the monthly connection demand
+(`0x006A3ED0`): it is a different part of the code and works together with this fix.
 
 ### To check in game
 
 Use a seaport of the BSC Functional Seaports with enough freight to upgrade. When it upgrades, `SC4SIM.log` shows
 `PortUpgradeFix: port at cell (x, z) upgrading from building 0x...`. The I-D, I-M and I-HT cap relief (data view or
 demand cheats) should grow with the stages instead of staying at the stage 1 value or dropping.
+
+## Seaport demand cap (1.11.0)
+
+`[GameFixes] SeaportDemandCapFix=true` (default). Port of sc4-seaport-demand-cap-fix by Nicholas Hayes (LGPL 2.1,
+`src/fixes/LICENSE-sc4-seaport-demand-cap-fix.txt`), merged into SC4SIM with the author's consent. Source:
+`src/fixes/SeaportDemandCapFix.cpp`. SimCity 4 1.1.641 only.
+
+### The bug
+
+Every month `cSC4DemandSimulator::EvaluateConnectionUtilization` (`0x006A3ED0`) turns the seaport trips into cap
+relief: industrial (accumulator `+0xAC`, applied to `0x4800` Industrial Connections and `0x4900`) and commercial
+(`+0xA8`, applied to `0x3800` Commercial Connections). The tuning exemplar of the demand simulator has one factor for
+each (`0x4A1F38C7` at `+0xCC`, default 2.0, and `0x4A1F38CA` at `+0xD8`, default 20; Maxis and CAM use the same
+values), but the game swaps them: the industrial term multiplies by `+0xCC` (`0x006A4A9E`) and the commercial term by
+`+0xD8` (`0x006A4AB8`). A seaport trip gives 2 of industrial relief instead of 20, and 20 of commercial relief instead
+of 2.
+
+Seaport relief reaches the industrial jobs through `0x4800` and the caps `0x4A00`, `0x4B00` and `0x4C00` (Maxis
+values 14000, 7000 and 4000), which cap the total I-D, I-M and I-HT demands `0x24200`, `0x24300` and `0x24400`.
+
+### The fix
+
+As in the original DLL, the displacements of the two FMUL instructions are swapped (`D8 8E CC 00 00 00` becomes
+`D8 8E D8 00 00 00` and the other way round). SC4SIM checks both instructions first: if another DLL has already fixed
+them it leaves them as they are, and if they are something else it patches nothing. The bytes are restored when the
+game closes. If `SC4SeaportDemandCapFix.dll` is next to `SC4SIM.dll`, SC4SIM leaves the patch and the cheat to it.
+
+### Cheat
+
+`LogIndustrialDemandValues` (same cheat as the original DLL) writes to `SC4SIM.log` the supply, demand and cap of the
+demands read by the original (`0x4300` and `0x4400`, index `0x20000`) and, to check the seaport relief itself,
+`0x4800`, `0x4A00`, `0x4B00`, `0x4C00` and `0x3800`. A demand the game does not hold at that index is logged as
+"not found".
+
+### To check in game
+
+The effect builds up month by month: the relief is recalculated at each monthly update and applied as a change from
+the previous month. Compare the same save with the fix on and off, in a city whose seaport is connected and used by
+freight trucks, after one or two months: `0x4800` and the industrial caps should be higher with the fix.

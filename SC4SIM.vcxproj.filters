@@ -27,6 +27,7 @@
     <ClCompile Include="src\fixes\TripCapacityFix.cpp"><Filter>Fixes</Filter></ClCompile>
     <ClCompile Include="src\fixes\BudgetFixes.cpp"><Filter>Fixes</Filter></ClCompile>
     <ClCompile Include="src\fixes\PortUpgradeFix.cpp"><Filter>Fixes</Filter></ClCompile>
+    <ClCompile Include="src\fixes\SeaportDemandCapFix.cpp"><Filter>Fixes</Filter></ClCompile>
     <ClCompile Include="src\advisors\UnderfundedNotices.cpp"><Filter>Advisors</Filter></ClCompile>
     <ClCompile Include="src\afterlife\Afterlife.cpp"><Filter>Afterlife</Filter></ClCompile>
     <ClCompile Include="src\afterlife\AfterlifeModel.cpp"><Filter>Afterlife</Filter></ClCompile>
@@ -54,6 +55,7 @@
     <ClInclude Include="src\fixes\TripCapacityFix.h"><Filter>Fixes</Filter></ClInclude>
     <ClInclude Include="src\fixes\BudgetFixes.h"><Filter>Fixes</Filter></ClInclude>
     <ClInclude Include="src\fixes\PortUpgradeFix.h"><Filter>Fixes</Filter></ClInclude>
+    <ClInclude Include="src\fixes\SeaportDemandCapFix.h"><Filter>Fixes</Filter></ClInclude>
     <ClInclude Include="src\advisors\UnderfundedNotices.h"><Filter>Advisors</Filter></ClInclude>
     <ClInclude Include="src\afterlife\Afterlife.h"><Filter>Afterlife</Filter></ClInclude>
     <ClInclude Include="src\afterlife\AfterlifeModel.h"><Filter>Afterlife</Filter></ClInclude>
