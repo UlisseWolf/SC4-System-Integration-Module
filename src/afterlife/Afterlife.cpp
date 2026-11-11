@@ -502,7 +502,7 @@ namespace
 		const auto getGrids = reinterpret_cast<GetPopulationGridsFn>((*reinterpret_cast<void***>(sim))[kGetPopulationGridsSlot]);
 		if (!ageGrid || !getGrids(sim, &population[0], &population[1], &population[2]) || !population[0] || !population[1] || !population[2])
 		{
-			for (PopulationGrid* grid : population) if (grid) grid->Release();
+			for (PopulationGrid* populationGrid : population) if (populationGrid) populationGrid->Release();
 			return waves;
 		}
 
