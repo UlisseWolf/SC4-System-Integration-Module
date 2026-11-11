@@ -45,6 +45,7 @@ such as NEON.
 | Manufacturing (I-M) zone | 1.8.0 | A zone of its own for manufacturing industry, on a reused zone slot (Spaceport by default): I-M grows only there, I-D and I-HT never do. `IMZone`, `IMZoneConvert` and `IMZoneInfo` cheats. |
 | Afterlife | 1.9.0 | The DLL version of `AFTERLIFE.lua`: fictitious Winner / Sinner / I.M.P. statistics, registered over the Lua functions, with the balance constants in the DLL and in `SC4SIM.ini`. 1.9.1: the real constants, a 60-character news roster and Afterlife headlines in the news ticker; `AFTERLIFE.lua` and `PACK_CONSTANTS.lua` are no longer needed. 1.9.2: Hell's natives (Hellborn) always outnumber the Souls in Hell, and Heaven gets its own native population (Heavenborn), always larger than the Souls in Heaven, shown in the church query. 1.9.3: deaths from the game's life expectancy and from the residential simulator's generation resets (old age or premature), judgment by the EQ of each wealth level, the education reference fixed (100 on the 0-200 EQ scale), the totals saved with the city. 1.9.4: deathcare, cemeteries and crematoria that collect the dead by radius and capacity, with uncollected dead lowering the health of their tract (see `docs/deathcare.md`). *Calculation checked against the reference Lua; news and queries tested in game, the 1.9.3 tract reading not yet.* |
 | Game fixes | 1.9.3 | `cSC4Lot::UpdateJobs` reads the $$ and $$$ trip capacities for their own wealth: fixes the "high-tech industry has no $$$ jobs" bug for every building (also the Medical Clinic, the solar and nuclear plants and mixed lots). Two bytes, checked before patching. 1.10.0: phantom funding sliders. A mod that changes the monthly cost of civic buildings already in the city no longer drives their funding sliders to 0 % or 120 %. The `FundingResync` and `FundingReset` cheats are included, along with `RemovePhantomBudgetItems`, merged from [sc4-remove-phantom-budget-items](https://github.com/0xC0000054/sc4-remove-phantom-budget-items) with the author's consent. See `docs/game-fixes.md`. *1.10.0 not yet tested in game.* |
+| Underfunded notice priorities | 1.10.0 | The priority of each of the eight notices of CoriBoom's Fixed Underfunded Notices (FUN, included in CAM) comes from `SC4SIM.ini`: the Urgent or Med-High preset of the two original files, or a priority per notice. See `docs/underfunded-notices.md`. *Not yet tested in game.* |
 | Advanced Water Management | 1.2.0 | The real efficiency of water buildings in the query dialog and tool tip, a monthly warning for fresh or salt water pumps that produce nothing, and the `ScanPumps` cheat. |
 
 ## Requirements
@@ -316,6 +317,9 @@ Details, the news events and the tests are in [`docs/afterlife.md`](docs/afterli
 | | `FundingSliderFix` | `true` | Fixes the phantom funding sliders: department budgets resync full funding with the buildings' current costs. |
 | | `FundingSliderResetStuck` | `false` | When a city opens and a department needed a resync, a department left at 0 % or at its maximum goes back to 100 %. |
 | | `RemovePhantomBudgetItems` | `true` | Registers the `RemovePhantomBudgetItems` cheat. |
+| `[UnderfundedNotices]` | `Enabled` | `true` | Sets the priorities of the Fixed Underfunded Notices (FUN) when a city opens. |
+| | `Preset` | `Urgent` | `Urgent` or `MedHigh`, as CoriBoom's two files. |
+| | `HospitalUnderfunded`, `SchoolUnderfunded`, `LibraryUnderfunded`, `MuseumUnderfunded`, `HealthStrike`, `SchoolStrike`, `FireStrike`, `PoliceStrike` | empty | Priority of one notice over the preset: `VeryLow`, `Low`, `MedLow`, `MedMedLow`, `Medium`, `MedHigh`, `High`, `Urgent` or 0–100. |
 | `[SC4PowerPoleCustomization]` | `Enabled` | `true` | Turns the custom power poles on or off. |
 | | `CrossZones` | `true` | Lets poles stand on empty zones and farm fields. |
 | | `DezoneUnderPoles` | `true` | Removes the zone from the cell of every new pole when the drag ends. |
@@ -370,6 +374,7 @@ src/water/           Advanced Water Management module (ported from sc4-advanced-
 src/mixed/           mixed R, C and I occupancy module
 src/zones/           manufacturing (I-M) zone module
 src/afterlife/       Afterlife module (statistics and news roster)
+src/advisors/        advisor notices (Fixed Underfunded Notices priorities)
 src/fixes/           game bug fixes (trip capacity by wealth, budget: phantom funding sliders and phantom budget items)
 lua/                 sim_advisor_rewards.lua (advisor reward creators)
 docs/                power-pole, mixed occupancy, I-M zone and Afterlife documentation and README.it.md (Italian notes)
@@ -386,6 +391,7 @@ SC4SIM.ini           settings template
   and [sc4-query-ui-hooks](https://github.com/0xC0000054/sc4-query-ui-hooks), and
   [sc4-remove-phantom-budget-items](https://github.com/0xC0000054/sc4-remove-phantom-budget-items), merged into
   SC4SIM with his consent.
+- **CoriBoom**: Fixed Underfunded Notices (FUN), included in CAM.
 - **nsgomez**: [gzcom-dll](https://github.com/nsgomez/gzcom-dll).
 - **metayeti**: [mINI](https://github.com/metayeti/mINI).
 

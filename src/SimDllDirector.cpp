@@ -67,6 +67,9 @@
 //    FundingSliderFix; FundingResync and FundingReset cheats). See docs/game-fixes.md.
 //  * RemovePhantomBudgetItems cheat: port of sc4-remove-phantom-budget-items by Nicholas Hayes (MIT), merged with the
 //    author's consent.
+//  * Fixed Underfunded Notices (FUN) by CoriBoom, included in CAM: the priority of each of its eight notices comes
+//    from SC4SIM.ini ([UnderfundedNotices]: Urgent or MedHigh preset, per-notice overrides), set in the advisor Lua
+//    when a city opens (src/advisors). See docs/underfunded-notices.md.
 // The reward creators themselves are Lua (create_reward_utilities, ...): reward scripts call them while the game
 // compiles them, before any DLL can reach the city's Lua, so they live in the SIM Lua package 0x0151A000.
 #include "SimLog.h"
@@ -77,6 +80,7 @@
 #include "zones/ManufacturingZone.h"
 #include "fixes/TripCapacityFix.h"
 #include "fixes/BudgetFixes.h"
+#include "advisors/UnderfundedNotices.h"
 #include "version.h"
 
 #include "cIGZCOM.h"
@@ -156,6 +160,7 @@ public:
 		ManufacturingZone::OnStart();
 		TripCapacityFix::OnStart();
 		BudgetFixes::OnStart();
+		UnderfundedNotices::OnStart();
 		Afterlife::OnStart();
 		cIGZFrameWork* const framework = pCOM->FrameWork();
 		if (framework->GetState() < cIGZFrameWork::kStatePreAppInit) framework->AddHook(this);
@@ -229,6 +234,7 @@ public:
 			ManufacturingZone::DoMessage(message);
 			Afterlife::DoMessage(message);
 			BudgetFixes::DoMessage(message);
+			UnderfundedNotices::DoMessage(message);
 		}
 		else if (type == kMsgPreCityShutdown || type == kMsgCheatIssued)
 		{

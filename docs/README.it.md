@@ -240,6 +240,24 @@ di Nicholas Hayes (MIT), integrato con il consenso dell'autore. Se `SC4RemovePha
 `SC4SIM.dll`, SC4SIM lascia il cheat alla DLL separata: rimuovila per usare la versione integrata. Impostazione:
 `[GameFixes] RemovePhantomBudgetItems`. Dettagli in `docs/game-fixes.md`.
 
+## Priorità degli avvisi di sottofinanziamento (1.10.0)
+
+Il CAM include **Fixed Underfunded Notices (FUN)** di CoriBoom, che rifà otto avvisi dei consiglieri:
+- il sottofinanziamento di ospedali, scuole, biblioteche e musei;
+- gli scioperi di ospedali, scuole, pompieri e polizia.
+
+CoriBoom l'aveva pubblicato in due file che cambiano solo quattro priorità: "Urgent" e "Med-High". Con SC4SIM la
+priorità si sceglie in `SC4SIM.ini`, sezione `[UnderfundedNotices]`:
+- `Preset=Urgent` (tutti urgenti, come il file incluso nel CAM) oppure `Preset=MedHigh` (come l'altro file);
+- una chiave per avviso, che vale più del preset: `HospitalUnderfunded`, `SchoolUnderfunded`, `LibraryUnderfunded`,
+  `MuseumUnderfunded`, `HealthStrike`, `SchoolStrike`, `FireStrike`, `PoliceStrike`;
+- valori: `VeryLow`, `Low`, `MedLow`, `MedMedLow`, `Medium`, `MedHigh`, `High`, `Urgent` oppure un numero da 0 a 100.
+
+Un avviso compare come finestra solo se la sua priorità raggiunge la soglia del livello di difficoltà (Facile 60,
+Medio 80, Difficile 100); altrimenti resta nel pannello dei consiglieri. La DLL scrive le priorità nei record Lua
+degli avvisi a ogni apertura della città, e solo se sono quelli di FUN. Lo script e i testi di FUN restano invariati.
+Dettagli in `docs/underfunded-notices.md`.
+
 ## Advanced Water Management (1.2.0)
 
 Porting nel SC4SIM.dll di [sc4-advanced-water-management](https://github.com/0xC0000054/sc4-advanced-water-management)
