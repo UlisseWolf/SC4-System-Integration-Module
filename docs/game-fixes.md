@@ -106,7 +106,7 @@ automatically when a city opens, for departments that needed a resync and sit at
 
 | Cheat | Effect |
 | --- | --- |
-| `FundingResync` | Resyncs every department now and shows how many line items changed. |
+| `FundingResync` | Resyncs every department now and shows how many line items changed. Diagnostic: registered only with `[SC4SIM] DebugCheats=true` (the fix resyncs by itself). |
 | `FundingReset [percent]` | Sets every department with locally funded buildings to `percent` (0–120, default 100), and every building's slider with it. |
 | `RemovePhantomBudgetItems <category> [all]` | See below. |
 
@@ -224,7 +224,7 @@ game closes. If `SC4SeaportDemandCapFix.dll` is next to `SC4SIM.dll`, SC4SIM lea
 
 ### Cheat
 
-`LogIndustrialDemandValues` (same cheat as the original DLL) writes to `SC4SIM.log` the supply, demand and cap of the
+`LogIndustrialDemandValues` (same cheat as the original DLL; registered only with `[SC4SIM] DebugCheats=true`) writes to `SC4SIM.log` the supply, demand and cap of the
 demands read by the original (`0x4300` and `0x4400`, index `0x20000`) and, to check the seaport relief itself,
 `0x4800`, `0x4A00`, `0x4B00`, `0x4C00` and `0x3800`. A demand the game does not hold at that index is logged as
 "not found".

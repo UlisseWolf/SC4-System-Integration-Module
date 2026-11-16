@@ -94,6 +94,8 @@
 //  * Water: both query table entries patched; non-producers left to the game. Budget: funded-item references released.
 //    Mixed: one secondary type per class in the census, trips appended like the game, commercial trip lists left alone,
 //    GetJobs declared void. Standalone DLLs detected wherever they are loaded. [DEBUG] lines only with DebugLog.
+//  * Diagnostic cheats (MixedOccupancy, IMZoneInfo, FundingResync, LogIndustrialDemandValues) only with
+//    [SC4SIM] DebugCheats=true.
 // The reward creators themselves are Lua (create_reward_utilities, ...): reward scripts call them while the game
 // compiles them, before any DLL can reach the city's Lua, so they live in the SIM Lua package 0x0151A000.
 #include "SimLog.h"

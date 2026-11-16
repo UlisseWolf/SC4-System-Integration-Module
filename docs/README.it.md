@@ -135,7 +135,7 @@ Per i lotti misti:
   CS$$). La 1.5.0 li impostava una volta al mese; la 1.5.1 toglie questo passaggio;
 - il censimento della domanda (`PerformCensus`, chiamate 0x006A7475 e 0x006A74AB) conta anche i tipi secondari.
 
-Il trucco `MixedOccupancy` scrive ogni lotto misto in `SC4SIM.log` e segnala i tipi secondari con una ricchezza
+Il trucco `MixedOccupancy` (solo con `[SC4SIM] DebugCheats=true`) scrive ogni lotto misto in `SC4SIM.log` e segnala i tipi secondari con una ricchezza
 diversa da quella del lotto (il gioco non li riempie); non cambia niente. Con `DebugLog=true` lo stesso resoconto
 viene scritto a ogni inizio mese. Limiti:
 - viaggi (1.7.0): il gioco crea i viaggi solo in base alla zona del lotto (pendolari in zona R, merci in zona I,
@@ -188,7 +188,7 @@ a +0x00 ed è lo slot 9 della vtable dello sviluppatore, `IsRCIZone` e `PlaceZon
 del gestore zone, senza chiamate dirette. Dettagli in `docs/manufacturing-zone.md`.
 
 Trucchi: `IMZone` attiva/disattiva il pennello, `IMZoneConvert` converte in zona I-M ogni casella vuota di industria
-densa, `IMZoneInfo` scrive stato e contatori in `SC4SIM.log`.
+densa, `IMZoneInfo` (solo con `[SC4SIM] DebugCheats=true`) scrive stato e contatori in `SC4SIM.log`.
 
 Limiti: una città salvata con zone I-M e aperta senza il modulo le vede come Spaceport;
 inquinamento, traffico e crimine potrebbero trattare la zona come lo slot originale. Analisi completa e punti da
@@ -230,7 +230,7 @@ subito anche per gli edifici esistenti e non serve demolire nulla. Solo SimCity 
 - `[GameFixes] FundingSliderFix` (attiva di default).
 - `FundingSliderResetStuck` (disattivata di default): all'apertura della città riporta al 100 % i dipartimenti
   corretti che erano a 0 % o al massimo.
-- Cheat `FundingResync`: riallinea subito.
+- Cheat `FundingResync`: riallinea subito (solo con `[SC4SIM] DebugCheats=true`, è diagnostico).
 - Cheat `FundingReset [percentuale]`: imposta tutti gli slider, 100 di default. Serve a ripristinare gli slider già
   spostati dal bug.
 
@@ -254,7 +254,7 @@ Dettagli in `docs/game-fixes.md`.
 industriale e per quello industriale nel sollievo commerciale: con i valori di default ogni viaggio dà 2 di sollievo
 industriale invece di 20. La correzione fa usare a ciascun termine il proprio fattore. È il port di
 sc4-seaport-demand-cap-fix di Nicholas Hayes (LGPL 2.1), integrato con il consenso dell'autore. Il cheat
-`LogIndustrialDemandValues` scrive in `SC4SIM.log` domande e cap industriali. Se `SC4SeaportDemandCapFix.dll` è
+`LogIndustrialDemandValues` (solo con `[SC4SIM] DebugCheats=true`) scrive in `SC4SIM.log` domande e cap industriali. Se `SC4SeaportDemandCapFix.dll` è
 accanto a `SC4SIM.dll`, SC4SIM lascia la correzione alla DLL separata. Impostazione: `[GameFixes] SeaportDemandCapFix`
 (attiva di default).
 

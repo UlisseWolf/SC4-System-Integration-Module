@@ -13,6 +13,7 @@ namespace
 	std::FILE* file = nullptr;
 	std::mutex lock;
 	std::atomic<bool> debug = false;
+	bool debugCheats = false;
 }
 
 void SimLog::Open()
@@ -22,6 +23,8 @@ void SimLog::Open()
 	wchar_t path[MAX_PATH]{};
 	if (GetModuleFileNameW(reinterpret_cast<HMODULE>(&__ImageBase), path, MAX_PATH) == 0) return;
 	const std::filesystem::path log = std::filesystem::path(path).replace_filename(L"SC4SIM.log");
+	const std::filesystem::path ini = std::filesystem::path(path).replace_filename(L"SC4SIM.ini");
+	debugCheats = GetPrivateProfileIntW(L"SC4SIM", L"DebugCheats", 0, ini.c_str()) != 0;
 	_wfopen_s(&file, log.c_str(), L"w");
 }
 
@@ -42,3 +45,4 @@ void SimLog::Write(Level level, const char* format, ...)
 
 void SimLog::SetDebug(bool enabled) { debug = enabled; }
 bool SimLog::DebugEnabled() { return debug; }
+bool SimLog::DebugCheatsEnabled() { return debugCheats; }

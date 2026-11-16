@@ -125,7 +125,7 @@ simulator); one install serves every later city.
    - **`IMZoneRevert`** cheat: the way back. Turns every *empty* I-M cell into dense industry again and reports how many
      cells of developed lots are still I-M; zone those with the Dense Industrial tool (brush off) before opening the
      city without the DLL.
-4. **`IMZoneInfo`** cheat: writes the status and counters to the log: I-M construction profiles redirected, stage
+4. **`IMZoneInfo`** cheat (registered only with `[SC4SIM] DebugCheats=true`): writes the status and counters to the log: I-M construction profiles redirected, stage
    checks passed in the slot, brush placements, and the slot's cell count, zone size and drag colour.
 
 ## Data the DLL does not provide

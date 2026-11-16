@@ -1159,9 +1159,10 @@ void ManufacturingZone::PostAppInit()
 	cISC4AppPtr app;
 	if (cIGZCheatCodeManager* cheats = app ? app->GetCheatCodeManager() : nullptr)
 	{
+		// IMZoneInfo is diagnostic (log report): only with [SC4SIM] DebugCheats=true.
 		const bool ok = cheats->RegisterCheatCode(kCheatBrush, cRZBaseString("IMZone"))
 			&& cheats->RegisterCheatCode(kCheatConvert, cRZBaseString("IMZoneConvert"))
-			&& cheats->RegisterCheatCode(kCheatInfo, cRZBaseString("IMZoneInfo"))
+			&& (!SimLog::DebugCheatsEnabled() || cheats->RegisterCheatCode(kCheatInfo, cRZBaseString("IMZoneInfo")))
 			&& cheats->RegisterCheatCode(kCheatRevert, cRZBaseString("IMZoneRevert"));
 		if (ok) cheatManager = cheats;
 		else SimLog::Write(SimLog::Level::Warning, "ManufacturingZone: could not register the IMZone cheats.");

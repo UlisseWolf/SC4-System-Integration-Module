@@ -1052,14 +1052,16 @@ void MixedOccupancy::PostAppInit()
 	cISC4AppPtr app;
 	if (cIGZCheatCodeManager* cheats = app ? app->GetCheatCodeManager() : nullptr)
 	{
-		if (cheats->RegisterCheatCode(kMixedOccupancyCheatID, cRZBaseString("MixedOccupancy")))
+		// Diagnostic (log report): only with [SC4SIM] DebugCheats=true.
+		if (SimLog::DebugCheatsEnabled() && cheats->RegisterCheatCode(kMixedOccupancyCheatID, cRZBaseString("MixedOccupancy")))
 		{
 			cheatManager = cheats;
 		}
 	}
 	SimLog::Write(SimLog::Level::Info,
 		"MixedOccupancy: enabled (R, C and I joint occupancy: lot capacity, occupancy, census and traffic hooks, "
-		"MixedOccupancy cheat). Mixed traffic: %s.", mixedTraffic ? "on" : "off (MixedTraffic=false)");
+		"MixedOccupancy cheat %s). Mixed traffic: %s.", cheatManager ? "on" : "off (DebugCheats=false)",
+		mixedTraffic ? "on" : "off (MixedTraffic=false)");
 }
 
 void MixedOccupancy::PostAppShutdown()

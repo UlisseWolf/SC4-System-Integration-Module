@@ -617,7 +617,8 @@ void BudgetFixes::PostAppInit()
 
 	if (hookInstalled)
 	{
-		cheats->RegisterCheatCode(kCheatFundingResync, cRZBaseString("FundingResync"));
+		// FundingResync is diagnostic (the fix resyncs by itself at city open and every month): DebugCheats only.
+		if (SimLog::DebugCheatsEnabled()) cheats->RegisterCheatCode(kCheatFundingResync, cRZBaseString("FundingResync"));
 		cheats->RegisterCheatCode(kCheatFundingReset, cRZBaseString("FundingReset"));
 	}
 

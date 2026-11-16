@@ -226,7 +226,8 @@ void SeaportDemandCapFix::PostAppInit()
 
 	cISC4AppPtr app;
 	cIGZCheatCodeManager* cheats = app ? app->GetCheatCodeManager() : nullptr;
-	if (cheats)
+	// LogIndustrialDemandValues is diagnostic (log report): only with [SC4SIM] DebugCheats=true.
+	if (cheats && SimLog::DebugCheatsEnabled())
 	{
 		cheatManager = cheats;
 		cheatRegistered = cheats->RegisterCheatCode(kCheatLogIndustrialDemandValues, cRZBaseString(kCheatLogIndustrialDemandValuesName));

@@ -178,7 +178,7 @@ the building's own wealth; industrial types have a fixed wealth:
   zones. SC4SIM also lets secondary residents commute and secondary industry ship freight, with the game's
   formulas, and a lot can hold both kinds of trips. Secondary shop and industry jobs also count in the lot's trip
   capacity, so commuters can work there. `MixedTraffic=false` turns all of this off.
-- **`MixedOccupancy` cheat.** Writes every mixed lot, with the population and capacity of each type, to
+- **`MixedOccupancy` cheat** (diagnostic: needs `[SC4SIM] DebugCheats=true`). Writes every mixed lot, with the population and capacity of each type, to
   `SC4SIM.log`. It also flags a secondary type whose wealth differs from the lot's, because the game never fills
   it. It changes nothing.
 
@@ -205,7 +205,7 @@ save format is sized for them, so the new zone **reuses a slot**: Spaceport (13)
 - **Placing it.** The `IMZone` cheat toggles a brush: while it is on, the **Dense Industrial** zone tool places the
   I-M zone. `IMZoneConvert` turns every empty dense industrial cell into the I-M zone; `IMZoneRevert` turns every
   empty I-M cell back into dense industry (do it, and rezone the I-M lots, before removing the DLL).
-- **`IMZoneInfo` cheat.** Writes the status and counters to `SC4SIM.log`.
+- **`IMZoneInfo` cheat** (diagnostic: needs `[SC4SIM] DebugCheats=true`). Writes the status and counters to `SC4SIM.log`.
 - **Safety.** The DLL measures the game's functions before patching them (vtable addresses, calling convention,
   argument order, the answers of the original rule functions) and installs nothing it cannot confirm.
 
@@ -301,6 +301,7 @@ Details, the news events and the tests are in [`docs/afterlife.md`](docs/afterli
 
 | Section | Key | Default | Effect |
 | --- | --- | --- | --- |
+| `[SC4SIM]` | `DebugCheats` | `false` | Registers the diagnostic cheats too (`MixedOccupancy`, `IMZoneInfo`, `FundingResync`, `LogIndustrialDemandValues`). |
 | `[AdvancedWaterManagement]` | `Enabled` | `true` | Turns Advanced Water Management on or off. |
 | `[MixedOccupancy]` | `Enabled` | `true` | Turns mixed R, C and I occupancy on or off. |
 | | `DebugLog` | `false` | Writes the cheat's report of the mixed lots to `SC4SIM.log` at the start of every month. |
@@ -321,7 +322,7 @@ Details, the news events and the tests are in [`docs/afterlife.md`](docs/afterli
 | | `FundingSliderResetStuck` | `false` | When a city opens and a department needed a resync, a department left at 0 % or at its maximum goes back to 100 %. |
 | | `RemovePhantomBudgetItems` | `true` | Registers the `RemovePhantomBudgetItems` cheat. |
 | | `PortUpgradeFix` | `true` | Fixes port upgrades: a staged seaport no longer loses its industrial cap relief at every upgrade. |
-| | `SeaportDemandCapFix` | `true` | Seaport trips give industrial cap relief with the industrial factor (port of sc4-seaport-demand-cap-fix); `LogIndustrialDemandValues` cheat. |
+| | `SeaportDemandCapFix` | `true` | Seaport trips give industrial cap relief with the industrial factor (port of sc4-seaport-demand-cap-fix); `LogIndustrialDemandValues` cheat with `[SC4SIM] DebugCheats=true`. |
 | `[UnderfundedNotices]` | `Enabled` | `true` | Sets the priorities of the Fixed Underfunded Notices (FUN) when a city opens. |
 | | `Preset` | `Urgent` | `Urgent` or `MedHigh`, as CoriBoom's two files. |
 | | `HospitalUnderfunded`, `SchoolUnderfunded`, `LibraryUnderfunded`, `MuseumUnderfunded`, `HealthStrike`, `SchoolStrike`, `FireStrike`, `PoliceStrike` | empty | Priority of one notice over the preset: `VeryLow`, `Low`, `MedLow`, `MedMedLow`, `Medium`, `MedHigh`, `High`, `Urgent` or 0–100. |
