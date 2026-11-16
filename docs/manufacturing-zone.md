@@ -1,7 +1,6 @@
 # Manufacturing (I-M) zone
 
-> **Off by default, opt-in** (`Enabled=true` to turn it on; since 1.11.1). Once installed it acts in every city of
-> the session: I-M stops growing in dense and medium industrial everywhere, and cities saved with I-M cells show
+> **On by default** (`Enabled=false` turns it off). Once installed it acts in every city of the session: I-M stops growing in dense and medium industrial everywhere, and cities saved with I-M cells show
 > Spaceport (or Military) zones without the DLL. Checked against the 1.1.641 executable, emulated and tested in game.
 > Try it on a copy of a region first, and read [Saved cities](#saved-cities).
 
@@ -113,8 +112,8 @@ simulator); one install serves every later city.
 
 ## Using it
 
-1. Turn the zone on with `[ManufacturingZone] Enabled=true` in `SC4SIM.ini` (it is off by default); set `ZoneSlot=10` if
-   you do not want 13.
+1. The zone is on by default (`[ManufacturingZone] Enabled=true` in `SC4SIM.ini`); set `ZoneSlot=10` if you do not
+   want 13.
 2. Open a city and check `SC4SIM.log`. It should report the measured convention of `GrowthStageFitsInZone`, the
    construction-profile offset, and a line like
    `ManufacturingZone: zone slot 13. I-M redirect on, stage hook on, IsRCIZone on, land value range 0-255, IMZone brush on.`
@@ -160,7 +159,7 @@ the remaining I-M lots) before removing the DLL or setting `Enabled=false`.
 
 ```ini
 [ManufacturingZone]
-Enabled=false        ; off by default (opt-in); true turns the module on
+Enabled=true         ; on by default; false turns the module off
 ZoneSlot=13          ; 13 Spaceport (default) or 10 Military; any other value is refused
 StageHook=true       ; required for the redirect: without it the module changes nothing
 RCIZoneHook=true     ; IsRCIZone true for the slot

@@ -72,7 +72,7 @@ it and says so in the log:
    - `PowerPoleCustomization: installed N of N patches`;
    - `AdvancedWater: installed the water building query UI hook`;
    - `MixedOccupancy: enabled (...)`;
-   - `ManufacturingZone: off (opt-in ...)` (off by default; `enabled, zone slot 13 ...` once turned on);
+   - `ManufacturingZone: enabled, zone slot 13 ...` (on by default);
    - `Afterlife: run_afterlife_balance_variables registered` when a city opens;
    - `FundingSliderFix: department budgets resync full funding with the buildings' current costs every month.`
    - `PortUpgradeFix: port upgrades remove the old stage's demand effects before the new stage replaces it.`
@@ -192,8 +192,8 @@ The reverse-engineering notes are in [`docs/mixed-occupancy.md`](docs/mixed-occu
 
 ## Manufacturing (I-M) zone
 
-> **Off by default (opt-in, since 1.11.1).** Set `Enabled=true` in `[ManufacturingZone]` to turn it on: it then acts in
-> every city you open. Checked against the 1.1.641 executable and tested in game.
+> **On by default.** Set `Enabled=false` in `[ManufacturingZone]` to turn it off. It acts in every city you open.
+> Checked against the 1.1.641 executable and tested in game.
 > Test it on a copy of a region.
 
 In the base game the I-D, I-M and I-HT developers all ask for the same zone, so dirty, manufacturing and high-tech
@@ -306,7 +306,7 @@ Details, the news events and the tests are in [`docs/afterlife.md`](docs/afterli
 | | `DebugLog` | `false` | Writes the cheat's report of the mixed lots to `SC4SIM.log` at the start of every month. |
 | | `MixedTraffic` | `true` | Commuters and freight for the secondary classes, and secondary jobs as commute destinations. |
 | `[Afterlife]` | `Enabled` | `true` | Registers the DLL version of the Afterlife functions in the advisor Lua. |
-| `[ManufacturingZone]` | `Enabled` | `false` | Turns the I-M zone on (opt-in). |
+| `[ManufacturingZone]` | `Enabled` | `true` | Turns the I-M zone on or off. |
 | | `ZoneSlot` | `13` | Zone slot reused for the I-M zone: 13 Spaceport or 10 Military (other values refused). |
 | | `StageHook` | `true` | Every growth stage fits the slot; required for the I-M redirect. |
 | | `RCIZoneHook` | `true` | `IsRCIZone` answers true for the slot. |

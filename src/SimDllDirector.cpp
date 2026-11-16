@@ -88,7 +88,7 @@
 //    connection-point tables (Read no longer writes into the shared vanilla tables); RemoveConnection re-aligns
 //    follow-span pads; zoned cells keep the game's building/network/lot checks; GetControlPoints is called __thiscall;
 //    no exception on non-ANSI paths; interdependent patches are installed all-or-nothing and verified before writing.
-//  * Manufacturing zone: off by default (opt-in), ZoneSlot 10 or 13 only, IMZoneRevert cheat.
+//  * Manufacturing zone: ZoneSlot 10 or 13 only, IMZoneRevert cheat.
 //  * Afterlife/Deathcare: real generation resets only (not ageing/averaging onto the reset age), reset age read from the
 //    game tuning, void grid getters, DEATHCARE_NOTIFY_NEARLY_FULL=0 means never, state kept in the city file.
 //  * Water: both query table entries patched; non-producers left to the game. Budget: funded-item references released.
