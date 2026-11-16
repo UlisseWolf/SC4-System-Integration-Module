@@ -35,18 +35,24 @@ So the wire can pass over a zone, but no pole can stand on it: a zone or a field
 ## The patch
 
 The two calls at `0x0064FF3E` and `0x006509AD` are redirected (rel32 `CALL`, target checked against
-`0x0064FD00` before patching) to `CellIsOKForPlacementHook`. It calls the original function and, when the result
-is 1 or 2, looks at the lot on the cell:
+`0x0064FD00` before patching) to `CellIsOKForPlacementHook`. Since 1.11.1 the hook no longer turns the zoned 1 into 0
+by itself: that skipped the occupant and lot checks, which vanilla never runs on a zoned cell, so a pole could stand on
+a network piece or on a building occupant without a lot. Instead, while one of the two hooked calls runs, the zoned
+branch (13 bytes at `0x0064FDA0`, `mov [esp+14h],1; jmp 0x0064FE64`, byte-checked) jumps to the occupant checks at
+`0x0064FDAD` with the result still 0 and records that the cell is zoned. The hook then answers:
 
 | Cell | Vanilla | With the patch |
 | --- | --- | --- |
 | no zone, no lot | 0 | 0 |
-| empty zone (no lot) | 1 | **0** |
+| empty zone (no lot, no building or network piece) | 1 | **0** |
 | farm field (zoned lot without a building) | 1 or 2 | **0** |
+| zoned cell with a network piece or a building occupant without a lot | 1 | 1 (unchanged) |
 | lot with a building | 1 or 2 | unchanged |
-| building occupant without a lot | 2 | unchanged |
+| building occupant without a lot (no zone) | 2 | unchanged |
 
-The relocation at `0x0065210B` is left vanilla, so poles moved by a zone change still avoid zones.
+The branch patch and the two call sites are installed together or not at all.
+The relocation at `0x0065210B` calls with the branch disarmed and is left vanilla, so poles moved by a zone change still
+avoid zones.
 
 `CrossZones=false` in `[SC4PowerPoleCustomization]` of `SC4SIM.ini` turns the patch off without
 uninstalling it.

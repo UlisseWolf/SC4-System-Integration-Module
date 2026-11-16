@@ -3,6 +3,7 @@
 #include <Windows.h>
 #include <cstdio>
 #include <filesystem>
+#include <atomic>
 #include <mutex>
 
 EXTERN_C IMAGE_DOS_HEADER __ImageBase;
@@ -11,7 +12,7 @@ namespace
 {
 	std::FILE* file = nullptr;
 	std::mutex lock;
-	bool debug = false;
+	std::atomic<bool> debug = false;
 }
 
 void SimLog::Open()
@@ -26,6 +27,7 @@ void SimLog::Open()
 
 void SimLog::Write(Level level, const char* format, ...)
 {
+	if (level == Level::Debug && !debug) return; // [DEBUG] lines only with DebugLog=true
 	std::scoped_lock guard(lock);
 	if (!file) return;
 	static const char* const prefix[] = { "INFO", "WARNING", "ERROR", "DEBUG" };

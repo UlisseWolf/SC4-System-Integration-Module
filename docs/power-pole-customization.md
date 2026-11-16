@@ -82,7 +82,15 @@ model-dependent case is a 45-degree turn of the pad for RKT1 instances `0x0503xx
 | `0xB22A000A` | Power Pole Foundation Half Extent | Float32 | Pad half-extent in meters. `5.0` matches vanilla. `0` collapses the pad and walls to a degenerate point -- the safe way to hide the foundation entirely, since it needs no texture to resolve. Clamped to 50. |
 | `0xB22A000B` | Power Pole Foundation Floor Texture ID | Uint32 | Overrides the floor's texture-cache lookup key (vanilla `0x0912220E`). |
 | `0xB22A000C` | Power Pole Foundation Wall Texture ID | Uint32 | Overrides the walls' texture-cache lookup key (vanilla `0x08080004`). |
-| `0xB22A0011` | Power Pole Foundation Follow Span | Bool | `true` yaw-rotates the pad (floor and walls) so it follows the pole's span bearing instead of staying axis-aligned. The rotation is the minimal deviation from the nearest 90-degree step, so walls keep their vanilla sides; junction poles whose connections disagree on a bearing stay axis-aligned. Rebuilt live whenever a connection is added or updated. Pairs well with FAR poles. |
+| `0xB22A0011` | Power Pole Foundation Follow Span | Bool | `true` yaw-rotates the pad (floor and walls) so it follows the pole's span bearing instead of staying axis-aligned. The rotation is the minimal deviation from the nearest 90-degree step, so walls keep their vanilla sides; junction poles whose connections disagree on a bearing stay axis-aligned. Rebuilt live whenever a connection is added, updated or (since 1.11.1) removed. Pairs well with FAR poles. |
+
+**1.11.1 fixes.** The floor and wall texture IDs never applied before 1.11.1: `Draw()` runs on the occupant's
+interface subobject at +0x120 and the hook looked the pole up with that pointer; it now converts it. The binding
+reload after registering a texture resets the engine's zoom global to its unset value 5 (zooms are 0-4); the former
+0 left a texture registered while the camera was at zoom 0 unbound, and the next draw dereferenced it. Per-wire
+width, wire/buoy textures and buoy size are resolved while drawing, from the pole, the connection and the wire index,
+instead of tables keyed by memory addresses: they now survive saving and reloading a city (the game restores the
+wires without calling AddConnection/UpdateConnection) and the removal of a neighbouring span.
 
 **Texture ID validation (2026-07-19)**: custom texture IDs are validated and registered at load.
 The engine keeps its own power-pole texture registry seeded with only the four vanilla IDs, and

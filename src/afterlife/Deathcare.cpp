@@ -40,6 +40,7 @@
 
 #include "Deathcare.h"
 #include "SimLog.h"
+#include "VersionDetection.h"
 #include "SC4NotificationDialog.h"
 #include "QueryUIHooks/cIBuildingQueryDialogHookTarget.h"
 #include "QueryUIHooks/cIBuildingQueryHookServer.h"
@@ -334,7 +335,10 @@ namespace
 	// ---------------------------------------------------------------- effects
 
 	using FloatGrid = cISC4SimGrid<float>;
-	using GetHQGridsFn = bool(__thiscall*)(cISC4ResidentialSimulator*, FloatGrid**, FloatGrid**, FloatGrid**);
+	// cSC4ResidentialSimulator::GetHQGrids (0x006F7300) returns void: it stores the three grid pointers, AddRefs each
+	// and returns without setting EAX, so a bool return would be the low byte of the last AddRef's reference count.
+	// Success is judged by the three pointers alone.
+	using GetHQGridsFn = void(__thiscall*)(cISC4ResidentialSimulator*, FloatGrid**, FloatGrid**, FloatGrid**);
 	constexpr int kGetHQGridsSlot = 24; // checked in 1.1.641: three out pointers, each AddRef'd
 
 	double UncollectedPercent(const Deathcare::TractGrid& tracts, uint32_t key, double dead)
@@ -348,10 +352,12 @@ namespace
 	void LowerHealth(const Deathcare::TractGrid& tracts)
 	{
 		cISC4ResidentialSimulator* const sim = city ? city->GetResidentialSimulator() : nullptr;
-		if (!sim || uncollected.empty()) return;
+		// GetHQGrids is a raw vtable slot checked on 1.1.641 only.
+		if (!sim || uncollected.empty() || VersionDetection::GetInstance().GetGameVersion() != 641) return;
 		FloatGrid* hq[3]{};
 		const auto getGrids = reinterpret_cast<GetHQGridsFn>((*reinterpret_cast<void***>(sim))[kGetHQGridsSlot]);
-		if (!getGrids(sim, &hq[0], &hq[1], &hq[2]) || !hq[0] || !hq[1] || !hq[2])
+		getGrids(sim, &hq[0], &hq[1], &hq[2]);
+		if (!hq[0] || !hq[1] || !hq[2])
 		{
 			for (FloatGrid* grid : hq) if (grid) grid->Release();
 			return;
@@ -624,7 +630,9 @@ void Deathcare::RunMonth(const TractGrid& tracts, const std::vector<double>& dea
 		if (f.used > 0) gravesUsed[key] = f.used;
 		if (f.emptying) emptying.insert(key);
 		totals.gravesUsed += f.used;
-		if (f.capacity > 0 && f.used >= settings.notifyNearlyFull * f.capacity) totals.cemeteriesNearlyFull++;
+		// DEATHCARE_NOTIFY_NEARLY_FULL=0 means "never": with 0 every cemetery would count as nearly full.
+		if (settings.notifyNearlyFull > 0 && f.capacity > 0 && f.used >= settings.notifyNearlyFull * f.capacity)
+			totals.cemeteriesNearlyFull++;
 	}
 	totals.collected = totals.cremated + totals.buried;
 	totals.relocation = relocation;

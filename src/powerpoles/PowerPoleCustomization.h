@@ -10,9 +10,9 @@ namespace PowerPoleCustomization
 	// Reads the [SC4PowerPoleCustomization] and [PowerPoles.*] sections of SC4SIM.ini.
 	void OnStart();
 	// Checks the game version (1.1.641 only), installs the patches and registers the keepwires cheat.
-	// The director subscribes to PreCityShutdown and the cheat messages and forwards them to DoMessage.
+	// The director subscribes to PostCityInit, PreCityShutdown and the cheat messages and forwards them to DoMessage.
 	bool PostAppInit(cIGZMessageTarget2* target);
 	void PostAppShutdown(cIGZMessageTarget2* target);
-	// PreCityShutdown and cheat-code messages received by the director.
+	// PostCityInit, PreCityShutdown and cheat-code messages received by the director.
 	void DoMessage(cIGZMessage2* message);
 }

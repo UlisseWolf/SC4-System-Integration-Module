@@ -19,7 +19,9 @@
 //     test becomes "land value 0-255", always true, and the checks after it still run.
 //  4. IsRCIZone (0x004DC300): true for the new zone (RCIZoneHook).
 //  5. PlaceZone (zone manager vtable): with the IMZone brush on, the Dense Industrial zone tool places the new zone.
-//     IMZoneConvert turns every empty dense industrial cell of the city into the new zone.
+//     IMZoneConvert turns every empty dense industrial cell of the city into the new zone; IMZoneRevert turns every
+//     empty cell of the new zone back into dense industry (the way back before opening a city without the module).
+//  The module is opt-in (Enabled=false by default): once the redirect is installed it acts in every city.
 //  6. Zone tuning (ReadSimulatorTunableValues, call at 0x004DE192): after the game reads the Zone Manager exemplar,
 //     the slot gets the sizes and costs of medium industry and its own texture and drag colour, so a zoning mod that
 //     overrides the exemplar does not undo them (IndustrialTuning, ZoneTexture, DragColour).
@@ -105,6 +107,7 @@ namespace
 	constexpr uint32_t kCheatBrush = 0x8E9F3630;    // IMZone
 	constexpr uint32_t kCheatConvert = 0x8E9F3631;  // IMZoneConvert
 	constexpr uint32_t kCheatInfo = 0x8E9F3632;     // IMZoneInfo
+	constexpr uint32_t kCheatRevert = 0x8E9F3633;   // IMZoneRevert
 
 	using ZoneType = cISC4ZoneManager::ZoneType;
 	using DeveloperType = cISC4BuildingDevelopmentSimulator::DeveloperType;
@@ -112,7 +115,10 @@ namespace
 
 	struct Settings
 	{
-		bool enabled = true;
+		// Opt-in: once the redirect is installed, I-M demand asks for the slot in every city of the session, so I-M
+		// stops growing in dense/medium industrial everywhere, and cities saved with I-M cells show Spaceport (or
+		// Military) zones without this module. It must be a choice, never a default.
+		bool enabled = false;
 		uint32_t slot = 13;
 		bool stageHook = true;
 		bool rciZoneHook = true;
@@ -1015,6 +1021,51 @@ namespace
 		Notify(text.c_str());
 	}
 
+	// The way back from IMZoneConvert: every empty cell of the slot becomes dense industrial again (with the brush
+	// off, so the PlaceZone hook does not turn it straight back into the slot). Lots are never touched; the I-M lots
+	// still in the slot are counted, and the Dense Industrial zone tool (brush off) rezones them like any lot.
+	void RevertToDenseIndustry()
+	{
+		cISC4ZoneManager* const zoneManager = city ? city->GetZoneManager() : nullptr;
+		cISC4LotManager* const lotManager = city ? city->GetLotManager() : nullptr;
+		if (!zoneManager || !lotManager)
+		{
+			Notify("No city is open.");
+			return;
+		}
+		const bool savedBrush = brushOn;
+		brushOn = false;
+		uint32_t reverted = 0, refused = 0, lotCells = 0;
+		const auto slot = static_cast<ZoneType>(settings.slot);
+		const int32_t sizeX = static_cast<int32_t>(city->CellCountX());
+		const int32_t sizeZ = static_cast<int32_t>(city->CellCountZ());
+		for (int32_t x = 0; x < sizeX; ++x)
+		{
+			for (int32_t z = 0; z < sizeZ; ++z)
+			{
+				if (zoneManager->GetZoneType(x, z) != slot) continue;
+				if (lotManager->GetLot(x, z, false))
+				{
+					++lotCells;
+					continue;
+				}
+				SC4CellRegion<int32_t> region(x, z, x, z, true);
+				const bool ok = zoneManager->PlaceZone(region, ZoneType::IndustrialHighDensity, true, true, false, true, true, nullptr, nullptr, 0);
+				++(ok ? reverted : refused);
+			}
+		}
+		brushOn = savedBrush;
+		std::string text = "IMZoneRevert: " + std::to_string(reverted) + " empty I-M cell(s) turned back into dense industry";
+		if (refused) text += ", " + std::to_string(refused) + " refused by the game";
+		text += ".";
+		if (lotCells)
+		{
+			text += " " + std::to_string(lotCells) + " cell(s) of developed lots are still I-M: zone them with the Dense Industrial"
+				" tool (IMZone brush off) before opening the city without SC4SIM.";
+		}
+		Notify(text.c_str());
+	}
+
 	void Report()
 	{
 		SimLog::Write(SimLog::Level::Info, "ManufacturingZone: slot %u, I-M redirect %s, brush %s.", settings.slot,
@@ -1067,7 +1118,7 @@ void ManufacturingZone::OnStart()
 	GetModuleFileNameW(reinterpret_cast<HMODULE>(&__ImageBase), modulePath, MAX_PATH);
 	const std::filesystem::path ini = std::filesystem::path(modulePath).replace_filename(L"SC4SIM.ini");
 
-	settings.enabled = ParseBool(ReadIni(ini, L"Enabled", L"true"), true);
+	settings.enabled = ParseBool(ReadIni(ini, L"Enabled", L"false"), false);
 	settings.stageHook = ParseBool(ReadIni(ini, L"StageHook", L"true"), true);
 	settings.rciZoneHook = ParseBool(ReadIni(ini, L"RCIZoneHook", L"true"), true);
 	settings.ignoreLandValue = ParseBool(ReadIni(ini, L"IgnoreLandValue", L"true"), true);
@@ -1076,14 +1127,19 @@ void ManufacturingZone::OnStart()
 	settings.dragColour = ReadHex(ini, L"DragColour", settings.dragColour);
 	settings.cursor = ReadHex(ini, L"Cursor", settings.cursor);
 	settings.zoneName = ReadHex(ini, L"ZoneName", settings.zoneName);
+	// Only Military (10) and Spaceport (13) are free: the game zones every placed lot's cells from its zone type
+	// (cSC4ViewInputControlPlaceLot::PlaceLot 0x004C1740), so with Airport (11) or Seaport (12) every airport or
+	// seaport would become I-M zone cells.
 	const uint32_t slot = static_cast<uint32_t>(GetPrivateProfileIntW(L"ManufacturingZone", L"ZoneSlot", 13, ini.c_str()));
-	if (slot >= 10 && slot <= 13)
+	if (slot == 10 || slot == 13)
 	{
 		settings.slot = slot;
 	}
 	else
 	{
-		SimLog::Write(SimLog::Level::Warning, "ManufacturingZone: ZoneSlot=%u is not 10-13: using 13 (Spaceport).", slot);
+		SimLog::Write(SimLog::Level::Warning,
+			"ManufacturingZone: ZoneSlot=%u refused (only 10 Military or 13 Spaceport; 11 and 12 are the game's airports and "
+			"seaports): using 13 (Spaceport).", slot);
 	}
 }
 
@@ -1091,15 +1147,9 @@ void ManufacturingZone::PostAppInit()
 {
 	if (!settings.enabled)
 	{
-		SimLog::Write(SimLog::Level::Info, "ManufacturingZone: disabled in SC4SIM.ini (Enabled=false).");
+		SimLog::Write(SimLog::Level::Info, "ManufacturingZone: off (opt-in: [ManufacturingZone] Enabled=true in SC4SIM.ini).");
 		return;
 	}
-	if (settings.slot == 11 || settings.slot == 12)
-	{
-		SimLog::Write(SimLog::Level::Warning, "ManufacturingZone: ZoneSlot=%u is the %s zone, which the game uses: expect conflicts.",
-			settings.slot, settings.slot == 11 ? "Airport" : "Seaport");
-	}
-
 	if (VersionDetection::GetInstance().GetGameVersion() == 641)
 	{
 		// Zone tuning, cursor and parcels are code and data of the executable: patched once, before any city loads.
@@ -1111,7 +1161,8 @@ void ManufacturingZone::PostAppInit()
 	{
 		const bool ok = cheats->RegisterCheatCode(kCheatBrush, cRZBaseString("IMZone"))
 			&& cheats->RegisterCheatCode(kCheatConvert, cRZBaseString("IMZoneConvert"))
-			&& cheats->RegisterCheatCode(kCheatInfo, cRZBaseString("IMZoneInfo"));
+			&& cheats->RegisterCheatCode(kCheatInfo, cRZBaseString("IMZoneInfo"))
+			&& cheats->RegisterCheatCode(kCheatRevert, cRZBaseString("IMZoneRevert"));
 		if (ok) cheatManager = cheats;
 		else SimLog::Write(SimLog::Level::Warning, "ManufacturingZone: could not register the IMZone cheats.");
 	}
@@ -1125,6 +1176,7 @@ void ManufacturingZone::PostAppShutdown()
 		cheatManager->UnregisterCheatCode(kCheatBrush);
 		cheatManager->UnregisterCheatCode(kCheatConvert);
 		cheatManager->UnregisterCheatCode(kCheatInfo);
+		cheatManager->UnregisterCheatCode(kCheatRevert);
 		cheatManager.Reset();
 	}
 	Uninstall();
@@ -1165,6 +1217,7 @@ void ManufacturingZone::DoMessage(cIGZMessage2* message)
 		case kCheatBrush: ToggleBrush(); break;
 		case kCheatConvert: ConvertDenseIndustry(); break;
 		case kCheatInfo: Report(); break;
+		case kCheatRevert: RevertToDenseIndustry(); break;
 		}
 		break;
 	}

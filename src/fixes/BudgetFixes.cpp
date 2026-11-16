@@ -409,9 +409,19 @@ namespace
 	{
 		orphanedBuildingOccupants.clear();
 
-		// The game's GetLocallyFundedItemsByPurpose (0x006AA9C0) returns no value: only the list is used.
+		// The game's GetLocallyFundedItemsByPurpose (0x006AA9C0) returns no value: only the list is used. Each element
+		// it pushes is a cRZAutoRefCount copy, i.e. AddRef'd, and SC4List<cISCPropertyHolder*> (the gzcom-dll
+		// declaration) never releases them: every element is released below, once it has been used.
 		SC4List<cISCPropertyHolder*> locallyFundedItems;
 		pDepartmentBudget->GetLocallyFundedItemsByPurpose(purposeID, locallyFundedItems);
+		struct ReleaseElements
+		{
+			SC4List<cISCPropertyHolder*>& list;
+			~ReleaseElements()
+			{
+				for (cISCPropertyHolder* holder : list) if (holder) holder->Release();
+			}
+		} releaseElements{ locallyFundedItems };
 
 		for (cISCPropertyHolder* propertyHolder : locallyFundedItems)
 		{
@@ -615,11 +625,12 @@ void BudgetFixes::PostAppInit()
 	{
 		SimLog::Write(SimLog::Level::Info, "RemovePhantomBudgetItems: disabled in SC4SIM.ini.");
 	}
-	else if (std::filesystem::exists(ModuleFolder() / L"SC4RemovePhantomBudgetItems.dll"))
+	else if (GetModuleHandleW(L"SC4RemovePhantomBudgetItems.dll") != nullptr)
 	{
+		// Loaded from anywhere in the Plugins folder (the game scans it recursively), not only next to SC4SIM.dll.
 		SimLog::Write(SimLog::Level::Warning,
-			"RemovePhantomBudgetItems: SC4RemovePhantomBudgetItems.dll is installed next to SC4SIM.dll; the standalone DLL "
-			"handles the cheat. Remove it to use the SC4SIM version.");
+			"RemovePhantomBudgetItems: SC4RemovePhantomBudgetItems.dll is loaded (somewhere in the Plugins folder); the "
+			"standalone DLL handles the cheat. Remove it to use the SC4SIM version.");
 	}
 	else
 	{

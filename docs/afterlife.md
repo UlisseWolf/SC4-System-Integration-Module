@@ -117,11 +117,17 @@ of their tract. See [deathcare.md](deathcare.md).
 
 ## Saved with the city (1.9.3)
 
-The game saves nothing about deaths. When it saves a city, the DLL writes the cumulative populations
-(`WINNER_POPULATION_HEAVEN`, `SINNER_POPULATION_HELL`, `REDEEMED_TOTAL`, `IMP_KILLS_TOTAL`) to `SC4SIM_Afterlife.ini`,
-next to the DLL, in a section named after the city's serial number (`City.XXXXXXXX`); when the city opens they are
-read back and the native populations recomputed. A city closed without saving reopens with the values of its last
-save. `SAVE_WITH_CITY=0` turns this off.
+The game saves nothing about deaths. Since 1.11.1, when it saves a city the DLL writes the cumulative populations
+(`WINNER_POPULATION_HEAVEN`, `SINNER_POPULATION_HELL`, `REDEEMED_TOTAL`, `IMP_KILLS_TOTAL`) and the deathcare state into
+the **city file itself**, as a record of its own (type/group `5C4DA1FE`, instance `00000001`, text `KEY=VALUE` lines),
+on the game's save message (`0x26C63344`, which carries the city file); when the city opens they are read back on the
+load message (`0x26C63341`) and the native populations recomputed. A copied or restored city therefore carries its own
+state. The game ignores the unknown record, so the city still opens without SC4SIM.
+
+Before 1.11.1 the values went to `SC4SIM_Afterlife.ini`, next to the DLL, in a section named after the city's serial
+number (`City.XXXXXXXX`), so a copied or restored city (same serial) inherited another save's state. That file is now
+read only for a city with no record yet (saved by an older version), and written only if the city file refuses the
+record. A city closed without saving reopens with the values of its last save. `SAVE_WITH_CITY=0` turns this off.
 
 ## Constants
 
@@ -133,7 +139,7 @@ of `SC4SIM.ini` (a commented line keeps the default):
 | Group | Keys and defaults |
 | --- | --- |
 | Mortality | `LIFE_EXPECTANCY_DEATH_SCALE` 1.0 (1.9.3); without a life expectancy: `BASE_MORTALITY_RATE_PER_CAPITA` 0.0006, `HEALTH_COVERAGE_WEIGHT` 1.5 |
-| Generation resets (1.9.3) | `WAVE_DEATH_SHARE` 0.05, `MAX_WAVE_DEATH_FRACTION_POP` 0.01, `PREMATURE_SIN_BONUS` 0.1; DLL settings `DEATH_WAVES` 1, `TRACT_RESET_AGE` 40, `CHRONIC_RESET_INTERVAL_MONTHS` 12, `SAVE_WITH_CITY` 1 |
+| Generation resets (1.9.3) | `WAVE_DEATH_SHARE` 0.05, `MAX_WAVE_DEATH_FRACTION_POP` 0.01, `PREMATURE_SIN_BONUS` 0.1; DLL settings `DEATH_WAVES` 1, `TRACT_RESET_AGE` 0 (= the game's tuning), `CHRONIC_RESET_INTERVAL_MONTHS` 12, `SAVE_WITH_CITY` 1 |
 | Judgment | `EDUCATION_REFERENCE` 100 (1.9.3; was 500), `BASE_SIN_RATIO` 0.5, `CRIME_WEIGHT` 0.3, `EDUCATION_WEIGHT` 0.3, `SIN_RATIO_MIN` 0.1, `SIN_RATIO_MAX` 0.9 |
 | I.M.P. | `IMP_CLIENT_RATIO` 0.002, `IMP_SUCCESS_CHANCE` 0.15, `IMP_KILL_RANDOM_VARIANCE` 2, `MAX_IMP_KILL_FRACTION_POP` 0.01 |
 | Redemption | `REDEMPTION_RATIO` 0.0015 |
@@ -147,7 +153,12 @@ Heaven. If `SC4SIM.ini` lowers the ratios too far, the DLL adds Imps (Hell) or A
 
 `game.ga_education` is the city's EQ, on a 0-200 scale. The old `EDUCATION_REFERENCE` of 500 (marked *TUNE THIS*) was
 above the whole scale, so education always pushed toward Sinner; since 1.9.3 it is 100, the middle of the scale.
-`TRACT_RESET_AGE` must match the reset age of the residential tuning exemplar (property `0xCA027307`, default 40).
+Since 1.11.1 the reset age is read from the residential tuning exemplar itself (`6534284A-E7E2C2DB-69189C84`, property
+`0xCA027307`, default 40), so a mod that changes it is followed; `TRACT_RESET_AGE` (a number above 0) overrides it.
+A generation reset is counted only when a tract comes down to the reset age from an age above it that had reached the
+life expectancy: `DoPopulationChange` (0x006FA450) also lands on the reset age by the December ageing (39 + 1) and by
+averaging with newcomers, and those months killed no one (before 1.11.1 they were counted as deaths and fed the
+deathcare health penalty and aura). With a life expectancy below the reset age every visit resets, as before.
 A value that is not a number is ignored with a warning in `SC4SIM.log`; `EDUCATION_REFERENCE=0` is changed to 1.
 If one of the four `game` inputs is missing, `run_afterlife_balance_variables` returns nothing, changes no state, and
 `SC4SIM.log` lists the missing names once per city.
@@ -157,7 +168,7 @@ If one of the four `game` inputs is missing, `run_afterlife_balance_variables` r
 - **Random numbers** come from a generator seeded once from the operating system's entropy (the old Lua used
   `game.g_population`). Only the I.M.P. kill jitter and the ticker pick are random.
 - **Cumulative values** (`WINNER_POPULATION_HEAVEN`, `SINNER_POPULATION_HELL`, `REDEEMED_TOTAL`, `IMP_KILLS_TOTAL`)
-  are kept by the DLL and saved in `SC4SIM_Afterlife.ini` when the city is saved (see [Saved with the city](#saved-with-the-city-193)).
+  are kept by the DLL and saved in the city file when the city is saved (see [Saved with the city](#saved-with-the-city-193)).
 - A fractional `IMP_KILL_RANDOM_VARIANCE` is truncated to an integer, as `math.random` does in Lua 5.0; a negative one
   is treated as 0.
 

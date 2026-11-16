@@ -85,7 +85,9 @@
 #include <cstdint>
 #include <cstring>
 #include <filesystem>
+#include <functional>
 #include <limits>
+#include <memory>
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
@@ -96,6 +98,7 @@ namespace {
     constexpr uint32_t kDirectorID = 0xB07E11E5; // arbitrary, must not collide with another director in this Plugins folder
     constexpr uint16_t kSupportedGameVersion = 641;
     constexpr uint32_t kCheatCodeMessageType = 0x230E27AC; // fixed SC4 message type, same constant every sample uses
+    constexpr uint32_t kSC4MessagePostCityInit = 0x26D31EC1;
     constexpr uint32_t kSC4MessagePreCityShutdown = 0x26D31EC2; // same constant DateJumper/RenderServices use
 
     // Experimental, deliberately runtime-scoped switch: while enabled, the lot developer's
@@ -122,8 +125,8 @@ namespace {
     // tConnection vector at +0xac/+0xb0, calls the cSC4Occupant base dtor on +0x8). Its sole
     // caller is the scalar deleting destructor at 0x0064e380, which then returns the 292-byte
     // object to the fixed pool at 0x00b0c0c8. Hooking that one call site lets this DLL drop its
-    // side-table entries for a pole the moment the engine destroys it -- without this, demolished
-    // poles leave stale gOverrides/gPolylineWidthOverrides entries behind and the pool's address
+    // override for a pole the moment the engine destroys it -- without this, demolished
+    // poles leave stale gOverrides entries behind and the pool's address
     // reuse can briefly pair a new pole with a dead pole's customization.
     constexpr uintptr_t kDestructor = 0x0064dfc0;
     constexpr uintptr_t kDestructor_CallSite_DeletingDtor = 0x0064e383;
@@ -170,7 +173,7 @@ namespace {
 
     constexpr uint32_t kVanillaPointsPerDirection = 4; // engine's hardcoded baked-table arity
     constexpr uint32_t kVanillaDirectionStrideBytes = 0x30; // 4 points x 12 bytes, per the baked tables
-    constexpr float kCellSize = 16.0f; // matches this project's existing convention (TerrainDiagonalFixDirector.cpp)
+    constexpr float kCellSize = 16.0f; // one city cell is 16 m
 
     // ------------------------------------------------------------------
     // tConnection -- one entry in a pole's connections vector (kOccupant_ConnectionsBegin/End),
@@ -186,7 +189,7 @@ namespace {
     constexpr uint32_t kConnection_PolylinesBegin = 0x14; // vector<vector<cS3DVector3>>
     constexpr uint32_t kConnection_PolylinesEnd = 0x18;
     // Second vector<vector<cS3DVector3>> (confirmed 2026-07-19 via AddConnection's decompile and
-    // DrawPowerlines' reads at [entry+0x20]/[entry+0x24]): coarse 4-point copies of each strand,
+    // DrawPowerlines' reads at [entry+0x20]/[entry+0x24]): coarse 3-point copies of each strand,
     // built by AddConnection ONLY when the span crosses water (terrain service vtbl+0x88 test); the
     // 0xC9AF0FCD texture draws its buoys. Same element layout and the same insert/erase helpers as
     // the regular list. Vanilla resizes each copy to 3 points (push 3 at 0x0064D842) and fills it
@@ -216,12 +219,16 @@ namespace {
     // Bezier control-point solver (2 endpoints -> 2 control points + a length-based tessellation
     // count), and the segment tessellator it feeds. Both confirmed via clean, self-contained
     // decompiles (no register-spill ambiguity, unlike AddConnection's own messy decompile).
-    // GetControlPoints ends in `RET 0x24` (callee cleans 9*4 stack bytes) -- __stdcall, not
-    // __cdecl. Confirmed in-game (2026-07-01): declaring it __cdecl double-cleaned the stack on
-    // every call (caller AND callee both popping), causing a delayed __report_gsfailure.
+    // cSC4PowerPoleOccupant::GetControlPoints is a member function: __thiscall, `this` in ECX,
+    // callee cleans its 9 stack arguments (`RET 0x24`). Both vanilla callers (0x0064d71e in
+    // UpdateConnection, 0x0064e675 in AddConnection) load the pole into ECX first. The body does
+    // not read ECX today, which is why the former __stdcall declaration happened to work; the
+    // pole is passed anyway so the call matches the real signature.
+    // (Declaring it __cdecl double-cleaned the stack on every call, 2026-07-01.)
     constexpr uintptr_t kGetControlPoints = 0x0064a6c0;
-    using GetControlPointsFn = void(__stdcall*)(float x1, float y1, float z1, float x2, float y2, float z2,
-                                                 float* outControl1, float* outControl2, int32_t* outCount);
+    using GetControlPointsFn = void(__thiscall*)(void* pole, float x1, float y1, float z1, float x2, float y2,
+                                                  float z2, float* outControl1, float* outControl2,
+                                                  int32_t* outCount);
 
     // Writes `count` tessellated points starting at byte address `outFirstPoint`, given the 4 bezier
     // control points (p0, ctrl1, ctrl2, p1) each as a 3-float pointer. Confirmed standalone.
@@ -298,7 +305,7 @@ namespace {
     // Optional non-negative Float32: scales the water-crossing buoy/ball quads (1.0 = vanilla).
     constexpr uint32_t kPropWaterBuoySizeScale = 0xB22A0012;
     // Optional Uint32: points per water-crossing strand polyline; the engine draws points-1 balls,
-    // so vanilla's 4 points = 3 balls. Clamped to [2, 17] (1-16 balls).
+    // so vanilla's 3 points = 2 balls. Clamped to [2, 17] (1-16 balls).
     constexpr uint32_t kPropWaterBuoyPointCount = 0xB22A0013;
     constexpr std::array<uint32_t, 4> kAttachPointProperties = {
         kPropAttachPointsDir0, kPropAttachPointsDir1, kPropAttachPointsDir2, kPropAttachPointsDir3,
@@ -363,13 +370,15 @@ namespace {
     // same read-only bucket walk Draw performs; verification failure falls back to the vanilla
     // texture instead of trusting the insert. ChangeZoomLevel reloads the binding of every
     // registered entry whenever the zoom global at 0x00b0c0a8 differs from the draw context's
-    // zoom, so zeroing that global right after inserting forces the engine itself to load the new
-    // texture on the next frame -- no manual texture-manager call needed.
+    // zoom, so resetting that global to its unset value (5; zooms are 0-4) right after inserting
+    // forces the engine itself to load the new texture on the next frame -- no manual
+    // texture-manager call needed.
     constexpr uintptr_t kPoleTextureRegistry = 0x00b46784;
     constexpr uintptr_t kPoleTextureRegistryInsert = 0x004f8d30;
     constexpr uintptr_t kPoleTextureBucketsBegin = 0x00b46788;
     constexpr uintptr_t kPoleTextureBucketsEnd = 0x00b4678c;
     constexpr uintptr_t kPoleTextureZoomGlobal = 0x00b0c0a8;
+    constexpr uint32_t kPoleTextureZoomUnset = 5; // zooms are 0-4; the global starts at 5
     constexpr uint32_t kFshTypeId = 0x7ab50e44;
     constexpr uint32_t kPoleTextureGroupId = 0x1abe787d; // group ChangeZoomLevel loads bindings from
 
@@ -660,30 +669,29 @@ namespace {
 
     // this(cSC4PowerPoleOccupant*) -> override. Entries exist only when at least one valid attach-
     // point or wire-appearance property is present. Everything else stays entirely vanilla.
+    //
+    // This is the only per-pole side table. Per-wire width, wire/buoy textures and buoy size are not
+    // stored per connection or per polyline buffer: the DrawPowerlines hooks receive the pole, the
+    // tConnection entry and the polyline being drawn, and resolve the value from gOverrides on the
+    // spot (pole, connection's other pole, wire index = position in the entry's polyline list). A
+    // table keyed by raw tConnection/buffer addresses went stale when RemoveConnection (0x0064DA00)
+    // shifted the remaining entries down by assignment (the inner vectors keep their buffers but
+    // receive another span's points), when Read (0x0064EA00) restored wires without going through
+    // AddConnection/UpdateConnection (so nothing was registered after loading a save), and when a
+    // freed buffer was reused by another pole. Nothing can go stale when nothing is cached.
     std::unordered_map<void*, PoleAttachOverride> gOverrides;
+    // Bumped on every change of gOverrides; invalidates the one-entry caches of the draw hooks.
+    uint32_t gOverridesGeneration = 1;
+    // False until the destructor hook (which drops a dying pole's entry) is installed.
+    bool gOverridesAllowed = false;
 
-    struct PolylineWidthOverride {
-        void* owner = nullptr;
-        std::array<float, kPowerLineZoomCount> widthByZoom{};
-    };
-
-    // Keyed by the inner vector's point-buffer address. Outer vector reallocation deep-copies the
-    // inner vectors, so registrations are made only after the full connection rebuild is complete.
-    std::unordered_map<const void*, PolylineWidthOverride> gPolylineWidthOverrides;
-
-    // Per-connection wire/buoy texture override, keyed by the tConnection entry address DrawPowerlines
-    // holds in EBP at both texture-lookup sites. Entry addresses move when a pole's connections
-    // vector reallocates, so RegisterOccupantConnectionTextures() erases-by-owner and re-registers
-    // every render-owner entry of the pole on each AddConnection/UpdateConnection -- the only
-    // operations that grow the vector. A shrink (neighbor demolition) keeps the buffer, and because
-    // the texture pair is uniform across one pole's connections, a shifted-but-still-registered
-    // entry resolves to the same texture either way.
-    struct ConnectionTextureOverride {
-        void* owner = nullptr;
-        uint32_t strandTextureId = kVanillaWireStrandTextureId;
-        uint32_t buoyTextureId = kVanillaWireBuoyTextureId;
-    };
-    std::unordered_map<const void*, ConnectionTextureOverride> gConnectionTextureOverrides;
+    // Private connection-point tables for poles whose exemplar leaves InitConnectionPoints without
+    // a table (see RepairMissingConnectionPointTable). cSC4PowerPoleOccupant::Read (0x0064EA00)
+    // writes the four saved wire points of direction 0 through the occupant's table pointer, so a
+    // pole pointed at the shared static tables would overwrite the table every vanilla pole uses.
+    // The arrays are heap nodes, so their addresses survive rehashing; freed with the pole.
+    constexpr size_t kConnectionPointTableFloats = 4 * kVanillaPointsPerDirection * 3; // 0xC0 bytes
+    std::unordered_map<void*, std::unique_ptr<std::array<float, kConnectionPointTableFloats>>> gPrivateConnectionTables;
 
     // ------------------------------------------------------------------
     // Property reading. cISCPropertyHolder doesn't have a typed array getter (SCPropertyUtil only
@@ -865,8 +873,11 @@ namespace {
         }
         *slot = 0; // fresh node: no binding yet (StaticInit zeroes its own fresh slots the same way)
         // Force the engine to reload every registered binding (including this one) on the next
-        // Draw: zoom values are 1-5, so 0 always mismatches.
-        *reinterpret_cast<uint32_t*>(kPoleTextureZoomGlobal) = 0;
+        // Draw. Zoom levels are 0-4 (cSC4CameraControl ctor 0x007CC990: min 0, max 4) and the
+        // global holds 5 until the first pole draw, so 5 (the engine's own "unset" value) always
+        // mismatches. 0 would not: a texture registered while the camera is at zoom 0 would keep
+        // its null binding and DrawPowerlines/Draw would dereference it.
+        *reinterpret_cast<uint32_t*>(kPoleTextureZoomGlobal) = kPoleTextureZoomUnset;
         gRegisteredPoleTextures.insert(textureId);
         LOG_INFO("PowerPoleCustomization: registered {} texture ID 0x{:08X} with the engine's "
                  "power-pole texture registry.", use, textureId);
@@ -1109,8 +1120,8 @@ namespace {
 
     // ------------------------------------------------------------------
     // Vanilla attach-point read, reimplemented for the case where a pole has no override -- exact
-    // same arithmetic as the original GetLineConnectionPoints (inlined into AddConnection /
-    // UpdateConnection on Windows, so it has no address of its own to call into): table base is
+    // same arithmetic as the original GetLineConnectionPoints (its own function at 0x00649BA0, not
+    // inlined; reimplemented here rather than called so the yaw rotation can be applied): table base is
     // read from this+kOccupant_ConnectionPointTablePtr, point N of direction D is the cS3DVector3
     // at (D & 3) * 0x30 + N * 0xc, translated by this pole's world position -- with the one
     // deliberate addition that the model-local offset is yaw-rotated first (see above).
@@ -1212,14 +1223,14 @@ namespace {
     // both are vector<vector<cS3DVector3>> and share the engine insert helper). Vanilla still
     // supplies its horizontal control geometry and tessellation count; only the vertical sag
     // component is scaled/clamped per wire.
-    void AppendPolylineToList(void* entry, const uint32_t listBeginOffset, const uint32_t listEndOffset,
+    void AppendPolylineToList(void* pole, void* entry, const uint32_t listBeginOffset, const uint32_t listEndOffset,
                               const AttachPoint& a, const AttachPoint& b,
                               const float sagScale, const float maximumSag) {
         float control1[3];
         float control2[3];
         int32_t pointCount = 0;
         const auto getControlPoints = reinterpret_cast<GetControlPointsFn>(kGetControlPoints);
-        getControlPoints(a.x, a.y, a.z, b.x, b.y, b.z, control1, control2, &pointCount);
+        getControlPoints(pole, a.x, a.y, a.z, b.x, b.y, b.z, control1, control2, &pointCount);
         AdjustControlPointSag(control1, a, b, sagScale, maximumSag);
         AdjustControlPointSag(control2, a, b, sagScale, maximumSag);
         pointCount = std::clamp(pointCount, 2, 64); // vanilla treats this as total points, including p0
@@ -1240,9 +1251,9 @@ namespace {
         insert(polylines, insertPos, view, 0, 1, 1);
     }
 
-    void AppendPolylineToConnection(void* entry, const AttachPoint& a, const AttachPoint& b,
+    void AppendPolylineToConnection(void* pole, void* entry, const AttachPoint& a, const AttachPoint& b,
                                     const float sagScale, const float maximumSag) {
-        AppendPolylineToList(entry, kConnection_PolylinesBegin, kConnection_PolylinesEnd,
+        AppendPolylineToList(pole, entry, kConnection_PolylinesBegin, kConnection_PolylinesEnd,
                              a, b, sagScale, maximumSag);
     }
 
@@ -1250,7 +1261,7 @@ namespace {
     // totalPoints + 1 uniform points along the sagged bezier and drops the t = 0 one, so the stored
     // points sit at t = k/totalPoints for k = 1..totalPoints (vanilla: count 3, t = 1/3, 2/3, 1). The
     // engine draws a buoy at every point except the last, so neither pole wears one.
-    void AppendWaterPolylineToConnection(void* entry, const AttachPoint& a, const AttachPoint& b,
+    void AppendWaterPolylineToConnection(void* pole, void* entry, const AttachPoint& a, const AttachPoint& b,
                                          const float sagScale, const float maximumSag,
                                          const int32_t totalPoints) {
         const int32_t balls = std::clamp(totalPoints - 1, 1, 62);
@@ -1258,7 +1269,7 @@ namespace {
         float control2[3];
         int32_t ignoredCount = 0;
         const auto getControlPoints = reinterpret_cast<GetControlPointsFn>(kGetControlPoints);
-        getControlPoints(a.x, a.y, a.z, b.x, b.y, b.z, control1, control2, &ignoredCount);
+        getControlPoints(pole, a.x, a.y, a.z, b.x, b.y, b.z, control1, control2, &ignoredCount);
         AdjustControlPointSag(control1, a, b, sagScale, maximumSag);
         AdjustControlPointSag(control2, a, b, sagScale, maximumSag);
 
@@ -1280,166 +1291,168 @@ namespace {
         insert(polylines, insertPos, view, 0, 1, 1);
     }
 
-    void ForgetConnectionWidths(void* entry) {
-        if (entry == nullptr) {
-            return;
+    void* ConnectionOtherPole(const void* entry) {
+        return *reinterpret_cast<void* const*>(static_cast<const uint8_t*>(entry) + kConnection_OtherPole);
+    }
+
+    const PoleAttachOverride* FindOverride(void* pole) {
+        if (pole == nullptr) {
+            return nullptr;
         }
-        auto* const begin = *reinterpret_cast<uint8_t**>(reinterpret_cast<uint8_t*>(entry) + kConnection_PolylinesBegin);
-        auto* const end = *reinterpret_cast<uint8_t**>(reinterpret_cast<uint8_t*>(entry) + kConnection_PolylinesEnd);
-        for (uint8_t* polyline = begin; polyline != end; polyline += 12) {
-            const void* const points = *reinterpret_cast<void* const*>(polyline);
-            if (points != nullptr) {
-                gPolylineWidthOverrides.erase(points);
-            }
+        const auto it = gOverrides.find(pole);
+        return it != gOverrides.end() ? &it->second : nullptr;
+    }
+
+    // Wire/buoy textures of a rendered connection: the render owner's pair if its exemplar sets
+    // either texture, else the other endpoint's, mirroring FindAppearanceOverride's precedence.
+    const PoleAttachOverride* FindTextureSource(void* occupant, void* otherPole) {
+        const PoleAttachOverride* const self = FindOverride(occupant);
+        if (self != nullptr && (self->hasWireTexture || self->hasBuoyTexture)) {
+            return self;
         }
+        const PoleAttachOverride* const other = FindOverride(otherPole);
+        if (other != nullptr && (other->hasWireTexture || other->hasBuoyTexture)) {
+            return other;
+        }
+        return nullptr;
     }
 
-    void ForgetOccupantWidths(void* occupant) {
-        std::erase_if(gPolylineWidthOverrides,
-                      [occupant](const auto& item) { return item.second.owner == occupant; });
+    // Water-crossing buoy size/count of a connection, same precedence.
+    const PoleAttachOverride* FindBuoySource(void* occupant, void* otherPole) {
+        const PoleAttachOverride* const self = FindOverride(occupant);
+        if (self != nullptr && (self->hasWaterBuoySize || self->hasWaterBuoyCount)) {
+            return self;
+        }
+        const PoleAttachOverride* const other = FindOverride(otherPole);
+        if (other != nullptr && (other->hasWaterBuoySize || other->hasWaterBuoyCount)) {
+            return other;
+        }
+        return nullptr;
     }
 
-    void ForgetOccupantTextures(void* occupant) {
-        std::erase_if(gConnectionTextureOverrides,
-                      [occupant](const auto& item) { return item.second.owner == occupant; });
+    // Index of `polyline` (an element of one of the entry's two vector<vector<cS3DVector3>> lists)
+    // in that list: the wire index, in the same order AddConnection/the rebuild below create them.
+    uint32_t PolylineIndex(const void* entry, const uint32_t listBeginOffset, const void* polyline) {
+        const auto* const begin = *reinterpret_cast<const uint8_t* const*>(
+            static_cast<const uint8_t*>(entry) + listBeginOffset);
+        return static_cast<uint32_t>((static_cast<const uint8_t*>(polyline) - begin) / 12);
     }
 
-    // Water-crossing buoy/ball size overrides, keyed like the wire-width overrides by the inner
-    // polyline's point-buffer address (EDI's [+0] at the patched size read). Values are the
-    // vanilla per-zoom width factors pre-multiplied by the pole's buoy size scale, so the patched
-    // read stays a single pointer swap.
-    struct WaterBallSizeOverride {
-        void* owner = nullptr;
-        std::array<float, kPowerLineZoomCount> sizeByZoom{};
+    // One-entry cache for the per-segment hooks below: DrawPowerlines calls them once per segment of
+    // the same polyline in a row, so the gOverrides lookups run once per wire instead of per segment.
+    struct DrawLookupCache {
+        uint32_t generation = 0;
+        const void* occupant = nullptr;
+        const void* entry = nullptr;
+        const void* otherPole = nullptr; // entries shift on RemoveConnection: same address, another span
+        const void* listBegin = nullptr;
+        const void* polyline = nullptr;
+        float scale = 1.0f;
     };
-    std::unordered_map<const void*, WaterBallSizeOverride> gWaterBallSizeOverrides;
 
-    void ForgetConnectionWaterBallSizes(void* entry) {
-        if (entry == nullptr) {
-            return;
-        }
-        auto* const begin = *reinterpret_cast<uint8_t**>(reinterpret_cast<uint8_t*>(entry) + kConnection_WaterPolylinesBegin);
-        auto* const end = *reinterpret_cast<uint8_t**>(reinterpret_cast<uint8_t*>(entry) + kConnection_WaterPolylinesEnd);
-        for (uint8_t* polyline = begin; polyline != end; polyline += 12) {
-            const void* const points = *reinterpret_cast<void* const*>(polyline);
-            if (points != nullptr) {
-                gWaterBallSizeOverrides.erase(points);
-            }
-        }
+    bool CacheHit(const DrawLookupCache& cache, const void* occupant, const void* entry, const void* otherPole,
+                  const void* listBegin, const void* polyline) {
+        return cache.generation == gOverridesGeneration && cache.occupant == occupant && cache.entry == entry &&
+               cache.otherPole == otherPole && cache.listBegin == listBegin && cache.polyline == polyline;
     }
 
-    void ForgetOccupantWaterBallSizes(void* occupant) {
-        std::erase_if(gWaterBallSizeOverrides,
-                      [occupant](const auto& item) { return item.second.owner == occupant; });
-    }
-
-    void RegisterConnectionWaterBallSizes(void* occupant, void* entry, const float sizeScale) {
-        ForgetConnectionWaterBallSizes(entry);
-        if (sizeScale == 1.0f) {
-            return;
-        }
+    // Per-wire width for the strand DrawPowerlines is drawing. Returns either the vanilla zoom slot
+    // or a pointer to a pre-scaled value (the engine reads it several times before the next call).
+    const float* __cdecl ResolveWireWidthPointer(void* occupant, const void* entry, const void* polyline) noexcept {
         const float* const vanillaWidths = *reinterpret_cast<float**>(kPowerLineWidthFactorsPtr);
-        auto* const begin = *reinterpret_cast<uint8_t**>(reinterpret_cast<uint8_t*>(entry) + kConnection_WaterPolylinesBegin);
-        auto* const end = *reinterpret_cast<uint8_t**>(reinterpret_cast<uint8_t*>(entry) + kConnection_WaterPolylinesEnd);
-        for (uint8_t* polyline = begin; polyline != end; polyline += 12) {
-            const void* const points = *reinterpret_cast<void* const*>(polyline);
-            if (points == nullptr) {
-                continue;
-            }
-            WaterBallSizeOverride value;
-            value.owner = occupant;
-            for (size_t zoom = 0; zoom < kPowerLineZoomCount; ++zoom) {
-                value.sizeByZoom[zoom] = vanillaWidths[zoom] * sizeScale;
-            }
-            gWaterBallSizeOverrides[points] = value;
+        const uint32_t zoom = *reinterpret_cast<const uint32_t*>(
+            reinterpret_cast<const uint8_t*>(occupant) + 0xc4);
+        if (gOverrides.empty() || entry == nullptr || polyline == nullptr || zoom >= kPowerLineZoomCount) {
+            return vanillaWidths + zoom;
         }
+        static DrawLookupCache cache;
+        static float scaledWidth = 0.0f;
+        const void* const listBegin = *reinterpret_cast<void* const*>(
+            static_cast<const uint8_t*>(entry) + kConnection_PolylinesBegin);
+        void* const otherPole = ConnectionOtherPole(entry);
+        if (!CacheHit(cache, occupant, entry, otherPole, listBegin, polyline)) {
+            const PoleAttachOverride* const appearance = FindAppearanceOverride(occupant, otherPole);
+            cache = DrawLookupCache{gOverridesGeneration, occupant, entry, otherPole, listBegin, polyline,
+                                    (appearance != nullptr && appearance->hasWidthCustomization)
+                                        ? appearance->WidthScale(PolylineIndex(entry, kConnection_PolylinesBegin, polyline))
+                                        : 1.0f};
+        }
+        if (cache.scale == 1.0f) {
+            return vanillaWidths + zoom;
+        }
+        scaledWidth = vanillaWidths[zoom] * cache.scale;
+        return &scaledWidth;
     }
 
-    const float* __cdecl ResolveWaterBallSizePointer(const void* polyline, const uint32_t zoom) noexcept {
+    // Buoy/ball half-size for the water-crossing polyline being drawn, same scheme.
+    const float* __cdecl ResolveWaterBallSizePointer(void* occupant, const void* entry, const void* polyline,
+                                                     const uint32_t zoom) noexcept {
         const float* const vanillaWidths = *reinterpret_cast<float**>(kPowerLineWidthFactorsPtr);
-        const void* const points = polyline ? *reinterpret_cast<void* const*>(polyline) : nullptr;
-        const auto it = points ? gWaterBallSizeOverrides.find(points) : gWaterBallSizeOverrides.end();
-        if (it != gWaterBallSizeOverrides.end() && zoom < kPowerLineZoomCount) {
-            return &it->second.sizeByZoom[zoom];
+        if (gOverrides.empty() || occupant == nullptr || entry == nullptr || polyline == nullptr ||
+            zoom >= kPowerLineZoomCount) {
+            return vanillaWidths + zoom;
         }
-        return vanillaWidths + zoom;
+        static DrawLookupCache cache;
+        static float scaledSize = 0.0f;
+        const void* const listBegin = *reinterpret_cast<void* const*>(
+            static_cast<const uint8_t*>(entry) + kConnection_WaterPolylinesBegin);
+        void* const otherPole = ConnectionOtherPole(entry);
+        if (!CacheHit(cache, occupant, entry, otherPole, listBegin, polyline)) {
+            const PoleAttachOverride* const source = FindBuoySource(occupant, otherPole);
+            cache = DrawLookupCache{gOverridesGeneration, occupant, entry, otherPole, listBegin, polyline,
+                                    (source != nullptr && source->hasWaterBuoySize) ? source->waterBuoySizeScale : 1.0f};
+        }
+        if (cache.scale == 1.0f) {
+            return vanillaWidths + zoom;
+        }
+        scaledSize = vanillaWidths[zoom] * cache.scale;
+        return &scaledSize;
     }
 
+    uint32_t __cdecl GetWireStrandTextureOverride(void* occupant, const void* entry) noexcept {
+        if (gOverrides.empty() || entry == nullptr) {
+            return kVanillaWireStrandTextureId;
+        }
+        const PoleAttachOverride* const source = FindTextureSource(occupant, ConnectionOtherPole(entry));
+        return (source != nullptr && source->hasWireTexture) ? source->wireTextureId : kVanillaWireStrandTextureId;
+    }
+
+    uint32_t __cdecl GetWireBuoyTextureOverride(void* occupant, const void* entry) noexcept {
+        if (gOverrides.empty() || entry == nullptr) {
+            return kVanillaWireBuoyTextureId;
+        }
+        const PoleAttachOverride* const source = FindTextureSource(occupant, ConnectionOtherPole(entry));
+        return (source != nullptr && source->hasBuoyTexture) ? source->wireBuoyTextureId : kVanillaWireBuoyTextureId;
+    }
+
+    // DrawPowerlines (0x0064b750) stack frame at every patched site, confirmed on 1.1.641: after its
+    // `sub esp,98h` and four pushes, [esp+10h] holds the current tConnection entry (written at
+    // 0x0064b789 and 0x0064bb7f, re-read at 0x0064b9b6/0x0064bb67) and [esp+14h] the complete pole
+    // occupant (written at 0x0064b765). The hook's CALL adds 4 to both.
 #if defined(_MSC_VER) && defined(_M_IX86)
     // Replaces the 11 bytes at 0x0064ba6e (MOV EAX,[0x00b46798]; FLD [EAX+EDX*4];
-    // LEA EAX,[EAX+EDX*4]). On entry EDX = zoom, EDI = current inner water-polyline vector; on
-    // return EAX must point at the size base value with that value pushed on the FPU stack (the
-    // code that follows both uses ST0 and re-reads [EAX] several times). ECX is dead here
-    // (overwritten at 0x0064ba7f) but preserved anyway alongside EDX.
+    // LEA EAX,[EAX+EDX*4]). On entry EDX = zoom, ECX = the pole occupant (loaded at 0x0064ba5a),
+    // EDI = current inner water-polyline vector; on return EAX must point at the size base value
+    // with that value pushed on the FPU stack (the code that follows both uses ST0 and re-reads
+    // [EAX] several times). ECX is dead here (overwritten at 0x0064ba7f) but preserved anyway
+    // alongside EDX.
     __declspec(naked) void WaterBallSizeHook() {
         __asm {
             push ecx
             push edx
-            push edx
-            push edi
+            push edx                      // zoom
+            push edi                      // polyline
+            push dword ptr [esp + 0x24]   // entry: caller [esp+10h] + return + 4 pushes
+            push ecx                      // occupant
             call ResolveWaterBallSizePointer
-            add esp, 8
+            add esp, 16
             pop edx
             pop ecx
             fld dword ptr [eax]
             ret
         }
     }
-#else
-#error Power-pole water-ball-size hook requires 32-bit MSVC.
-#endif
 
-    // (Re)registers wire/buoy texture overrides for every render-owner tConnection entry in this
-    // pole's connections vector. Called after AddConnection/UpdateConnection, i.e. after any
-    // reallocation of that vector, so registered entry addresses are always current. The texture
-    // pair comes from this pole's exemplar; a pole without wire texture properties inherits the
-    // other endpoint's pair per connection, mirroring FindAppearanceOverride's precedence.
-    void RegisterOccupantConnectionTextures(void* occupant) {
-        ForgetOccupantTextures(occupant);
-        auto* const begin = *reinterpret_cast<uint8_t**>(reinterpret_cast<uint8_t*>(occupant) + kOccupant_ConnectionsBegin);
-        auto* const end = *reinterpret_cast<uint8_t**>(reinterpret_cast<uint8_t*>(occupant) + kOccupant_ConnectionsEnd);
-        const auto self = gOverrides.find(occupant);
-        const bool selfHasTextures = self != gOverrides.end() &&
-                                     (self->second.hasWireTexture || self->second.hasBuoyTexture);
-        for (uint8_t* entry = begin; entry != end; entry += kConnection_Size) {
-            if (*reinterpret_cast<const uint8_t*>(entry + kConnection_IsRenderOwner) == 0) {
-                continue; // DrawPowerlines only visits render-owner entries
-            }
-            const PoleAttachOverride* source = selfHasTextures ? &self->second : nullptr;
-            if (source == nullptr) {
-                void* const otherPole = *reinterpret_cast<void**>(entry + kConnection_OtherPole);
-                const auto other = gOverrides.find(otherPole);
-                if (other != gOverrides.end() &&
-                    (other->second.hasWireTexture || other->second.hasBuoyTexture)) {
-                    source = &other->second;
-                }
-            }
-            if (source == nullptr) {
-                continue; // fully vanilla pair; the lookup hook falls back by itself
-            }
-            ConnectionTextureOverride value;
-            value.owner = occupant;
-            value.strandTextureId = source->hasWireTexture ? source->wireTextureId
-                                                           : kVanillaWireStrandTextureId;
-            value.buoyTextureId = source->hasBuoyTexture ? source->wireBuoyTextureId
-                                                          : kVanillaWireBuoyTextureId;
-            gConnectionTextureOverrides[entry] = value;
-        }
-    }
-
-    uint32_t __cdecl GetWireStrandTextureOverride(const void* entry) noexcept {
-        const auto it = gConnectionTextureOverrides.find(entry);
-        return it != gConnectionTextureOverrides.end() ? it->second.strandTextureId
-                                                        : kVanillaWireStrandTextureId;
-    }
-
-    uint32_t __cdecl GetWireBuoyTextureOverride(const void* entry) noexcept {
-        const auto it = gConnectionTextureOverrides.find(entry);
-        return it != gConnectionTextureOverrides.end() ? it->second.buoyTextureId
-                                                        : kVanillaWireBuoyTextureId;
-    }
-
-#if defined(_MSC_VER) && defined(_M_IX86)
     // Both sites replace the 5-byte `MOV ESI, imm32` with `CALL rel32`. At each site EBP holds the
     // current tConnection entry, ECX the bucket-array base, and EDI the in-progress bucket count --
     // ECX/EDI must survive (consumed by the SAR/DIV that follow); EAX/EDX are clobbered by the
@@ -1450,9 +1463,10 @@ namespace {
             push ecx
             push edx
             push edi
-            push ebp
+            push ebp                      // entry
+            push dword ptr [esp + 0x28]   // occupant: caller [esp+14h] + return + 4 pushes
             call GetWireStrandTextureOverride
-            add esp, 4
+            add esp, 8
             mov esi, eax
             pop edi
             pop edx
@@ -1466,9 +1480,10 @@ namespace {
             push ecx
             push edx
             push edi
-            push ebp
+            push ebp                      // entry
+            push dword ptr [esp + 0x28]   // occupant: caller [esp+14h] + return + 4 pushes
             call GetWireBuoyTextureOverride
-            add esp, 4
+            add esp, 8
             mov esi, eax
             pop edi
             pop edx
@@ -1476,12 +1491,29 @@ namespace {
             ret
         }
     }
+
+    // Called from 0x0064b855. At entry, EDI points to the current outer polyline-vector element,
+    // the entry is at caller ESP+0x10 and the complete pole occupant at caller ESP+0x14; CALL pushes
+    // a return address, hence +0x14/+0x18 here. Reproduce the overwritten FST at caller ESP+0x78 as
+    // callee ESP+0x7c.
+    __declspec(naked) void WireWidthLookupHook() {
+        __asm {
+            mov eax, dword ptr [esp + 0x18]
+            mov edx, dword ptr [esp + 0x14]
+            push edi
+            push edx
+            push eax
+            call ResolveWireWidthPointer
+            add esp, 12
+            fst dword ptr [esp + 0x7c]
+            ret
+        }
+    }
 #else
-#error Power-pole wire-texture hooks require 32-bit MSVC.
+#error Power-pole DrawPowerlines hooks require 32-bit MSVC.
 #endif
 
     void ClearConnectionPolylines(void* entry) {
-        ForgetConnectionWidths(entry);
         auto* const begin = *reinterpret_cast<void**>(reinterpret_cast<uint8_t*>(entry) + kConnection_PolylinesBegin);
         auto* const end = *reinterpret_cast<void**>(reinterpret_cast<uint8_t*>(entry) + kConnection_PolylinesEnd);
         const auto erase = reinterpret_cast<PolylineListEraseFn>(kPolylineListErase);
@@ -1489,71 +1521,23 @@ namespace {
     }
 
     void ClearConnectionWaterPolylines(void* entry) {
-        ForgetConnectionWaterBallSizes(entry);
         auto* const begin = *reinterpret_cast<void**>(reinterpret_cast<uint8_t*>(entry) + kConnection_WaterPolylinesBegin);
         auto* const end = *reinterpret_cast<void**>(reinterpret_cast<uint8_t*>(entry) + kConnection_WaterPolylinesEnd);
         const auto erase = reinterpret_cast<PolylineListEraseFn>(kPolylineListErase);
         erase(reinterpret_cast<uint8_t*>(entry) + kConnection_WaterPolylinesBegin, begin, end);
     }
 
-    void RegisterConnectionWidths(void* occupant, void* entry, const PoleAttachOverride* appearance) {
-        ForgetConnectionWidths(entry);
-        if (appearance == nullptr || !appearance->hasWidthCustomization) {
-            return;
+    // Uninstall guard shared by the patch classes below: the bytes are restored only if the site
+    // still holds exactly what Install wrote. If another DLL patched it afterwards (and may chain
+    // to our hook), restoring would silently remove its hook, so the site is left as it is.
+    bool SiteStillPatched(const uintptr_t site, const uint8_t* written, const size_t size, const char* name) {
+        if (std::memcmp(reinterpret_cast<const void*>(site), written, size) == 0) {
+            return true;
         }
-
-        const float* const vanillaWidths = *reinterpret_cast<float**>(kPowerLineWidthFactorsPtr);
-        auto* const begin = *reinterpret_cast<uint8_t**>(reinterpret_cast<uint8_t*>(entry) + kConnection_PolylinesBegin);
-        auto* const end = *reinterpret_cast<uint8_t**>(reinterpret_cast<uint8_t*>(entry) + kConnection_PolylinesEnd);
-        uint32_t wireIndex = 0;
-        for (uint8_t* polyline = begin; polyline != end; polyline += 12, ++wireIndex) {
-            const float scale = appearance->WidthScale(wireIndex);
-            if (scale == 1.0f) {
-                continue;
-            }
-            const void* const points = *reinterpret_cast<void* const*>(polyline);
-            if (points == nullptr) {
-                continue;
-            }
-            PolylineWidthOverride value;
-            value.owner = occupant;
-            for (size_t zoom = 0; zoom < kPowerLineZoomCount; ++zoom) {
-                value.widthByZoom[zoom] = vanillaWidths[zoom] * scale;
-            }
-            gPolylineWidthOverrides[points] = value;
-        }
+        LOG_WARN("PowerPoleCustomization: {} at 0x{:08X} was changed by someone else since it was patched; "
+                 "left as it is.", name, static_cast<uint32_t>(site));
+        return false;
     }
-
-    const float* __cdecl ResolveWireWidthPointer(void* occupant, const void* polyline) noexcept {
-        const float* const vanillaWidths = *reinterpret_cast<float**>(kPowerLineWidthFactorsPtr);
-        const uint32_t zoom = *reinterpret_cast<const uint32_t*>(
-            reinterpret_cast<const uint8_t*>(occupant) + 0xc4);
-        const void* const points = polyline ? *reinterpret_cast<void* const*>(polyline) : nullptr;
-        const auto it = points ? gPolylineWidthOverrides.find(points) : gPolylineWidthOverrides.end();
-        if (it != gPolylineWidthOverrides.end() && it->second.owner == occupant && zoom < kPowerLineZoomCount) {
-            return &it->second.widthByZoom[zoom];
-        }
-        return vanillaWidths + zoom;
-    }
-
-#if defined(_MSC_VER) && defined(_M_IX86)
-    // Called from 0x0064b855. At entry, EDI points to the current outer polyline-vector element and
-    // the complete pole occupant is at caller ESP+0x14. CALL pushes a return address, hence +0x18
-    // here. Reproduce the overwritten FST at caller ESP+0x78 as callee ESP+0x7c.
-    __declspec(naked) void WireWidthLookupHook() {
-        __asm {
-            mov eax, dword ptr [esp + 0x18]
-            push edi
-            push eax
-            call ResolveWireWidthPointer
-            add esp, 8
-            fst dword ptr [esp + 0x7c]
-            ret
-        }
-    }
-#else
-#error Power-pole wire-width hook requires 32-bit MSVC.
-#endif
 
     class InlineCallPatch final {
     public:
@@ -1580,6 +1564,7 @@ namespace {
             site[0] = 0xe8;
             std::memcpy(site + 1, &relative, sizeof(relative));
             std::fill(site + 5, site + kWireWidthLookupPatchSize, static_cast<uint8_t>(0x90));
+            std::memcpy(written_.data(), site, written_.size());
             FlushInstructionCache(GetCurrentProcess(), site, kWireWidthLookupPatchSize);
             DWORD ignored = 0;
             VirtualProtect(site, kWireWidthLookupPatchSize, oldProtect, &ignored);
@@ -1589,6 +1574,10 @@ namespace {
 
         void Uninstall() {
             if (!installed_) {
+                return;
+            }
+            installed_ = false;
+            if (!SiteStillPatched(kWireWidthLookupPatchSite, written_.data(), written_.size(), "wire-width patch")) {
                 return;
             }
             auto* const site = reinterpret_cast<uint8_t*>(kWireWidthLookupPatchSite);
@@ -1606,6 +1595,7 @@ namespace {
 
     private:
         std::array<uint8_t, kWireWidthLookupPatchSize> original_{};
+        std::array<uint8_t, kWireWidthLookupPatchSize> written_{};
         bool installed_ = false;
     };
 
@@ -1630,16 +1620,12 @@ namespace {
     void RebuildFoundation(void* occupant, float halfExtent, float yaw);
 
     // Rebuilds the complete regular-polyline list whenever either endpoint customizes attachment
-    // geometry/count or sag. Width-only customization keeps vanilla geometry and merely registers
-    // per-polyline width values. The active/render-owning side determines appearance when two pole
+    // geometry/count or sag. Width-only customization keeps vanilla geometry; the width is applied
+    // at draw time. The active/render-owning side determines appearance when two pole
     // families disagree; if it has no appearance properties, the other endpoint supplies them.
     void ApplyConnectionCustomization(void* occupant, void* otherPole) {
         const uint32_t direction = DirectionBetween(occupant, otherPole);
         const uint32_t count = std::min(StrandCount(occupant, direction), StrandCount(otherPole, direction));
-        // Re-key texture overrides first: this pole's connections vector may have just reallocated
-        // regardless of which side render-owns the new pair, so every registered entry address of
-        // this pole must be refreshed even when the early-return below fires.
-        RegisterOccupantConnectionTextures(occupant);
         void* const entry = FindConnectionEntry(occupant, otherPole);
         if (entry == nullptr) {
             return; // reciprocal non-rendering side, or no live connection for this pair
@@ -1662,20 +1648,7 @@ namespace {
         const bool hadWaterPolylines =
             *reinterpret_cast<void**>(reinterpret_cast<uint8_t*>(entry) + kConnection_WaterPolylinesBegin) !=
             *reinterpret_cast<void**>(reinterpret_cast<uint8_t*>(entry) + kConnection_WaterPolylinesEnd);
-        const PoleAttachOverride* buoySource = nullptr;
-        if (hadWaterPolylines) {
-            const auto self = gOverrides.find(occupant);
-            if (self != gOverrides.end() &&
-                (self->second.hasWaterBuoySize || self->second.hasWaterBuoyCount)) {
-                buoySource = &self->second;
-            } else {
-                const auto other = gOverrides.find(otherPole);
-                if (other != gOverrides.end() &&
-                    (other->second.hasWaterBuoySize || other->second.hasWaterBuoyCount)) {
-                    buoySource = &other->second;
-                }
-            }
-        }
+        const PoleAttachOverride* const buoySource = hadWaterPolylines ? FindBuoySource(occupant, otherPole) : nullptr;
         const int32_t waterPointCount = (buoySource != nullptr && buoySource->hasWaterBuoyCount)
             ? static_cast<int32_t>(buoySource->waterBuoyPointCount)
             : kWaterPolylinePointCount;
@@ -1700,21 +1673,17 @@ namespace {
                 const float sagScale = appearance ? appearance->SagScale(i) : 1.0f;
                 const float maximumSag = appearance ? appearance->MaximumSag(i) :
                                                       std::numeric_limits<float>::infinity();
-                AppendPolylineToConnection(entry, a, b, sagScale, maximumSag);
+                AppendPolylineToConnection(occupant, entry, a, b, sagScale, maximumSag);
                 if (hadWaterPolylines) {
-                    AppendWaterPolylineToConnection(entry, a, b, sagScale, maximumSag, waterPointCount);
+                    AppendWaterPolylineToConnection(occupant, entry, a, b, sagScale, maximumSag, waterPointCount);
                 }
             }
             LOG_DEBUG("PowerPoleCustomization: rebuilt {} strands in direction {} for connection {} -> {}{}.",
                      count, direction, occupant, otherPole,
                      hadWaterPolylines ? " (incl. water-crossing coarse list)" : "");
         }
-        RegisterConnectionWidths(occupant, entry, appearance);
-        if (hadWaterPolylines) {
-            RegisterConnectionWaterBallSizes(occupant, entry,
-                (buoySource != nullptr && buoySource->hasWaterBuoySize) ? buoySource->waterBuoySizeScale
-                                                                        : 1.0f);
-        }
+        // Per-wire width, textures and buoy size need no registration: the DrawPowerlines hooks
+        // resolve them from gOverrides while drawing (see ResolveWireWidthPointer).
 
         // A new/changed connection can change the follow-span bearing (first connection appearing,
         // or a second one confirming/breaking agreement) -- rebuild the pad on the spot instead of
@@ -1819,13 +1788,20 @@ namespace {
     // both hook instances for a given texture must return the same result -- resolved once here per
     // occupant lookup, called from 2 independent patch sites each.
     // ------------------------------------------------------------------
-    uint32_t __cdecl GetFloorTextureHashOverride(void* occupant) noexcept {
+    // cSC4PowerPoleOccupant::Draw (0x0064c800) is entered through the interface subobject at
+    // completeObject+0x120: it keeps that `this` in EBX and computes the complete object as
+    // `lea esi,[ebx-0x120]` (0x0064c810). gOverrides is keyed by the complete object.
+    constexpr uint32_t kDrawSubobjectOffset = 0x120;
+
+    uint32_t __cdecl GetFloorTextureHashOverride(uint8_t* drawThis) noexcept {
+        void* const occupant = drawThis - kDrawSubobjectOffset;
         const auto it = gOverrides.find(occupant);
         return (it != gOverrides.end() && it->second.hasFloorTexture) ? it->second.foundationFloorTextureId
                                                                        : kVanillaFloorTextureId;
     }
 
-    uint32_t __cdecl GetWallTextureHashOverride(void* occupant) noexcept {
+    uint32_t __cdecl GetWallTextureHashOverride(uint8_t* drawThis) noexcept {
+        void* const occupant = drawThis - kDrawSubobjectOffset;
         const auto it = gOverrides.find(occupant);
         return (it != gOverrides.end() && it->second.hasWallTexture) ? it->second.foundationWallTextureId
                                                                       : kVanillaWallTextureId;
@@ -1833,9 +1809,9 @@ namespace {
 
 #if defined(_MSC_VER) && defined(_M_IX86)
     // Both patch sites replace `MOV EAX, imm32` (5 bytes) with `CALL rel32` (5 bytes) -- a 1:1 size
-    // swap, so no surrounding instructions move. The occupant pointer is live in EBX at every one of
-    // the 4 sites (confirmed via disassembly: EBX is read again later at 0x0064ca36/+0x38 in Draw's
-    // own body, so it cannot have been repurposed by the compiler in between). ECX/EDX must come back
+    // swap, so no surrounding instructions move. EBX holds Draw's own `this` -- the occupant's
+    // interface subobject at +0x120, not the complete object (mov ebx,ecx at 0x0064c805) -- at every
+    // one of the 4 sites; the callee converts it. ECX/EDX must come back
     // unchanged -- EDX in particular is 0 going into the immediately-following DIV and must stay that
     // way, which a plain push/pop pair guarantees regardless of what our __cdecl callee does to it.
     __declspec(naked) void FloorTextureHashHook() {
@@ -1993,13 +1969,17 @@ namespace {
 #error Keep-wires zone-change hook requires 32-bit MSVC.
 #endif
 
-    // Generic N-byte-prefix-match -> `CALL rel32` patch (5 bytes) + NOP padding for the remainder.
-    // Used for the 7-byte pole-style lookup sites; kept separate from Imm32CallPatch (fixed 5-byte
-    // `MOV EAX,imm32` sites) since the expected byte pattern and size differ here.
+    // Generic N-byte-prefix-match -> `CALL rel32` (or `JMP rel32`) patch (5 bytes) + NOP padding for
+    // the remainder. Used for the 7-byte pole-style lookup sites and the zoned branch of
+    // CellIsOKForPlacement; kept separate from Imm32CallPatch (fixed 5-byte `MOV EAX,imm32` sites)
+    // since the expected byte pattern and size differ here.
+    constexpr uint8_t kCallRel32 = 0xe8;
+    constexpr uint8_t kJmpRel32 = 0xe9;
+
     class ByteSpanCallPatch final {
     public:
         bool Install(const uintptr_t site, std::initializer_list<uint8_t> expectedBytes, void* hookFn,
-                     const char* name) {
+                     const char* name, const uint8_t opcode = kCallRel32) {
             site_ = site;
             size_ = static_cast<uint32_t>(expectedBytes.size());
             auto* const p = reinterpret_cast<uint8_t*>(site);
@@ -2017,9 +1997,11 @@ namespace {
             original_.assign(p, p + size_);
             const auto relative = static_cast<int32_t>(
                 reinterpret_cast<intptr_t>(hookFn) - (static_cast<intptr_t>(site) + 5));
-            p[0] = 0xe8;
+            p[0] = opcode;
             std::memcpy(p + 1, &relative, sizeof(relative));
             std::fill(p + 5, p + size_, static_cast<uint8_t>(0x90));
+            written_.assign(p, p + size_);
+            name_ = name;
             FlushInstructionCache(GetCurrentProcess(), p, size_);
             DWORD ignored = 0;
             VirtualProtect(p, size_, oldProtect, &ignored);
@@ -2031,6 +2013,10 @@ namespace {
 
         void Uninstall() {
             if (!installed_) {
+                return;
+            }
+            installed_ = false;
+            if (!SiteStillPatched(site_, written_.data(), written_.size(), name_)) {
                 return;
             }
             auto* const p = reinterpret_cast<uint8_t*>(site_);
@@ -2048,6 +2034,8 @@ namespace {
         uintptr_t site_ = 0;
         uint32_t size_ = 0;
         std::vector<uint8_t> original_;
+        std::vector<uint8_t> written_;
+        const char* name_ = "";
         bool installed_ = false;
     };
 
@@ -2074,6 +2062,8 @@ namespace {
             }
             original_ = *slot;
             *slot = reinterpret_cast<uintptr_t>(hookFn);
+            written_ = *slot;
+            name_ = name;
             DWORD ignored = 0;
             VirtualProtect(slot, sizeof(uintptr_t), oldProtect, &ignored);
             installed_ = true;
@@ -2082,6 +2072,10 @@ namespace {
 
         void Uninstall() {
             if (!installed_) {
+                return;
+            }
+            installed_ = false;
+            if (!SiteStillPatched(slot_, reinterpret_cast<const uint8_t*>(&written_), sizeof(written_), name_)) {
                 return;
             }
             auto* const slot = reinterpret_cast<uintptr_t*>(slot_);
@@ -2097,6 +2091,8 @@ namespace {
     private:
         uintptr_t slot_ = 0;
         uintptr_t original_ = 0;
+        uintptr_t written_ = 0;
+        const char* name_ = "";
         bool installed_ = false;
     };
 
@@ -2133,6 +2129,8 @@ namespace {
                 reinterpret_cast<intptr_t>(hookFn) - (static_cast<intptr_t>(site) + 5));
             p[0] = 0xe8;
             std::memcpy(p + 1, &relative, sizeof(relative));
+            std::memcpy(written_.data(), p, written_.size());
+            name_ = name;
             FlushInstructionCache(GetCurrentProcess(), p, 5);
             DWORD ignored = 0;
             VirtualProtect(p, 5, oldProtect, &ignored);
@@ -2142,6 +2140,10 @@ namespace {
 
         void Uninstall() {
             if (!installed_) {
+                return;
+            }
+            installed_ = false;
+            if (!SiteStillPatched(site_, written_.data(), written_.size(), name_)) {
                 return;
             }
             auto* const p = reinterpret_cast<uint8_t*>(site_);
@@ -2160,6 +2162,8 @@ namespace {
     private:
         uintptr_t site_ = 0;
         std::array<uint8_t, 5> original_{};
+        std::array<uint8_t, 5> written_{};
+        const char* name_ = "";
         bool installed_ = false;
     };
 
@@ -2178,6 +2182,10 @@ namespace {
     // (0x00649BA0) and Write read it without a check, so a custom pole outside 1-4 (the FAR poles use
     // 0xA) would crash; seed a safe table for those poles. Custom attachment geometry still replaces
     // the resulting vanilla strands in ApplyConnectionCustomization.
+    // The seeded table is a private copy of the matching static table (gPrivateConnectionTables),
+    // never the static table itself: Read writes the four saved points of direction 0 through this
+    // pointer, and a pole whose direction flags changed after it was saved would otherwise write
+    // cardinal points into the shared diagonal table (or the reverse) of every vanilla pole.
     uint32_t gRepairedConnectionTables = 0;
 
     void RepairMissingConnectionPointTable(void* occupant) {
@@ -2191,8 +2199,14 @@ namespace {
             reinterpret_cast<const uint8_t*>(occupant) + kOccupant_DirectionFlags);
         const bool diagonalOnly = (directionFlags & kDiagonalDirectionFlags) != 0 &&
                                   (directionFlags & kCardinalDirectionFlags) == 0;
-        table = reinterpret_cast<uint8_t*>(
-            diagonalOnly ? kDiagonalConnectionPoints : kCardinalConnectionPoints);
+        auto& privateTable = gPrivateConnectionTables[occupant];
+        if (!privateTable) {
+            privateTable = std::make_unique<std::array<float, kConnectionPointTableFloats>>();
+        }
+        std::memcpy(privateTable->data(),
+                    reinterpret_cast<const void*>(diagonalOnly ? kDiagonalConnectionPoints : kCardinalConnectionPoints),
+                    sizeof(*privateTable));
+        table = reinterpret_cast<uint8_t*>(privateTable->data());
         // Expected for every FAR / custom pole: log the first one, the rest only at debug level.
         if (gRepairedConnectionTables++ == 0) {
             LOG_INFO("PowerPoleCustomization: pole {} has no vanilla connection-point table (exemplar instance "
@@ -2227,27 +2241,26 @@ namespace {
     using DestructorFn = void(__thiscall*)(void* occupant);
 
     // Runs when the engine destroys a pole (demolition, zone rebuild, city teardown). Dropping the
-    // side-table entries here -- unconditionally, even while disabled -- guarantees no stale
-    // customization can attach to a future pole that recycles the same 292-byte pool slot, and
-    // keeps both maps from growing across a long session.
+    // pole's override and private connection-point table here guarantees no stale customization
+    // can attach to a future pole that recycles the same 292-byte pool slot, and keeps both maps
+    // from growing across a long session.
     void __fastcall DestructorHook(void* occupant, void* /*edx*/) {
         gOverrides.erase(occupant);
-        ForgetOccupantWidths(occupant);
-        ForgetOccupantTextures(occupant);
-        ForgetOccupantWaterBallSizes(occupant);
+        ++gOverridesGeneration;
         const auto original = reinterpret_cast<DestructorFn>(kDestructor);
         original(occupant);
+        gPrivateConnectionTables.erase(occupant); // after the engine is done with the pole
     }
 
     void __fastcall InitConnectionPointsHook(void* occupant, void* /*edx*/) {
         const auto original = reinterpret_cast<InitConnectionPointsFn>(kInitConnectionPoints);
         original(occupant); // always run vanilla first: it still owns model load + default-table selection
         RepairMissingConnectionPointTable(occupant);
-        ForgetOccupantWidths(occupant);
-        ForgetOccupantTextures(occupant);
-        ForgetOccupantWaterBallSizes(occupant);
+        ++gOverridesGeneration;
 
-        if (!gSettings.enabled) {
+        // Overrides are consumed by hooks that are only safe while the destructor hook drops a
+        // pole's entry when the pole dies (the pool recycles addresses); without it, none are made.
+        if (!gSettings.enabled || !gOverridesAllowed) {
             gOverrides.erase(occupant);
             return;
         }
@@ -2273,9 +2286,6 @@ namespace {
     }
 
     void __fastcall AddConnectionHook(void* occupant, void* /*edx*/, void* otherPole, void* lineInfoVector) {
-        if (gSettings.enabled) {
-            ForgetConnectionWidths(FindConnectionEntry(occupant, otherPole));
-        }
         const auto original = reinterpret_cast<AddConnectionFn>(kAddConnection);
         original(occupant, otherPole, lineInfoVector);
 
@@ -2287,14 +2297,41 @@ namespace {
     }
 
     void __fastcall UpdateConnectionHook(void* occupant, void* /*edx*/, void* otherPole) {
-        if (gSettings.enabled) {
-            ForgetConnectionWidths(FindConnectionEntry(occupant, otherPole));
-        }
         const auto original = reinterpret_cast<UpdateConnectionFn>(kUpdateConnection);
         original(occupant, otherPole);
         if (gSettings.enabled) {
             ApplyConnectionCustomization(occupant, otherPole);
         }
+    }
+
+    // cSC4PowerPoleOccupant::RemoveConnection (0x0064DA00, __thiscall, args otherPole and a flag,
+    // RET 8) erases one tConnection and shifts the later ones down. Six direct call sites
+    // (0x0064DB09 is the reciprocal removal of the pole teardown at 0x0064DAE0; 0x006518DF/0x00651A27
+    // in PlacePoles; 0x0065279F/0x006527A9 in UpdateOnZoneChange; 0x006EE04A). Nothing is cached per
+    // connection any more, so the hook only keeps a follow-span foundation pad aligned with the
+    // connections the pole still has (a junction losing a branch becomes a straight span), which
+    // vanilla would only redo at the next zoom change. Skipped while the city is shutting down.
+    constexpr uintptr_t kRemoveConnection = 0x0064da00;
+    constexpr std::array<uintptr_t, 6> kRemoveConnectionCallSites = {
+        0x0064db09, 0x006518df, 0x00651a27, 0x0065279f, 0x006527a9, 0x006ee04a,
+    };
+    using RemoveConnectionFn = void(__thiscall*)(void* occupant, void* otherPole, uint32_t flag);
+    bool gCityShuttingDown = false;
+
+    void __fastcall RemoveConnectionHook(void* occupant, void* /*edx*/, void* otherPole, uint32_t flag) {
+        const auto original = reinterpret_cast<RemoveConnectionFn>(kRemoveConnection);
+        original(occupant, otherPole, flag);
+        if (!gSettings.enabled || gCityShuttingDown) {
+            return;
+        }
+        const PoleAttachOverride* const self = FindOverride(occupant);
+        if (self == nullptr || !self->foundationFollowSpan) {
+            return;
+        }
+        float yaw = 0.0f;
+        PoleFoundationYaw(occupant, yaw);
+        RebuildFoundation(occupant, self->hasFoundationHalfExtent ? self->foundationHalfExtent
+                                                                  : kVanillaFoundationHalfExtent, yaw);
     }
 
     // Inter-pole distance for the active style, or the tool's own vanilla value when no style is
@@ -2337,52 +2374,95 @@ namespace {
     //   0 = a pole may stand here,
     //   1 = zoned cell (cISC4ZoneManager::GetZoneType != None, Landfill, Plopped),
     //   2 = a building occupant or a lot on the cell, 3 = a network piece that is not underground.
+    // The checks run in that order and the zone test returns early: on a zoned cell vanilla returns 1
+    // at 0x0064fda0 without ever looking at the cell's occupants (building 2, network 3) or its lot.
     // CheckForReservedTiles (0x0064fed0) never moves the cut point forward on 1, so a 1 cuts the drag back to the
     // last free step; a 3 cuts only on the last step when the cell before gave 0.
     // DeterminePolePositions (call 0x006509ad) only places poles on 0. Over 1 the wire may span, but no
     // pole can stand, so a zone wider than the pole spacing breaks the line; the drag validation
     // (call 0x0064ff3e) stops the drag at 2. A farm field is a zoned lot without a building.
-    // The hook turns 1 and 2 into 0 when the cell has no lot (empty zone) or its lot has no building
-    // (farm field). Lots with a building keep the vanilla answer. The third caller (0x0065210b, the pole
-    // relocation of UpdateOnZoneChange) is left vanilla, so relocated poles still avoid zones.
+    //
+    // Turning the early 1 into 0 would skip the occupant and lot checks on every zoned cell, so a
+    // pole could stand on a network piece or a building occupant without a lot. Instead, while one of
+    // the two hooked calls runs, the zoned branch (13 bytes at 0x0064fda0: `mov [esp+14h],1;
+    // jmp 0x0064fe64`) is redirected to the occupant checks at 0x0064fdad with the result still 0,
+    // and records that the cell is zoned. The hook then answers:
+    //   zoned, occupant and lot checks 0 (empty zone)         -> 0;
+    //   zoned, 2 with a lot without a building (farm field)   -> 0;
+    //   zoned, anything else                                   -> 1 (the vanilla answer);
+    //   not zoned, 2 with a lot without a building            -> 0 (as before); otherwise vanilla.
+    // The third caller (0x0065210b, the pole relocation of UpdateOnZoneChange) calls with the branch
+    // disarmed, so it gets the vanilla result and relocated poles still avoid zones.
     // ------------------------------------------------------------------
     constexpr uintptr_t kCellIsOKForPlacement = 0x0064fd00;
     constexpr std::array<uintptr_t, 2> kCellIsOKForPlacementCallSites = {
         0x0064ff3e, // drag validation (truncates the drag on 2, warns on 1)
         0x006509ad, // DeterminePolePositions
     };
+    constexpr uintptr_t kCellZonedBranch = 0x0064fda0;
+    constexpr uintptr_t kCellOccupantChecks = 0x0064fdad;
+    constexpr uintptr_t kCellResultEpilogue = 0x0064fe64;
     constexpr uint32_t kCellOK = 0;
     constexpr uint32_t kCellZoned = 1;
     constexpr uint32_t kCellBuildingOrLot = 2;
+    bool gCellZoneScanArmed = false;
+    bool gCellWasZoned = false;
+
+#if defined(_MSC_VER) && defined(_M_IX86)
+    // Reached by a JMP (not a CALL) from 0x0064fda0, at the same stack depth as the two branches to
+    // 0x0064fdad. EAX holds the zone type just compared and is free (rewritten at 0x0064fdc6 and in
+    // the epilogue's destructor call). [esp+14h] is the function's result, still 0 here.
+    __declspec(naked) void CellZonedBranchHook() {
+        __asm {
+            cmp byte ptr [gCellZoneScanArmed], 0
+            je vanilla_zoned
+            mov byte ptr [gCellWasZoned], 1
+            mov eax, kCellOccupantChecks
+            jmp eax
+        vanilla_zoned:
+            mov dword ptr [esp + 14h], 1
+            mov eax, kCellResultEpilogue
+            jmp eax
+        }
+    }
+#else
+#error Power-line zone hook requires 32-bit MSVC.
+#endif
 
     using CellIsOKForPlacementFn = uint32_t(__thiscall*)(void* tool, int32_t cellX, int32_t cellZ);
 
     uint32_t __fastcall CellIsOKForPlacementHook(void* tool, void* /*edx*/, int32_t cellX, int32_t cellZ) {
         const auto original = reinterpret_cast<CellIsOKForPlacementFn>(kCellIsOKForPlacement);
+        if (!gSettings.enabled || !gSettings.crossZones) {
+            return original(tool, cellX, cellZ);
+        }
+        gCellWasZoned = false;
+        gCellZoneScanArmed = true;
         const uint32_t result = original(tool, cellX, cellZ);
-        if (!gSettings.enabled || !gSettings.crossZones || (result != kCellZoned && result != kCellBuildingOrLot)) {
-            return result;
-        }
+        gCellZoneScanArmed = false;
+        const bool zoned = gCellWasZoned;
 
-        const cISC4AppPtr app;
-        cISC4City* const city = app ? app->GetCity() : nullptr;
-        cISC4LotManager* const lotManager = city ? city->GetLotManager() : nullptr;
-        if (lotManager == nullptr) {
-            return result;
+        uint32_t newResult = zoned ? kCellZoned : result;
+        bool hasLot = false;
+        bool hasBuilding = false;
+        if (result == kCellOK && zoned) {
+            newResult = kCellOK; // empty zone: no building, network piece or lot on the cell
+        } else if (result == kCellBuildingOrLot) {
+            const cISC4AppPtr app;
+            cISC4City* const city = app ? app->GetCity() : nullptr;
+            cISC4LotManager* const lotManager = city ? city->GetLotManager() : nullptr;
+            cISC4Lot* const lot = lotManager ? lotManager->GetLot(cellX, cellZ, false) : nullptr;
+            hasLot = lot != nullptr;
+            hasBuilding = lot != nullptr && lot->GetBuilding() != nullptr;
+            if (hasLot && !hasBuilding) {
+                newResult = kCellOK; // farm field (or an empty lot); a lot with a building keeps blocking
+            }
         }
-
-        cISC4Lot* const lot = lotManager->GetLot(cellX, cellZ, false);
-        uint32_t newResult = result;
-        if (lot == nullptr) {
-            // Empty zone: allowed. A building occupant without a lot (2) keeps blocking.
-            newResult = result == kCellZoned ? kCellOK : result;
-        } else if (lot->GetBuilding() == nullptr) {
-            // Farm field (or an empty lot): allowed. A lot with a building keeps the vanilla answer.
-            newResult = kCellOK;
+        if (zoned || newResult != result) {
+            LOG_DEBUG("PowerPoleCustomization: [zones] cell ({}, {}) {}checks {} -> {} (lot {}, building {}).",
+                      cellX, cellZ, zoned ? "zoned, " : "", result, newResult, hasLot ? "yes" : "no",
+                      hasBuilding ? "yes" : "no");
         }
-        LOG_DEBUG("PowerPoleCustomization: [zones] cell ({}, {}) vanilla {} -> {} (lot {}, building {}).",
-                  cellX, cellZ, result, newResult, lot != nullptr ? "yes" : "no",
-                  lot != nullptr && lot->GetBuilding() != nullptr ? "yes" : "no");
         return newResult;
     }
 
@@ -2953,6 +3033,24 @@ namespace {
         return std::filesystem::path(path).parent_path();
     }
 
+    // UTF-8 text of a path for the log. std::filesystem::path::string() converts to the ANSI code
+    // page and throws when a character has no ANSI equivalent (a Windows user name in another
+    // script), so it is never used here.
+    std::string PathForLog(const std::filesystem::path& path) {
+        const std::wstring& wide = path.native();
+        if (wide.empty()) {
+            return {};
+        }
+        const int size = WideCharToMultiByte(CP_UTF8, 0, wide.c_str(), static_cast<int>(wide.size()),
+                                             nullptr, 0, nullptr, nullptr);
+        std::string result(size > 0 ? static_cast<size_t>(size) : 0, '\0');
+        if (size > 0) {
+            WideCharToMultiByte(CP_UTF8, 0, wide.c_str(), static_cast<int>(wide.size()), result.data(), size,
+                                nullptr, nullptr);
+        }
+        return result;
+    }
+
     // [PowerPoles.<Name>] sections use named REG.* connection combinations. The names below are in
     // engine mask order, so parsing compiles the author-facing key directly into the existing
     // 16-entry lookup table. mINI makes keys case-insensitive. A section may be sparse -- masks it
@@ -3096,11 +3194,11 @@ namespace {
         gFarDefaultStyle = PoleStyle{};
         gHasFarDefault = false;
         gActiveStyleIndex = 0;
-        const auto settingsPath = GetDllDirectoryPath() / "SC4SIM.ini";
-        mINI::INIFile file(settingsPath.string());
+        const auto settingsPath = GetDllDirectoryPath() / L"SC4SIM.ini";
+        mINI::INIFile file(settingsPath); // mINI opens the std::filesystem::path itself (wide on Windows)
         mINI::INIStructure ini;
         if (!file.read(ini) || !ini.has("SC4PowerPoleCustomization")) {
-            LOG_INFO("PowerPoleCustomization: using default settings; no readable {}.", settingsPath.string());
+            LOG_INFO("PowerPoleCustomization: using default settings; no readable {}.", PathForLog(settingsPath));
             return;
         }
 
@@ -3134,21 +3232,63 @@ namespace {
         LoadPoleStyles(ini);
     }
 
-    // City teardown: every pole is destroyed (the destructor hook empties the side tables
-    // per-pole), the engine's texture registry is torn down by its own static shutdown. Belt and
+    // City teardown: every pole is destroyed (the destructor hook drops each pole's override and
+    // private table), the engine's texture registry is torn down by its own static shutdown. Belt and
     // suspenders: drop everything city-scoped here so nothing stale survives into the next city,
     // whatever destruction order the engine picked.
     void FlushCityScopedState() {
         gOverrides.clear();
-        gPolylineWidthOverrides.clear();
-        gConnectionTextureOverrides.clear();
-        gWaterBallSizeOverrides.clear();
+        ++gOverridesGeneration;
+        // gPrivateConnectionTables is NOT cleared: the poles still point at their private tables
+        // until the engine destroys them, and the destructor hook frees each one then.
         gRegisteredPoleTextures.clear();
         gFarDragActive = false;
         gFarSnapAnchorValid = false;
         LOG_DEBUG("PowerPoleCustomization: city-scoped state flushed on city shutdown.");
     }
 }
+
+// Interdependent patches are installed all-or-nothing: if one member of a group cannot be installed,
+// the members that were installed are removed again and the feature stays vanilla. A half-installed
+// group is worse than none -- e.g. only one of the two floor-texture sites patched makes Draw compute
+// the bucket of one texture ID and compare against another, and a FAR drag without the
+// DeterminePolePositions scope places poles off the FAR nodes.
+class PatchGroup final {
+public:
+    explicit PatchGroup(const char* name) : name_(name) {}
+
+    template <typename Patch>
+    void Add(const bool installed, Patch& patch) {
+        ++total_;
+        if (installed) {
+            undo_.push_back([&patch] { patch.Uninstall(); });
+        } else {
+            failed_ = true;
+        }
+    }
+
+    bool Commit() {
+        if (!failed_) {
+            return true;
+        }
+        LOG_ERROR("PowerPoleCustomization: {}: {} of {} patches installed; the feature needs all of them, so none "
+                  "is kept.", name_, undo_.size(), total_);
+        for (auto it = undo_.rbegin(); it != undo_.rend(); ++it) {
+            (*it)();
+        }
+        undo_.clear();
+        return false;
+    }
+
+    [[nodiscard]] size_t Total() const noexcept { return total_; }
+    [[nodiscard]] size_t Installed() const noexcept { return undo_.size(); }
+
+private:
+    const char* name_;
+    std::vector<std::function<void()>> undo_;
+    size_t total_ = 0;
+    bool failed_ = false;
+};
 
 // SC4SIM: the former PowerPoleCustomizationDirector, driven by the SC4SIM director (one director per DLL).
 class PowerPoleModule final {
@@ -3167,20 +3307,30 @@ public:
             return true;
         }
 
+        size_t installed = 0;
+        size_t total = 0;
+        const auto commit = [&installed, &total](PatchGroup& group) {
+            total += group.Total();
+            const bool ok = group.Commit();
+            installed += group.Installed();
+            return ok;
+        };
+
         // The connection-point table repair is a crash guard, not a feature: it is installed even when the module
         // is disabled, because pole exemplars whose instance bits 8-11 are not 1-4 (the FAR poles, any custom pole)
         // leave the table null and the game reads it without a check. With the module disabled the hook only
         // repairs the table (InitConnectionPointsHook drops every override when gSettings.enabled is false).
-        size_t installed = 0;
-        installed += InstallCallSitePatch(initConnectionPointsPatches_[0], "InitConnectionPoints@Init",
-                                           kInitConnectionPoints_CallSite_Init, kInitConnectionPoints,
-                                           &InitConnectionPointsHook);
-        installed += InstallCallSitePatch(initConnectionPointsPatches_[1], "InitConnectionPoints@SetDefaultExemplar",
-                                           kInitConnectionPoints_CallSite_SetDefaultExemplar, kInitConnectionPoints,
-                                           &InitConnectionPointsHook);
-        installed += InstallCallSitePatch(initConnectionPointsPatches_[2], "InitConnectionPoints@Read",
-                                           kInitConnectionPoints_CallSite_Read, kInitConnectionPoints,
-                                           &InitConnectionPointsHook);
+        // Each site guards its own path, so they are not a group: every site that installs helps.
+        constexpr std::array<const char*, 3> kInitNames = {
+            "InitConnectionPoints@Init", "InitConnectionPoints@SetDefaultExemplar", "InitConnectionPoints@Read"};
+        constexpr std::array<uintptr_t, 3> kInitSites = {
+            kInitConnectionPoints_CallSite_Init, kInitConnectionPoints_CallSite_SetDefaultExemplar,
+            kInitConnectionPoints_CallSite_Read};
+        for (size_t i = 0; i < kInitSites.size(); ++i) {
+            ++total;
+            installed += InstallCallSitePatch(initConnectionPointsPatches_[i], kInitNames[i], kInitSites[i],
+                                              kInitConnectionPoints, &InitConnectionPointsHook) ? 1 : 0;
+        }
 
         if (!gSettings.enabled) {
             LOG_INFO("PowerPoleCustomization: disabled via ini; only the connection-point table guard is installed "
@@ -3188,94 +3338,172 @@ public:
             return true;
         }
 
-        installed += InstallCallSitePatch(modelInstanceIdPatch_, "GetModelInstanceID@LoadModel",
-                                           kGetModelInstanceID_CallSite_LoadModel, kGetModelInstanceID,
-                                           &GetModelInstanceIDHook);
-        installed += InstallCallSitePatch(destructorPatch_, "Destructor@DeletingDtor",
-                                           kDestructor_CallSite_DeletingDtor, kDestructor,
-                                           &DestructorHook);
+        PatchGroup modelGroup("model quarter-turn");
+        modelGroup.Add(InstallCallSitePatch(modelInstanceIdPatch_, "GetModelInstanceID@LoadModel",
+                                            kGetModelInstanceID_CallSite_LoadModel, kGetModelInstanceID,
+                                            &GetModelInstanceIDHook), modelInstanceIdPatch_);
+        commit(modelGroup);
 
-        for (size_t i = 0; i < kAddConnectionCallSites.size(); ++i) {
-            installed += InstallCallSitePatch(addConnectionPatches_[i], "AddConnection@PlacePoles",
-                                               kAddConnectionCallSites[i], kAddConnection, &AddConnectionHook);
+        // Everything that reads gOverrides needs the destructor hook: the engine recycles pole
+        // addresses from a fixed pool, so without it a new pole could inherit a dead pole's override.
+        PatchGroup lifetimeGroup("pole lifetime (destructor)");
+        lifetimeGroup.Add(InstallCallSitePatch(destructorPatch_, "Destructor@DeletingDtor",
+                                               kDestructor_CallSite_DeletingDtor, kDestructor, &DestructorHook),
+                          destructorPatch_);
+        gOverridesAllowed = commit(lifetimeGroup);
+        if (!gOverridesAllowed) {
+            LOG_ERROR("PowerPoleCustomization: without the destructor hook no pole customization is applied "
+                      "(attach points, wire appearance, foundation pads).");
+        } else {
+            PatchGroup connectionGroup("custom wires (AddConnection/UpdateConnection)");
+            for (size_t i = 0; i < kAddConnectionCallSites.size(); ++i) {
+                connectionGroup.Add(InstallCallSitePatch(addConnectionPatches_[i], "AddConnection@PlacePoles",
+                                                         kAddConnectionCallSites[i], kAddConnection,
+                                                         &AddConnectionHook), addConnectionPatches_[i]);
+            }
+            for (size_t i = 0; i < kUpdateConnectionCallSites.size(); ++i) {
+                connectionGroup.Add(InstallCallSitePatch(updateConnectionPatches_[i],
+                                                         "UpdateConnection@SetDefaultExemplar",
+                                                         kUpdateConnectionCallSites[i], kUpdateConnection,
+                                                         &UpdateConnectionHook), updateConnectionPatches_[i]);
+            }
+            commit(connectionGroup);
+
+            // Each draw-time lookup patches one site and resolves its value by itself.
+            PatchGroup widthGroup("per-wire width");
+            widthGroup.Add(wireWidthLookupPatch_.Install(), wireWidthLookupPatch_);
+            commit(widthGroup);
+            PatchGroup strandGroup("wire strand texture");
+            strandGroup.Add(wireStrandTexturePatch_.Install(kWireStrandTextureSite, kVanillaWireStrandTextureId,
+                                                            &WireStrandTextureHook, "WireStrandTexture",
+                                                            kMovEsiOpcode), wireStrandTexturePatch_);
+            commit(strandGroup);
+            PatchGroup buoyTextureGroup("wire buoy texture");
+            buoyTextureGroup.Add(wireBuoyTexturePatch_.Install(kWireBuoyTextureSite, kVanillaWireBuoyTextureId,
+                                                               &WireBuoyTextureHook, "WireBuoyTexture",
+                                                               kMovEsiOpcode), wireBuoyTexturePatch_);
+            commit(buoyTextureGroup);
+            PatchGroup buoySizeGroup("water buoy size");
+            buoySizeGroup.Add(waterBallSizePatch_.Install(kWaterBallSizeSite,
+                                  {0xa1, 0x98, 0x67, 0xb4, 0x00, 0xd9, 0x04, 0x90, 0x8d, 0x04, 0x90},
+                                  &WaterBallSizeHook, "WaterBallSize"), waterBallSizePatch_);
+            commit(buoySizeGroup);
+
+            // The three CreateFloor callers rebuild the same pad: all of them, or the pad reverts on some paths.
+            PatchGroup floorGroup("foundation pad (CreateFloor)");
+            floorGroup.Add(InstallCallSitePatch(createFloorPatches_[0], "CreateFloor@SetPosition",
+                                                kCreateFloor_CallSite_SetPosition, kCreateFloor, &CreateFloorHook),
+                           createFloorPatches_[0]);
+            floorGroup.Add(InstallCallSitePatch(createFloorPatches_[1], "CreateFloor@Draw",
+                                                kCreateFloor_CallSite_Draw, kCreateFloor, &CreateFloorHook),
+                           createFloorPatches_[1]);
+            floorGroup.Add(InstallCallSitePatch(createFloorPatches_[2], "CreateFloor@ChangeZoomLevel",
+                                                kCreateFloor_CallSite_ChangeZoomLevel, kCreateFloor,
+                                                &CreateFloorHook), createFloorPatches_[2]);
+            const bool floorInstalled = commit(floorGroup);
+
+            // Both sites of one texture feed the same bucket walk (index and compare): never one of them alone.
+            PatchGroup floorTextureGroup("foundation floor texture");
+            floorTextureGroup.Add(floorTextureHashPatch1_.Install(kFloorTextureHashSite1, kVanillaFloorTextureId,
+                                                                  &FloorTextureHashHook, "FloorTextureHash@1"),
+                                  floorTextureHashPatch1_);
+            floorTextureGroup.Add(floorTextureHashPatch2_.Install(kFloorTextureHashSite2, kVanillaFloorTextureId,
+                                                                  &FloorTextureHashHook, "FloorTextureHash@2"),
+                                  floorTextureHashPatch2_);
+            commit(floorTextureGroup);
+            PatchGroup wallTextureGroup("foundation wall texture");
+            wallTextureGroup.Add(wallTextureHashPatch1_.Install(kWallTextureHashSite1, kVanillaWallTextureId,
+                                                                &WallTextureHashHook, "WallTextureHash@1"),
+                                 wallTextureHashPatch1_);
+            wallTextureGroup.Add(wallTextureHashPatch2_.Install(kWallTextureHashSite2, kVanillaWallTextureId,
+                                                                &WallTextureHashHook, "WallTextureHash@2"),
+                                 wallTextureHashPatch2_);
+            commit(wallTextureGroup);
+
+            // Re-aligns follow-span pads when a connection goes away; only meaningful with the pad hooks.
+            if (floorInstalled) {
+                PatchGroup removeGroup("follow-span pad on RemoveConnection");
+                for (size_t i = 0; i < kRemoveConnectionCallSites.size(); ++i) {
+                    removeGroup.Add(InstallCallSitePatch(removeConnectionPatches_[i], "RemoveConnection",
+                                                         kRemoveConnectionCallSites[i], kRemoveConnection,
+                                                         &RemoveConnectionHook), removeConnectionPatches_[i]);
+                }
+                commit(removeGroup);
+            }
         }
-        for (size_t i = 0; i < kUpdateConnectionCallSites.size(); ++i) {
-            installed += InstallCallSitePatch(updateConnectionPatches_[i], "UpdateConnection@SetDefaultExemplar",
-                                               kUpdateConnectionCallSites[i], kUpdateConnection, &UpdateConnectionHook);
-        }
+
+        PatchGroup styleGroup("pole styles (CreatePowerPole lookups)");
+        styleGroup.Add(poleStyleLookupPatch1_.Install(kPoleStyleLookupSite1,
+                           {0x8b, 0x04, 0xbd, 0xb0, 0x67, 0xb4, 0x00}, &PoleStyleLookupHook, "PoleStyleLookup@1"),
+                       poleStyleLookupPatch1_);
+        styleGroup.Add(poleStyleLookupPatch2_.Install(kPoleStyleLookupSite2,
+                           {0x8b, 0x04, 0xbd, 0xb0, 0x67, 0xb4, 0x00}, &PoleStyleLookupHook, "PoleStyleLookup@2"),
+                       poleStyleLookupPatch2_);
+        const bool stylesInstalled = commit(styleGroup);
+
+        PatchGroup spacingGroup("pole spacing (DeterminePolePositions)");
         for (size_t i = 0; i < kDeterminePolePositionsCallSites.size(); ++i) {
-            installed += InstallCallSitePatch(determinePolePositionsPatches_[i], "DeterminePolePositions",
-                                               kDeterminePolePositionsCallSites[i], kDeterminePolePositions,
-                                               &DeterminePolePositionsHook);
+            spacingGroup.Add(InstallCallSitePatch(determinePolePositionsPatches_[i], "DeterminePolePositions",
+                                                  kDeterminePolePositionsCallSites[i], kDeterminePolePositions,
+                                                  &DeterminePolePositionsHook), determinePolePositionsPatches_[i]);
         }
+        const bool spacingInstalled = commit(spacingGroup);
+
+        // FAR drag (docs SS17): a vtable-slot swap, valid only together with the spacing scope above.
+        bool farInstalled = false;
+        if (spacingInstalled) {
+            PatchGroup farGroup("FAR drag");
+            farGroup.Add(farDrawNetworkLinePatch_.Install(kPowerToolDrawNetworkLineSlot, kDrawNetworkLine,
+                                                          &FarDrawNetworkLineHook, "FarDrawNetworkLine"),
+                         farDrawNetworkLinePatch_);
+            farInstalled = commit(farGroup);
+        }
+
+        PatchGroup keepWiresGroup("keepwires");
+        keepWiresGroup.Add(keepWiresPatch_.Install(kUpdateOnZoneChange, {0x83, 0xec, 0x68, 0x8b, 0x44, 0x24, 0x7c},
+                                                   &KeepWiresOnZoneChangeHook, "KeepWiresOnZoneChange"),
+                           keepWiresPatch_);
+        commit(keepWiresGroup);
+
+        // SC4SIM: power lines across zones -- the two hooked callers and the zoned branch they arm.
+        PatchGroup zonesGroup("power lines across zones");
+        zonesGroup.Add(cellZonedBranchPatch_.Install(kCellZonedBranch,
+                           {0xc7, 0x44, 0x24, 0x14, 0x01, 0x00, 0x00, 0x00, 0xe9, 0xb7, 0x00, 0x00, 0x00},
+                           &CellZonedBranchHook, "CellIsOKForPlacement zoned branch", kJmpRel32),
+                       cellZonedBranchPatch_);
         for (size_t i = 0; i < kCellIsOKForPlacementCallSites.size(); ++i) {
-            installed += InstallCallSitePatch(cellIsOKForPlacementPatches_[i], "CellIsOKForPlacement",
-                                               kCellIsOKForPlacementCallSites[i], kCellIsOKForPlacement,
-                                               &CellIsOKForPlacementHook);
+            zonesGroup.Add(InstallCallSitePatch(cellIsOKForPlacementPatches_[i], "CellIsOKForPlacement",
+                                                kCellIsOKForPlacementCallSites[i], kCellIsOKForPlacement,
+                                                &CellIsOKForPlacementHook), cellIsOKForPlacementPatches_[i]);
         }
-        installed += wireWidthLookupPatch_.Install() ? 1 : 0;
+        commit(zonesGroup);
 
-        installed += InstallCallSitePatch(createFloorPatches_[0], "CreateFloor@SetPosition",
-                                           kCreateFloor_CallSite_SetPosition, kCreateFloor, &CreateFloorHook);
-        installed += InstallCallSitePatch(createFloorPatches_[1], "CreateFloor@Draw",
-                                           kCreateFloor_CallSite_Draw, kCreateFloor, &CreateFloorHook);
-        installed += InstallCallSitePatch(createFloorPatches_[2], "CreateFloor@ChangeZoomLevel",
-                                           kCreateFloor_CallSite_ChangeZoomLevel, kCreateFloor, &CreateFloorHook);
-        installed += floorTextureHashPatch1_.Install(kFloorTextureHashSite1, kVanillaFloorTextureId,
-                                                       &FloorTextureHashHook, "FloorTextureHash@1") ? 1 : 0;
-        installed += floorTextureHashPatch2_.Install(kFloorTextureHashSite2, kVanillaFloorTextureId,
-                                                       &FloorTextureHashHook, "FloorTextureHash@2") ? 1 : 0;
-        installed += wallTextureHashPatch1_.Install(kWallTextureHashSite1, kVanillaWallTextureId,
-                                                      &WallTextureHashHook, "WallTextureHash@1") ? 1 : 0;
-        installed += wallTextureHashPatch2_.Install(kWallTextureHashSite2, kVanillaWallTextureId,
-                                                      &WallTextureHashHook, "WallTextureHash@2") ? 1 : 0;
-        installed += wireStrandTexturePatch_.Install(kWireStrandTextureSite, kVanillaWireStrandTextureId,
-                                                       &WireStrandTextureHook, "WireStrandTexture",
-                                                       kMovEsiOpcode) ? 1 : 0;
-        installed += wireBuoyTexturePatch_.Install(kWireBuoyTextureSite, kVanillaWireBuoyTextureId,
-                                                     &WireBuoyTextureHook, "WireBuoyTexture",
-                                                     kMovEsiOpcode) ? 1 : 0;
-        installed += waterBallSizePatch_.Install(kWaterBallSizeSite,
-            {0xa1, 0x98, 0x67, 0xb4, 0x00, 0xd9, 0x04, 0x90, 0x8d, 0x04, 0x90},
-            &WaterBallSizeHook, "WaterBallSize") ? 1 : 0;
-
-        installed += poleStyleLookupPatch1_.Install(kPoleStyleLookupSite1,
-            {0x8b, 0x04, 0xbd, 0xb0, 0x67, 0xb4, 0x00}, &PoleStyleLookupHook, "PoleStyleLookup@1") ? 1 : 0;
-        installed += poleStyleLookupPatch2_.Install(kPoleStyleLookupSite2,
-            {0x8b, 0x04, 0xbd, 0xb0, 0x67, 0xb4, 0x00}, &PoleStyleLookupHook, "PoleStyleLookup@2") ? 1 : 0;
-
-        // FAR drag (docs SS17). A vtable-slot swap, not a code patch.
-        const bool farInstalled = farDrawNetworkLinePatch_.Install(kPowerToolDrawNetworkLineSlot, kDrawNetworkLine,
-                                                                    &FarDrawNetworkLineHook, "FarDrawNetworkLine");
-        installed += farInstalled ? 1 : 0;
-        installed += keepWiresPatch_.Install(kUpdateOnZoneChange,
-            {0x83, 0xec, 0x68, 0x8b, 0x44, 0x24, 0x7c}, &KeepWiresOnZoneChangeHook,
-            "KeepWiresOnZoneChange") ? 1 : 0;
-        // SC4SIM: dezoning under new poles (independent of keepwires: dezoning never reroutes a line).
+        // SC4SIM: dezoning under new poles -- recorded by PlacePoles, applied when the drag ends.
+        PatchGroup dezoneGroup("dezone under new poles");
         for (size_t i = 0; i < kPlacePolesCallSites.size(); ++i) {
-            installed += InstallCallSitePatch(placePolesPatches_[i], "PlacePoles",
-                                               kPlacePolesCallSites[i], kPlacePoles, &PlacePolesHook);
+            dezoneGroup.Add(InstallCallSitePatch(placePolesPatches_[i], "PlacePoles", kPlacePolesCallSites[i],
+                                                 kPlacePoles, &PlacePolesHook), placePolesPatches_[i]);
         }
-        installed += onMouseDownLPatch_.Install(kOnMouseDownLSlot, kOnMouseDownL, &OnMouseDownLHook,
-                                                "OnMouseDownL@NetworkToolInputControl") ? 1 : 0;
-        installed += onMouseUpLPatch_.Install(kOnMouseUpLSlot, kOnMouseUpL, &OnMouseUpLHook,
-                                              "OnMouseUpL@NetworkToolInputControl") ? 1 : 0;
+        dezoneGroup.Add(onMouseDownLPatch_.Install(kOnMouseDownLSlot, kOnMouseDownL, &OnMouseDownLHook,
+                                                   "OnMouseDownL@NetworkToolInputControl"), onMouseDownLPatch_);
+        dezoneGroup.Add(onMouseUpLPatch_.Install(kOnMouseUpLSlot, kOnMouseUpL, &OnMouseUpLHook,
+                                                 "OnMouseUpL@NetworkToolInputControl"), onMouseUpLPatch_);
+        commit(dezoneGroup);
 
-        // Tab / Shift-Tab pole-style switch. Byte-validates the OnKeyDown slot, which transitively
-        // confirms the network-tool input-control vtable the overlay's power-tool check also reads.
-        const bool keyHookInstalled = onKeyDownPatch_.Install(kOnKeyDownSlot, kOnKeyDown,
-                                                              &OnKeyDownHook, "OnKeyDown@NetworkToolInputControl");
-        installed += keyHookInstalled ? 1 : 0;
+        // Tab / Shift-Tab pole-style switch: useless without the style lookups.
+        bool keyHookInstalled = false;
+        if (stylesInstalled) {
+            PatchGroup keyGroup("Tab style switch");
+            keyGroup.Add(onKeyDownPatch_.Install(kOnKeyDownSlot, kOnKeyDown, &OnKeyDownHook,
+                                                 "OnKeyDown@NetworkToolInputControl"), onKeyDownPatch_);
+            keyHookInstalled = commit(keyGroup);
+        }
         styleUiValidated_ = keyHookInstalled && farInstalled;
 
-        LOG_INFO("PowerPoleCustomization: installed {} of {} patches.", installed,
-                 initConnectionPointsPatches_.size() + kAddConnectionCallSites.size() +
-                 kUpdateConnectionCallSites.size() + kDeterminePolePositionsCallSites.size() +
-                 kCellIsOKForPlacementCallSites.size() + kPlacePolesCallSites.size() + 2 +
-                 2 + createFloorPatches_.size() + 4 + 2 + 2 + 1 + 1 + 1 + 1 + 1);
+        LOG_INFO("PowerPoleCustomization: installed {} of {} patches.", installed, total);
 
-        // SC4SIM: the SC4SIM director subscribes once to PreCityShutdown and to the cheat-code
-        // notifications for all its modules and forwards them to DoMessage.
+        // SC4SIM: the SC4SIM director subscribes once to PostCityInit, PreCityShutdown and to the
+        // cheat-code notifications for all its modules and forwards them to DoMessage.
         (void)target;
 
         const cISC4AppPtr app;
@@ -3314,8 +3542,10 @@ public:
         for (auto& patch : initConnectionPointsPatches_) patch.Uninstall();
         for (auto& patch : addConnectionPatches_) patch.Uninstall();
         for (auto& patch : updateConnectionPatches_) patch.Uninstall();
+        for (auto& patch : removeConnectionPatches_) patch.Uninstall();
         for (auto& patch : determinePolePositionsPatches_) patch.Uninstall();
         for (auto& patch : cellIsOKForPlacementPatches_) patch.Uninstall();
+        cellZonedBranchPatch_.Uninstall();
         for (auto& patch : placePolesPatches_) patch.Uninstall();
         wireWidthLookupPatch_.Uninstall();
         for (auto& patch : createFloorPatches_) patch.Uninstall();
@@ -3328,17 +3558,19 @@ public:
         waterBallSizePatch_.Uninstall();
         poleStyleLookupPatch1_.Uninstall();
         poleStyleLookupPatch2_.Uninstall();
-        gPolylineWidthOverrides.clear();
-        gConnectionTextureOverrides.clear();
-        gWaterBallSizeOverrides.clear();
         gOverrides.clear();
+        ++gOverridesGeneration;
+        gOverridesAllowed = false;
         return true;
     }
 
     bool DoMessage(cIGZMessage2* pMsg) {
         if (pMsg) {
             auto* const stdMsg = static_cast<cIGZMessage2Standard*>(pMsg);
-            if (stdMsg->GetType() == kSC4MessagePreCityShutdown) {
+            if (stdMsg->GetType() == kSC4MessagePostCityInit) {
+                gCityShuttingDown = false;
+            } else if (stdMsg->GetType() == kSC4MessagePreCityShutdown) {
+                gCityShuttingDown = true;
                 FlushCityScopedState();
             } else if (stdMsg->GetType() == kCheatCodeMessageType &&
                        static_cast<uint32_t>(stdMsg->GetData1()) == kCheatKeepWires) {
@@ -3353,32 +3585,28 @@ public:
     }
 
 private:
-    static size_t InstallCallSitePatch(TerrainDecal::RelativeCallPatch& patch, const char* name,
-                                        const uintptr_t callSite, const uintptr_t expectedTarget, void* hookFn) {
-        patch.Configure(name, callSite, hookFn);
+    // The call site must target expectedTarget; RelativeCallPatch checks it before writing anything.
+    static bool InstallCallSitePatch(PowerPoles::RelativeCallPatch& patch, const char* name,
+                                     const uintptr_t callSite, const uintptr_t expectedTarget, void* hookFn) {
+        patch.Configure(name, callSite, hookFn, expectedTarget);
         if (!patch.Install()) {
             LOG_ERROR("PowerPoleCustomization: failed to install {} at 0x{:08X}.", name, static_cast<uint32_t>(callSite));
-            return 0;
+            return false;
         }
-        if (patch.GetOriginalTarget() != expectedTarget) {
-            LOG_ERROR("PowerPoleCustomization: {} call site 0x{:08X} targets 0x{:08X}, expected 0x{:08X}; reverting.",
-                       name, static_cast<uint32_t>(callSite), static_cast<uint32_t>(patch.GetOriginalTarget()),
-                       static_cast<uint32_t>(expectedTarget));
-            patch.Uninstall();
-            return 0;
-        }
-        return 1;
+        return true;
     }
 
-    std::array<TerrainDecal::RelativeCallPatch, 3> initConnectionPointsPatches_{};
-    TerrainDecal::RelativeCallPatch modelInstanceIdPatch_{};
-    TerrainDecal::RelativeCallPatch destructorPatch_{}; // side-table cleanup on pole destruction
-    std::array<TerrainDecal::RelativeCallPatch, 4> addConnectionPatches_{};
-    std::array<TerrainDecal::RelativeCallPatch, 2> updateConnectionPatches_{};
-    std::array<TerrainDecal::RelativeCallPatch, 3> determinePolePositionsPatches_{};
-    std::array<TerrainDecal::RelativeCallPatch, 2> cellIsOKForPlacementPatches_{}; // SC4SIM: zones / farm fields
-    std::array<TerrainDecal::RelativeCallPatch, 2> placePolesPatches_{};           // SC4SIM: dezone under new poles
-    std::array<TerrainDecal::RelativeCallPatch, 3> createFloorPatches_{};
+    std::array<PowerPoles::RelativeCallPatch, 3> initConnectionPointsPatches_{};
+    PowerPoles::RelativeCallPatch modelInstanceIdPatch_{};
+    PowerPoles::RelativeCallPatch destructorPatch_{}; // override/table cleanup on pole destruction
+    std::array<PowerPoles::RelativeCallPatch, 4> addConnectionPatches_{};
+    std::array<PowerPoles::RelativeCallPatch, 2> updateConnectionPatches_{};
+    std::array<PowerPoles::RelativeCallPatch, 6> removeConnectionPatches_{};
+    std::array<PowerPoles::RelativeCallPatch, 3> determinePolePositionsPatches_{};
+    std::array<PowerPoles::RelativeCallPatch, 2> cellIsOKForPlacementPatches_{}; // SC4SIM: zones / farm fields
+    ByteSpanCallPatch cellZonedBranchPatch_{};                                    // SC4SIM: zoned-cell checks
+    std::array<PowerPoles::RelativeCallPatch, 2> placePolesPatches_{};           // SC4SIM: dezone under new poles
+    std::array<PowerPoles::RelativeCallPatch, 3> createFloorPatches_{};
     Imm32CallPatch floorTextureHashPatch1_{};
     Imm32CallPatch floorTextureHashPatch2_{};
     Imm32CallPatch wallTextureHashPatch1_{};
@@ -3401,7 +3629,13 @@ private:
 PowerPoleModule sModule;
 
 void PowerPoleCustomization::OnStart() {
-    LoadSettings();
+    try {
+        LoadSettings();
+    } catch (const std::exception& e) {
+        // Nothing may escape into the game's DLL loader: keep the defaults and say why.
+        gSettings = {};
+        LOG_ERROR("PowerPoleCustomization: could not read the settings ({}); using the defaults.", e.what());
+    }
 }
 
 bool PowerPoleCustomization::PostAppInit(cIGZMessageTarget2* target) {
@@ -3432,10 +3666,13 @@ void PowerPoleCustomization::DoMessage(cIGZMessage2* message) {
 //   5. CLOSED (validated in-game 2026-07-19): full 1-N geometry and sag rebuild in the active
 //      tConnection regular-polyline vector, including counts below vanilla's fixed four.
 //   6. CLOSED (validated in-game 2026-07-19): per-wire width lookup at 0x0064b855. The patch is
-//      byte-validated before installation and falls back to vanilla width for unregistered wires.
+//      byte-validated before installation. Since 2026-11 width, wire/buoy textures and buoy size
+//      are resolved at draw time from (pole, connection, wire index): they survive save/load and
+//      RemoveConnection, which the former address-keyed tables did not.
 //   7. CLOSED (2026-07-19): pole lifetime. The complete destructor (0x0064dfc0) is hooked at its
-//      sole call site inside the scalar deleting destructor (0x0064e383), so side-table entries
-//      die with their pole; a PreCityShutdown flush clears all remaining city-scoped state.
+//      sole call site inside the scalar deleting destructor (0x0064e383), so overrides and private
+//      connection-point tables die with their pole; a PreCityShutdown flush clears the overrides.
+//      No override is made when this hook cannot be installed.
 //   8. CLOSED (2026-07-19): custom foundation texture IDs are validated against the resource
 //      manager and registered with the engine's texture registry before use (StaticInit only
 //      registers the four vanilla IDs; an unregistered ID null-derefs in Draw).

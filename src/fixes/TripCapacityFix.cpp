@@ -22,6 +22,7 @@
 
 #include "TripCapacityFix.h"
 #include "SimLog.h"
+#include "VersionDetection.h"
 
 #include <Windows.h>
 #include <cstdint>
@@ -91,6 +92,13 @@ void TripCapacityFix::PostAppInit()
 	if (!enabled)
 	{
 		SimLog::Write(SimLog::Level::Info, "TripCapacityFix: disabled in SC4SIM.ini ([GameFixes] TripCapacityWealthFix=false).");
+		return;
+	}
+	// Gated on the game version like every other patch, not only on the byte check.
+	const uint16_t version = VersionDetection::GetInstance().GetGameVersion();
+	if (version != 641)
+	{
+		SimLog::Write(SimLog::Level::Warning, "TripCapacityFix: game version %u, the fix needs 1.1.641: not patched.", version);
 		return;
 	}
 	// All or nothing: patch only when both sites are the expected 1.1.641 code.

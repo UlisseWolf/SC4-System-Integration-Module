@@ -1102,7 +1102,7 @@ since vector reallocation moves entries). New exemplar properties `0xB22A000F` (
 AddConnection's decompile shows the second `vector<vector<cS3DVector3>>` at entry+0x20 is built
 ONLY when the span crosses water (terrain service vtbl+0x88 test on either endpoint's cell) and
 holds a coarse copy of every strand: same GetControlPoints output, `TessellateBezierSegment(...,
-count=3)` (4 points total), same insert/erase helpers as the regular list. Previously called the
+count=3)` into a vector resized to 3 (3 points: t = 1/3, 2/3, 1), same insert/erase helpers as the regular list. Previously called the
 "buoy list" in these docs — renamed. DLL consequence (implemented): the custom strand rebuild now
 also clears and rebuilds this list (when vanilla had populated it) with the same attach points,
 strand count, yaw rotation, and sag, so water spans match custom geometry.
@@ -1126,7 +1126,7 @@ modifier state.)
 ### E. Water-crossing buoy balls: size + density (2026-07-19, same pass)
 
 DrawPowerlines draws one billboarded quad per INTERIOR point of each water polyline (iterations =
-pointCount - 1; vanilla 4 points = 3 balls), half-sized `g_afPowerLineWidthFactors[zoom] * 4.0f`
+pointCount - 1; vanilla 3 points = 2 balls), half-sized `g_afPowerLineWidthFactors[zoom] * 4.0f`
 (constant at `0x00a8e17c`). The zoom-table read at **`0x0064ba6e`** (`A1 98 67 B4 00 / D9 04 90 /
 8D 04 90` = MOV EAX,[0x00b46798]; FLD [EAX+EDX*4]; LEA EAX,[EAX+EDX*4], 11 bytes) is the single
 chokepoint -- all later size uses re-read `[EAX]`. At that instruction EDX = zoom, EDI = current

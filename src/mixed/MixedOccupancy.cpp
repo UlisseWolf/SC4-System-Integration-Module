@@ -401,7 +401,19 @@ namespace
 			return;
 		}
 
-		// Same formulas as the two branches of PerformCensus, for the types the game skipped.
+		// Same formulas as the two branches of PerformCensus, for the types the game skipped. Within one class only
+		// one type can move in (GetAvailableCapacity: the wealth levels of a class are exclusive, the first to move in
+		// takes the building), so each secondary class adds ONE type: the one already living there, else the one
+		// with the largest capacity x desirability. Adding CS$$ and CO$$ (or R$$ and R$$$) together counted the same
+		// room twice and overstated demand.
+		struct Candidate
+		{
+			uint32_t type = 0;
+			float weighted = 0.0f;
+			bool populated = false;
+			bool valid = false;
+		};
+		Candidate best[4]{}; // by OccupantClass
 		const OccupantClass primary = ClassOfPurpose(profile->purpose);
 		ForEachCapacity(*profile, [&](uint32_t type, uint16_t)
 		{
@@ -412,6 +424,20 @@ namespace
 			if (!GetDesirability(bds, type, cellX, cellZ, desirability)) return;
 			const uint16_t capacity = VCall<uint16_t>(lot, kLotGetCapacity, type, false);
 			const float weighted = static_cast<float>(capacity) * desirability;
+			const bool populated = GetPopulation(lot, type) != 0;
+			Candidate& slot = best[static_cast<size_t>(occupantClass) & 3];
+			if (!slot.valid || (populated && !slot.populated) || (populated == slot.populated && weighted > slot.weighted))
+			{
+				slot = Candidate{ type, weighted, populated, true };
+			}
+		});
+
+		for (const Candidate& candidate : best)
+		{
+			if (!candidate.valid) continue;
+			const uint32_t type = candidate.type;
+			const OccupantClass occupantClass = ClassOf(type);
+			const float weighted = candidate.weighted;
 
 			if (occupantClass == OccupantClass::Commercial || occupantClass == OccupantClass::Industrial)
 			{
@@ -422,7 +448,7 @@ namespace
 			{
 				// Residential branch.
 				void* const residentialSim = Member<void*>(demandSimulator, kDemandResidentialSim);
-				if (!residentialSim) return;
+				if (!residentialSim) continue;
 				float shareStorage = 0.0f;
 				const float* const share = VCall<float*>(residentialSim, kResidentialShareSlot, &shareStorage, cellX, cellZ);
 				const float bandValue = VCall<float>(residentialSim, kResidentialBandSlot, cellX, cellZ);
@@ -434,7 +460,7 @@ namespace
 				AddToCensus(demandSimulator, ((wealth + 0x210) << 4) + band, weighted * (share ? *share : 0.0f));
 				AddToCensus(demandSimulator, (wealth << 4) + 0x1001, weighted);
 			}
-		});
+		}
 	}
 
 	// ---------------------------------------------------------------- hook 4: UpdateTrafficVolume (trips)
@@ -458,7 +484,7 @@ namespace
 	constexpr uintptr_t kOriginalUpdateTrafficVolume = 0x006C27E0;
 	constexpr uintptr_t kGameOperatorNew = 0x0090CF54;      // cdecl void* (size_t)
 	constexpr uintptr_t kGameOperatorDelete = 0x0090CF63;   // cdecl void (void*)
-	constexpr uintptr_t kTripListPushFront = 0x006C1E10;    // thiscall (list*, const cSC4TripData*), copies the data
+	constexpr uintptr_t kTripDataCopy = 0x006C0AE0;         // thiscall (cSC4TripData* this, const cSC4TripData*): copy ctor
 	constexpr uintptr_t kTripListErase = 0x006C0FA0;        // thiscall (list*, node** out, node* it): *out = next
 	constexpr uintptr_t kTripListClear = 0x006C0FF0;        // thiscall (list*)
 	constexpr uintptr_t kCommuteShareSimPtr = 0x00B43DA4;   // object whose slot 30 gives the commuting share of a cell
@@ -526,6 +552,9 @@ namespace
 		return next;
 	}
 
+	// Appends a trip at the back of the list, as UpdateTrafficVolume itself does (0x006C2CAF-0x006C2D02: a 0x34-byte
+	// node from the game allocator, the data copied with the cSC4TripData copy constructor, linked before the header).
+	// The game's helper 0x006C1E10 inserts at the front instead, which changes the order the trips are routed in.
 	void AddTrip(TripList* list, uint8_t type, uint8_t wealth, uint32_t count, uint8_t flags, uint8_t state)
 	{
 		TripData data{};
@@ -534,7 +563,15 @@ namespace
 		data.wealth = wealth;
 		data.flags = flags;
 		data.state = state;
-		reinterpret_cast<void(__thiscall*)(TripList*, const TripData*)>(kTripListPushFront)(list, &data);
+		static_assert(sizeof(TripNode) == 0x34);
+		auto* const node = static_cast<TripNode*>(GameNew(sizeof(TripNode)));
+		if (!node) return;
+		reinterpret_cast<void(__thiscall*)(TripData*, const TripData*)>(kTripDataCopy)(&node->data, &data);
+		TripNode* const header = list->header;
+		node->next = header;
+		node->prev = header->prev;
+		header->prev->next = node;
+		header->prev = node;
 	}
 
 	uint16_t TravelPopulation(void* lot, uint32_t type)
@@ -696,7 +733,7 @@ namespace
 		}
 	}
 
-	void UpdateMixedTraffic(void* lot, void* trafficSource, bool residentialZone)
+	void UpdateMixedTraffic(void* lot, void* trafficSource, bool residentialZone, bool commercialZone)
 	{
 		TripList* const list = reinterpret_cast<TripList*>(static_cast<uint8_t*>(trafficSource) + kTrafficSourceTripList);
 		if (!list->header) return;
@@ -713,6 +750,17 @@ namespace
 
 		if (!anyCommuters && !hasFreight)
 		{
+			if (commercialZone)
+			{
+				// The game makes no trips in a commercial zone and leaves the list alone: only the commuter and
+				// freight trips this update made earlier go away.
+				for (TripNode* node = list->header->next; node != list->header;)
+				{
+					const bool ours = !(node->data.flags & kTripFlagPlaceholder) && node->data.type <= kTripTypeFreight;
+					node = ours ? EraseTrip(list, node) : node->next;
+				}
+				return;
+			}
 			// No trips: the game keeps a single placeholder trip.
 			TripNode* const first = list->header->next;
 			if (first != list->header && (first->data.flags & kTripFlagPlaceholder))
@@ -754,7 +802,7 @@ namespace
 				const bool extra = (residents && !residentialZone) || (industry && !industrialZone);
 				if (extra)
 				{
-					UpdateMixedTraffic(lot, trafficSource, residentialZone);
+					UpdateMixedTraffic(lot, trafficSource, residentialZone, zone >= 4 && zone <= 6);
 					return true;
 				}
 			}
@@ -779,17 +827,18 @@ namespace
 	constexpr uintptr_t kDemandSimulatorPtr = 0x00B43D74;
 	constexpr size_t kDemandCalculateJobsPerUnit = 8;  // (float jobs[4], demand ID, demand index): writes jobs[1..3]
 
-	using GetJobsFn = bool(__thiscall*)(void* lot, float* jobs);
+	// cSC4Lot::GetJobs (0x006BF800) returns void: it only fills the jobs array (EAX is whatever was left in it).
+	using GetJobsFn = void(__thiscall*)(void* lot, float* jobs);
 	GetJobsFn originalGetJobs = nullptr;
 
-	bool __fastcall Hook_GetJobs(void* lot, void* /*edx*/, float* jobs)
+	void __fastcall Hook_GetJobs(void* lot, void* /*edx*/, float* jobs)
 	{
-		const bool result = originalGetJobs(lot, jobs);
-		if (!mixedTraffic || !jobs) return result;
+		originalGetJobs(lot, jobs);
+		if (!mixedTraffic || !jobs) return;
 
 		const BuildingProfile* const profile = GetMixedProfile(lot, BuildingDevelopmentSimulator());
 		void* const demand = *reinterpret_cast<void**>(kDemandSimulatorPtr);
-		if (!profile || !demand) return result;
+		if (!profile || !demand) return;
 
 		const OccupantClass primary = ClassOfPurpose(profile->purpose);
 		ForEachCapacity(*profile, [&](uint32_t type, uint16_t)
@@ -808,7 +857,6 @@ namespace
 				jobs[i] += perUnit[i] * static_cast<float>(population);
 			}
 		});
-		return result;
 	}
 
 	// ---------------------------------------------------------------- log report (read only)
@@ -1048,7 +1096,8 @@ void MixedOccupancy::DoMessage(cIGZMessage2* message)
 	case kMessageSimNewMonth:
 		if (debugLog)
 		{
-			ReportMixedLots(SimLog::Level::Debug);
+			// Its own setting asks for this report, so it is not subject to the global [DEBUG] filter.
+			ReportMixedLots(SimLog::Level::Info);
 		}
 		break;
 	case kMessageCheatIssued:

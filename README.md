@@ -68,11 +68,11 @@ it and says so in the log:
    [Building](#building)).
 2. Copy `SC4SIM.dll` and, optionally, `SC4SIM.ini` to your SimCity 4 **Plugins** folder.
 3. Start the game. `SC4SIM.log`, created next to the DLL, should report:
-   - `SC4 SIM DLL 1.11.0`;
+   - `SC4 SIM DLL 1.11.1`;
    - `PowerPoleCustomization: installed N of N patches`;
    - `AdvancedWater: installed the water building query UI hook`;
    - `MixedOccupancy: enabled (...)`;
-   - `ManufacturingZone: enabled, zone slot 13 ...` (on by default);
+   - `ManufacturingZone: off (opt-in ...)` (off by default; `enabled, zone slot 13 ...` once turned on);
    - `Afterlife: run_afterlife_balance_variables registered` when a city opens;
    - `FundingSliderFix: department budgets resync full funding with the buildings' current costs every month.`
    - `PortUpgradeFix: port upgrades remove the old stage's demand effects before the new stage replaces it.`
@@ -192,7 +192,8 @@ The reverse-engineering notes are in [`docs/mixed-occupancy.md`](docs/mixed-occu
 
 ## Manufacturing (I-M) zone
 
-> **On by default.** Set `Enabled=false` in `[ManufacturingZone]` to turn it off. Checked against the 1.1.641 executable and tested in game.
+> **Off by default (opt-in, since 1.11.1).** Set `Enabled=true` in `[ManufacturingZone]` to turn it on: it then acts in
+> every city you open. Checked against the 1.1.641 executable and tested in game.
 > Test it on a copy of a region.
 
 In the base game the I-D, I-M and I-HT developers all ask for the same zone, so dirty, manufacturing and high-tech
@@ -202,7 +203,8 @@ save format is sized for them, so the new zone **reuses a slot**: Spaceport (13)
 - **Growth.** The I-M developer asks for the new zone; every growth stage fits it; there is no land-value wealth
   test in it, as in the other industrial zones. I-M grows only in the new zone; I-D and I-HT never grow there.
 - **Placing it.** The `IMZone` cheat toggles a brush: while it is on, the **Dense Industrial** zone tool places the
-  I-M zone. `IMZoneConvert` turns every empty dense industrial cell into the I-M zone.
+  I-M zone. `IMZoneConvert` turns every empty dense industrial cell into the I-M zone; `IMZoneRevert` turns every
+  empty I-M cell back into dense industry (do it, and rezone the I-M lots, before removing the DLL).
 - **`IMZoneInfo` cheat.** Writes the status and counters to `SC4SIM.log`.
 - **Safety.** The DLL measures the game's functions before patching them (vtable addresses, calling convention,
   argument order, the answers of the original rule functions) and installs nothing it cannot confirm.
@@ -304,8 +306,8 @@ Details, the news events and the tests are in [`docs/afterlife.md`](docs/afterli
 | | `DebugLog` | `false` | Writes the cheat's report of the mixed lots to `SC4SIM.log` at the start of every month. |
 | | `MixedTraffic` | `true` | Commuters and freight for the secondary classes, and secondary jobs as commute destinations. |
 | `[Afterlife]` | `Enabled` | `true` | Registers the DLL version of the Afterlife functions in the advisor Lua. |
-| `[ManufacturingZone]` | `Enabled` | `true` | Turns the I-M zone on or off. |
-| | `ZoneSlot` | `13` | Zone slot reused for the I-M zone: 13 Spaceport or 10 Military. |
+| `[ManufacturingZone]` | `Enabled` | `false` | Turns the I-M zone on (opt-in). |
+| | `ZoneSlot` | `13` | Zone slot reused for the I-M zone: 13 Spaceport or 10 Military (other values refused). |
 | | `StageHook` | `true` | Every growth stage fits the slot; required for the I-M redirect. |
 | | `RCIZoneHook` | `true` | `IsRCIZone` answers true for the slot. |
 | | `IgnoreLandValue` | `true` | No land-value wealth test in the slot. |
@@ -327,7 +329,7 @@ Details, the news events and the tests are in [`docs/afterlife.md`](docs/afterli
 | | `CrossZones` | `true` | Lets poles stand on empty zones and farm fields. |
 | | `DezoneUnderPoles` | `true` | Removes the zone from the cell of every new pole when the drag ends. |
 | | `DezoneFieldCells` | `true` | Also on farm fields; the game demolishes that field lot. |
-| | `DebugLog` | `false` | Writes the power-pole debug traces to `SC4SIM.log`. |
+| | `DebugLog` | `false` | Writes every `[DEBUG]` line to `SC4SIM.log`: the power-pole traces and the monthly deathcare totals. |
 | | `MaxPointsPerDirection` | `8` | Maximum number of cables per direction (1–15). |
 | `[PowerPoles.<name>]` | `REG.*`, `FAR-*`, `InterPoleDistance` | — | Pole styles, see above. |
 

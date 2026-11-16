@@ -6,7 +6,7 @@
 // Copyright (c) 2024, 2025, 2026 Nicholas Hayes
 //
 // This file is licensed under terms of the MIT License.
-// See LICENSE.txt for more information.
+// See LICENSE-sc4-query-ui-hooks.txt (in this folder) for more information.
 // Copied into SC4SIM from sc4-query-ui-hooks (public interface header, MIT License).
 //
 ///////////////////////////////////////////////////////////////////////////////

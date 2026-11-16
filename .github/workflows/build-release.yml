@@ -1,5 +1,5 @@
-# Builds SC4SIM.dll on every push to master and publishes SC4SIM-<version>.zip (SC4SIM.dll, SC4SIM.ini and the
-# license files in Licenses/) as a GitHub release. The version comes from SIM_DLL_VERSION_STR in src/version.h: a new release (tag
+# Builds SC4SIM.dll on every push to master and publishes SC4SIM-<version>.zip (SC4SIM.dll, SC4SIM.ini, README.txt,
+# the Lua scripts in Lua/ and the license files in Licenses/) as a GitHub release. The version comes from SIM_DLL_VERSION_STR in src/version.h: a new release (tag
 # v<version>) is created only when that version has no release yet, so bump src/version.h to publish.
 name: Build and release SC4SIM.dll
 
@@ -56,6 +56,27 @@ jobs:
           New-Item -ItemType Directory -Force -Path package | Out-Null
           Copy-Item $dll package/
           Copy-Item SC4SIM.ini package/
+          # The Lua features (sim.version checks, advisor rewards, Afterlife news, deathcare hearses) run from scripts
+          # inside CAM_LUA_Controller.dat, which comes with the Colossus Addon Mod, not with this zip: the sources
+          # are shipped so the requirement is visible and the .dat can be rebuilt (tools/afterlife-news/build_news.py).
+          New-Item -ItemType Directory -Force -Path package/Lua | Out-Null
+          Copy-Item lua/*.lua package/Lua/
+          @(
+            "SC4SIM.dll $version - SC4 System Integration Module DLL (Colossus Addon Mod), for SimCity 4 1.1.641.",
+            "",
+            "Install: copy SC4SIM.dll and SC4SIM.ini to the top level of the Plugins folder.",
+            "",
+            "REQUIRED DATA FILES (not in this zip, they come with the Colossus Addon Mod):",
+            "- CAM_LUA_Controller.dat: the Lua of the advisor rewards (package 0x0151A000), of the Afterlife news",
+            "  (afterlife_news.lua) and of the deathcare hearses. Without it the DLL works, but those Lua features are absent.",
+            "- CAM_Afterlife_News_en.dat: the Afterlife news ticker lines.",
+            "- SC4SIM_ManufacturingZone.dat: colour, cursor and name of the optional I-M zone (off by default).",
+            "- CAM_PowerPoles.dat and CAM_PowerPoles_Models.dat: the P3 pole styles of SC4SIM.ini.",
+            "The Lua/ folder holds the sources of the scripts inside CAM_LUA_Controller.dat, for reference; copying them",
+            "to Plugins does nothing by themselves.",
+            "",
+            "Source code and documentation: ${{ github.server_url }}/${{ github.repository }}"
+          ) | Set-Content -Path package/README.txt -Encoding utf8
           # SC4SIM.dll is LGPL-3.0; the code it includes from other projects keeps its own license.
           New-Item -ItemType Directory -Force -Path package/Licenses | Out-Null
           Copy-Item LICENSE package/Licenses/LICENSE-SC4SIM-LGPL-3.0.txt
@@ -64,6 +85,7 @@ jobs:
           Copy-Item src/fixes/LICENSE-sc4-remove-phantom-budget-items.txt package/Licenses/LICENSE-sc4-remove-phantom-budget-items-MIT.txt
           Copy-Item src/fixes/LICENSE-sc4-seaport-demand-cap-fix.txt package/Licenses/LICENSE-sc4-seaport-demand-cap-fix-LGPL-2.1.txt
           Copy-Item vendor/gzcom-dll/LICENSE package/Licenses/LICENSE-gzcom-dll-LGPL-2.1.txt
+          Copy-Item src/water/QueryUIHooks/LICENSE-sc4-query-ui-hooks.txt package/Licenses/LICENSE-sc4-query-ui-hooks-MIT.txt
           Copy-Item vendor/mINI/LICENSE package/Licenses/LICENSE-mINI-MIT.txt
           @(
             "SC4SIM.dll $version - SC4 System Integration Module DLL (Colossus Addon Mod)",
@@ -75,6 +97,7 @@ jobs:
             "- Advanced Water Management: sc4-advanced-water-management by Nicholas Hayes, MIT (LICENSE-sc4-advanced-water-management-MIT.txt)",
             "- RemovePhantomBudgetItems cheat: sc4-remove-phantom-budget-items by Nicholas Hayes, MIT (LICENSE-sc4-remove-phantom-budget-items-MIT.txt)",
             "- Seaport demand cap fix: sc4-seaport-demand-cap-fix by Nicholas Hayes, LGPL 2.1 (LICENSE-sc4-seaport-demand-cap-fix-LGPL-2.1.txt)",
+            "- query UI hook interfaces (src/water/QueryUIHooks): sc4-query-ui-hooks by Nicholas Hayes, MIT (LICENSE-sc4-query-ui-hooks-MIT.txt)",
             "- gzcom-dll: LGPL 2.1 (LICENSE-gzcom-dll-LGPL-2.1.txt)",
             "- mINI: MIT (LICENSE-mINI-MIT.txt)"
           ) | Set-Content -Path package/Licenses/README.txt -Encoding utf8
@@ -109,4 +132,4 @@ jobs:
           gh release create $tag '${{ steps.package.outputs.zip }}' `
             --target '${{ github.sha }}' `
             --title "SC4SIM.dll $version" `
-            --notes "SC4SIM.dll $version for SimCity 4 1.1.641. Copy SC4SIM.dll and SC4SIM.ini to the top level of the Plugins folder. See the README for the features and settings."
+            --notes "SC4SIM.dll $version for SimCity 4 1.1.641. Copy SC4SIM.dll and SC4SIM.ini to the top level of the Plugins folder. The Lua features need CAM_LUA_Controller.dat from the Colossus Addon Mod (see README.txt in the zip). See the README for the features and settings."

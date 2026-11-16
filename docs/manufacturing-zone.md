@@ -1,7 +1,9 @@
 # Manufacturing (I-M) zone
 
-> **On by default** (`Enabled=true`). Checked against the 1.1.641 executable, emulated and tested in game. Try it on
-> a copy of a region first, and read [Saved cities](#saved-cities).
+> **Off by default, opt-in** (`Enabled=true` to turn it on; since 1.11.1). Once installed it acts in every city of
+> the session: I-M stops growing in dense and medium industrial everywhere, and cities saved with I-M cells show
+> Spaceport (or Military) zones without the DLL. Checked against the 1.1.641 executable, emulated and tested in game.
+> Try it on a copy of a region first, and read [Saved cities](#saved-cities).
 
 SC4SIM 1.8.0 can give manufacturing industry (I-M) a zone of its own, as wanted by the Industrial Revolution Mod
 (IRM) concept. This page explains the game rules it changes, how each hook is made safe, and what still has to be
@@ -18,7 +20,7 @@ and a zone-8 building may also grow in zone 9 (high density). There is no free z
 | --- | --- | --- |
 | **13** | Spaceport | Default. The shipped game does not appear to place it; check in your regions. |
 | 10 | Military | Possible, if nothing (for example a military base deal) places Military zones in your regions. |
-| 11, 12 | Airport, Seaport | Accepted with a warning: the game uses them, expect conflicts. |
+| 11, 12 | Airport, Seaport | **Refused** (13 is used instead): the game zones every placed lot's cells from its zone type (`cSC4ViewInputControlPlaceLot::PlaceLot` 0x004C1740), so airports and seaports would become I-M zone cells. |
 
 ## What the DLL changes
 
@@ -111,7 +113,8 @@ simulator); one install serves every later city.
 
 ## Using it
 
-1. The zone is on by default (`[ManufacturingZone] Enabled=true` in `SC4SIM.ini`); set `ZoneSlot` if you do not want 13.
+1. Turn the zone on with `[ManufacturingZone] Enabled=true` in `SC4SIM.ini` (it is off by default); set `ZoneSlot=10` if
+   you do not want 13.
 2. Open a city and check `SC4SIM.log`. It should report the measured convention of `GrowthStageFitsInZone`, the
    construction-profile offset, and a line like
    `ManufacturingZone: zone slot 13. I-M redirect on, stage hook on, IsRCIZone on, land value range 0-255, IMZone brush on.`
@@ -120,6 +123,9 @@ simulator); one install serves every later city.
      zone. Type it again to turn it off. It turns off when the city closes.
    - **`IMZoneConvert`** cheat: turns every *empty* dense industrial cell of the city (no lot) into the I-M zone. Use it
      if the brush does not work: draw dense industry, then convert it.
+   - **`IMZoneRevert`** cheat: the way back. Turns every *empty* I-M cell into dense industry again and reports how many
+     cells of developed lots are still I-M; zone those with the Dense Industrial tool (brush off) before opening the
+     city without the DLL.
 4. **`IMZoneInfo`** cheat: writes the status and counters to the log: I-M construction profiles redirected, stage
    checks passed in the slot, brush placements, and the slot's cell count, zone size and drag colour.
 
@@ -133,7 +139,8 @@ simulator); one install serves every later city.
 
 The slot is stored in the save as an ordinary zone type. A city with I-M zones, opened **without** the DLL (or with
 `Enabled=false`), sees those cells as Spaceport (or Military): I-M buildings there may decline or be demolished, and
-nothing grows. Keep a copy of the region before trying it.
+nothing grows. Keep a copy of the region before trying it, and use `IMZoneRevert` (then the Dense Industrial tool over
+the remaining I-M lots) before removing the DLL or setting `Enabled=false`.
 
 ## Open points for the in-game test
 
@@ -153,8 +160,8 @@ nothing grows. Keep a copy of the region before trying it.
 
 ```ini
 [ManufacturingZone]
-Enabled=true         ; on by default; false turns the module off
-ZoneSlot=13          ; 13 Spaceport (default) or 10 Military
+Enabled=false        ; off by default (opt-in); true turns the module on
+ZoneSlot=13          ; 13 Spaceport (default) or 10 Military; any other value is refused
 StageHook=true       ; required for the redirect: without it the module changes nothing
 RCIZoneHook=true     ; IsRCIZone true for the slot
 IgnoreLandValue=true ; no land-value wealth test in the slot, as in zones 7-9

@@ -80,6 +80,20 @@
 //    author's consent. Seaport trips use the industrial factor for industrial cap relief and the commercial factor
 //    for commercial relief (src/fixes/SeaportDemandCapFix.cpp, [GameFixes] SeaportDemandCapFix;
 //    LogIndustrialDemandValues cheat).
+//
+// Version 1.11.1 (fixes from the static review of 1.11.0 against 1.1.641):
+//  * Power poles: the texture rebind resets the zoom global to 5 (zooms are 0-4; 0 left a texture registered at zoom 0
+//    unbound); floor/wall textures look the pole up from Draw's +0x120 subobject; per-wire width, wire/buoy textures and
+//    buoy size are resolved while drawing (they survive save/load and RemoveConnection); FAR/custom poles get private
+//    connection-point tables (Read no longer writes into the shared vanilla tables); RemoveConnection re-aligns
+//    follow-span pads; zoned cells keep the game's building/network/lot checks; GetControlPoints is called __thiscall;
+//    no exception on non-ANSI paths; interdependent patches are installed all-or-nothing and verified before writing.
+//  * Manufacturing zone: off by default (opt-in), ZoneSlot 10 or 13 only, IMZoneRevert cheat.
+//  * Afterlife/Deathcare: real generation resets only (not ageing/averaging onto the reset age), reset age read from the
+//    game tuning, void grid getters, DEATHCARE_NOTIFY_NEARLY_FULL=0 means never, state kept in the city file.
+//  * Water: both query table entries patched; non-producers left to the game. Budget: funded-item references released.
+//    Mixed: one secondary type per class in the census, trips appended like the game, commercial trip lists left alone,
+//    GetJobs declared void. Standalone DLLs detected wherever they are loaded. [DEBUG] lines only with DebugLog.
 // The reward creators themselves are Lua (create_reward_utilities, ...): reward scripts call them while the game
 // compiles them, before any DLL can reach the city's Lua, so they live in the SIM Lua package 0x0151A000.
 #include "SimLog.h"
@@ -119,15 +133,25 @@ static constexpr uint32_t kMsgPostCityInit = 0x26D31EC1;
 static constexpr uint32_t kMsgPreCityShutdown = 0x26D31EC2;
 static constexpr uint32_t kMsgCheatIssued = 0x230E27AC;
 static constexpr uint32_t kMsgPostSave = 0x26C63345;
+static constexpr uint32_t kMsgLoad = 0x26C63341; // Void1: the city file being loaded (cIGZPersistDBSegment)
+static constexpr uint32_t kMsgSave = 0x26C63344; // Void1: the city file being saved (cIGZPersistDBSegment)
 
 namespace
 {
 	int32_t Version(lua_State* state)
 	{
 		cRZAutoRefCount<cISCLua> lua = SCLuaUtil::GetISCLuaFromFunctionState(state);
+		if (!lua)
+		{
+			return 0; // no result: sim.version() returns nil
+		}
 		lua->PushString(SIM_DLL_VERSION_STR);
 		return 1;
 	}
+
+	// Every message the director subscribes to, for all modules (removed again at shutdown).
+	constexpr std::array<uint32_t, 6> kSubscribedMessages = {
+		kMsgPostCityInit, kMsgPreCityShutdown, AdvancedWater::kMessageSimNewMonth, kMsgPostSave, kMsgLoad, kMsgSave };
 
 	// Reward creators added by the SIM Lua, and the Maxis ones they complete.
 	constexpr std::array<const char*, 4> kSimRewardCreators = {
@@ -188,7 +212,7 @@ public:
 		cIGZMessageServer2Ptr ms2;
 		if (ms2)
 		{
-			for (uint32_t type : { kMsgPostCityInit, kMsgPreCityShutdown, AdvancedWater::kMessageSimNewMonth, kMsgPostSave })
+			for (uint32_t type : kSubscribedMessages)
 			{
 				if (!ms2->AddNotification(this, type))
 				{
@@ -230,6 +254,14 @@ public:
 			cheatManager->RemoveNotification2(this, 0);
 			cheatManager.Reset();
 		}
+		cIGZMessageServer2Ptr ms2;
+		if (ms2)
+		{
+			for (uint32_t type : kSubscribedMessages)
+			{
+				ms2->RemoveNotification(this, type);
+			}
+		}
 		SeaportDemandCapFix::PostAppShutdown();
 		PortUpgradeFix::PostAppShutdown();
 		BudgetFixes::PostAppShutdown();
@@ -247,6 +279,7 @@ public:
 		if (type == kMsgPostCityInit)
 		{
 			PostCityInit(static_cast<cISC4City*>(static_cast<cIGZMessage2Standard*>(message)->GetVoid1()));
+			PowerPoleCustomization::DoMessage(message);
 			AdvancedWater::DoMessage(message);
 			MixedOccupancy::DoMessage(message);
 			ManufacturingZone::DoMessage(message);
@@ -270,7 +303,7 @@ public:
 			MixedOccupancy::DoMessage(message);
 			Afterlife::DoMessage(message);
 		}
-		else if (type == kMsgPostSave)
+		else if (type == kMsgPostSave || type == kMsgLoad || type == kMsgSave)
 		{
 			Afterlife::DoMessage(message);
 		}

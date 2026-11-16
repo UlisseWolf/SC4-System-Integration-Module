@@ -6,7 +6,7 @@
 // Copyright (c) 2024 Nicholas Hayes
 //
 // This file is licensed under terms of the MIT License.
-// See LICENSE-sc4-advanced-water-management.txt for more information.
+// See LICENSE-sc4-query-ui-hooks.txt (in this folder) for more information.
 // Included in SC4SIM.dll (SC4 System Integration Module) without changes unless noted.
 //
 ///////////////////////////////////////////////////////////////////////////////

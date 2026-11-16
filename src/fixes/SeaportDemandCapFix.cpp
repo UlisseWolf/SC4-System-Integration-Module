@@ -47,6 +47,7 @@
 #include <cstring>
 #include <cwctype>
 #include <filesystem>
+#include <iterator>
 #include <string>
 
 EXTERN_C IMAGE_DOS_HEADER __ImageBase;
@@ -73,6 +74,8 @@ namespace
 
 	bool enabled = true;
 	bool patched = false;
+	// Sites this DLL itself rewrote: only those are ever restored, so a site another DLL fixed is never "restored".
+	bool wrote[std::size(sites)] = {};
 	bool cheatRegistered = false;
 	cRZAutoRefCount<cIGZCheatCodeManager> cheatManager;
 
@@ -166,11 +169,12 @@ void SeaportDemandCapFix::PostAppInit()
 		SimLog::Write(SimLog::Level::Info, "SeaportDemandCapFix: disabled in SC4SIM.ini ([GameFixes] SeaportDemandCapFix=false).");
 		return;
 	}
-	if (std::filesystem::exists(ModuleFolder() / L"SC4SeaportDemandCapFix.dll"))
+	if (GetModuleHandleW(L"SC4SeaportDemandCapFix.dll") != nullptr)
 	{
+		// Loaded from anywhere in the Plugins folder (the game scans it recursively), not only next to SC4SIM.dll.
 		SimLog::Write(SimLog::Level::Warning,
-			"SeaportDemandCapFix: SC4SeaportDemandCapFix.dll is installed next to SC4SIM.dll; the standalone DLL applies the "
-			"patch and the cheat. Remove it to use the SC4SIM version.");
+			"SeaportDemandCapFix: SC4SeaportDemandCapFix.dll is loaded (somewhere in the Plugins folder); the standalone DLL "
+			"applies the patch and the cheat. Remove it to use the SC4SIM version.");
 		return;
 	}
 	const uint16_t version = VersionDetection::GetInstance().GetGameVersion();
@@ -199,10 +203,21 @@ void SeaportDemandCapFix::PostAppInit()
 		return;
 	}
 
+	// All sites or none: if a write fails, the sites already written are put back.
 	patched = true;
-	for (const Site& site : sites)
+	for (size_t i = 0; i < std::size(sites) && patched; ++i)
 	{
-		if (!SiteHas(site, site.fixed)) patched = WriteDisplacement(site, site.fixed) && patched;
+		if (SiteHas(sites[i], sites[i].fixed)) continue;
+		wrote[i] = WriteDisplacement(sites[i], sites[i].fixed);
+		patched = wrote[i];
+	}
+	if (!patched)
+	{
+		for (size_t i = 0; i < std::size(sites); ++i)
+		{
+			if (wrote[i] && SiteHas(sites[i], sites[i].fixed)) WriteDisplacement(sites[i], sites[i].original);
+			wrote[i] = false;
+		}
 	}
 	SimLog::Write(patched ? SimLog::Level::Info : SimLog::Level::Error, patched
 		? "SeaportDemandCapFix: seaport trips use the industrial factor for industrial relief and the commercial factor for commercial relief "
@@ -231,9 +246,10 @@ void SeaportDemandCapFix::PostAppShutdown()
 	}
 	if (patched)
 	{
-		for (const Site& site : sites)
+		for (size_t i = 0; i < std::size(sites); ++i)
 		{
-			if (SiteHas(site, site.fixed)) WriteDisplacement(site, site.original);
+			if (wrote[i] && SiteHas(sites[i], sites[i].fixed)) WriteDisplacement(sites[i], sites[i].original);
+			wrote[i] = false;
 		}
 		patched = false;
 	}

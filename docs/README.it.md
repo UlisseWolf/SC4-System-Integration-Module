@@ -152,7 +152,8 @@ Analisi completa in `docs/mixed-occupancy.md`. Impostazioni: `[MixedOccupancy] E
 
 ## Zona industriale manifatturiera I-M (1.8.0)
 
-**Attiva di default (`Enabled=true` in `[ManufacturingZone]`; `false` la disattiva). Verificata sull'eseguibile
+**Disattivata di default dalla 1.11.1 (`Enabled=true` in `[ManufacturingZone]` la attiva; una volta attiva vale per
+ogni città aperta).** Verificata sull'eseguibile
 1.1.641 (disassemblato ed emulato) e provata in gioco. Provarla prima su una copia della regione.**
 
 Nel gioco base gli sviluppatori I-D, I-M e I-HT chiedono tutti la zona 8, e la zona 9 accetta gli edifici della zona 8:
@@ -204,7 +205,8 @@ vittime I.M.P., redenzioni), con le notizie nel ticker e righe nelle query di ch
   l'età di reset);
 - il giudizio usa l'istruzione (EQ, scala 0-200, riferimento 100) della fascia di ricchezza dei morti;
 - Hellborn e Heavenborn superano sempre le anime all'Inferno e in Paradiso;
-- i totali vengono salvati in `SC4SIM_Afterlife.ini` quando si salva la città;
+- i totali vengono salvati nel file della città (un record di SC4SIM) quando si salva; `SC4SIM_Afterlife.ini` si legge
+  solo per le città salvate prima della 1.11.1;
 - servizi funerari (1.9.4): cimiteri e crematori raccolgono i morti dei quartieri nel loro raggio (capacità in tombe o
   in salme al mese, dalle proprietà `0x5C4DD001`-`0x5C4DD003` di New_Properties.xml-patches); i morti non raccolti
   abbassano la salute del loro quartiere e una notifica avvisa. Dettagli in `docs/deathcare.md`.

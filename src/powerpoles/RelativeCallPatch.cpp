@@ -15,21 +15,25 @@ namespace
     constexpr size_t kCallInstructionLength = 5;
 }
 
-namespace TerrainDecal
+namespace PowerPoles
 {
     RelativeCallPatch::RelativeCallPatch(const std::string_view name,
                                          const uintptr_t callSiteAddress,
-                                         void* hookFn)
+                                         void* hookFn,
+                                         const uintptr_t expectedTarget)
     {
-        Configure(name, callSiteAddress, hookFn);
+        Configure(name, callSiteAddress, hookFn, expectedTarget);
     }
 
-    void RelativeCallPatch::Configure(const std::string_view name, const uintptr_t callSiteAddress, void* hookFn)
+    void RelativeCallPatch::Configure(const std::string_view name, const uintptr_t callSiteAddress, void* hookFn,
+                                      const uintptr_t expectedTarget)
     {
         name_ = name;
         callSiteAddress_ = callSiteAddress;
         hookFn_ = hookFn;
+        expectedTarget_ = expectedTarget;
         originalRel_ = 0;
+        hookRel_ = 0;
         originalTarget_ = 0;
         installed_ = false;
     }
@@ -41,29 +45,37 @@ namespace TerrainDecal
         }
 
         if (callSiteAddress_ == 0 || hookFn_ == nullptr) {
-            LOG_ERROR("TerrainDecalHook: incomplete call patch configuration for {}", name_);
+            LOG_ERROR("RelativeCallPatch: incomplete call patch configuration for {}", name_);
             return false;
         }
 
         auto* const site = reinterpret_cast<uint8_t*>(callSiteAddress_);
         if (site[0] != 0xE8) {
-            LOG_ERROR("TerrainDecalHook: expected CALL rel32 at 0x{:08X} for {}",
+            LOG_ERROR("RelativeCallPatch: expected CALL rel32 at 0x{:08X} for {}",
                       static_cast<uint32_t>(callSiteAddress_), name_);
             return false;
         }
 
         std::memcpy(&originalRel_, site + 1, sizeof(originalRel_));
         originalTarget_ = callSiteAddress_ + kCallInstructionLength + originalRel_;
+        // Verify before writing: a call site that does not target the expected function (another
+        // game version, or another DLL already hooked it) is left exactly as it is.
+        if (expectedTarget_ != 0 && originalTarget_ != expectedTarget_) {
+            LOG_ERROR("RelativeCallPatch: {} call site 0x{:08X} targets 0x{:08X}, expected 0x{:08X}; not patching.",
+                      name_, static_cast<uint32_t>(callSiteAddress_), static_cast<uint32_t>(originalTarget_),
+                      static_cast<uint32_t>(expectedTarget_));
+            return false;
+        }
 
         int32_t newRel = 0;
         if (!ComputeRelativeCallTarget(callSiteAddress_, reinterpret_cast<uintptr_t>(hookFn_), newRel)) {
-            LOG_ERROR("TerrainDecalHook: rel32 range failure for {}", name_);
+            LOG_ERROR("RelativeCallPatch: rel32 range failure for {}", name_);
             return false;
         }
 
         DWORD oldProtect = 0;
         if (!VirtualProtect(site + 1, sizeof(newRel), PAGE_EXECUTE_READWRITE, &oldProtect)) {
-            LOG_ERROR("TerrainDecalHook: VirtualProtect failed for {}", name_);
+            LOG_ERROR("RelativeCallPatch: VirtualProtect failed for {}", name_);
             return false;
         }
 
@@ -71,6 +83,7 @@ namespace TerrainDecal
         FlushInstructionCache(GetCurrentProcess(), site, kCallInstructionLength);
         VirtualProtect(site + 1, sizeof(newRel), oldProtect, &oldProtect);
 
+        hookRel_ = newRel;
         installed_ = true;
         return true;
     }
@@ -82,6 +95,16 @@ namespace TerrainDecal
         }
 
         auto* const site = reinterpret_cast<uint8_t*>(callSiteAddress_);
+        int32_t currentRel = 0;
+        std::memcpy(&currentRel, site + 1, sizeof(currentRel));
+        if (site[0] != 0xE8 || currentRel != hookRel_) {
+            // Another DLL hooked the site after us and chains to our hook: restoring the vanilla
+            // target would silently remove its hook. Leave the site alone.
+            LOG_WARN("RelativeCallPatch: {} call site 0x{:08X} was changed by someone else; left as it is.",
+                     name_, static_cast<uint32_t>(callSiteAddress_));
+            installed_ = false;
+            return;
+        }
         DWORD oldProtect = 0;
         if (VirtualProtect(site + 1, sizeof(originalRel_), PAGE_EXECUTE_READWRITE, &oldProtect)) {
             std::memcpy(site + 1, &originalRel_, sizeof(originalRel_));

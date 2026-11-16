@@ -29,8 +29,16 @@
 #include "AfterlifeModel.h"
 #include "Deathcare.h"
 #include "SimLog.h"
+#include "VersionDetection.h"
 
+#include "cGZPersistResourceKey.h"
 #include "cIGZMessage2Standard.h"
+#include "cIGZPersistDBSegment.h"
+#include "cIGZPersistResourceManager.h"
+#include "cISCPropertyHolder.h"
+#include "cISCResExemplar.h"
+#include "GZServPtrs.h"
+#include "SCPropertyUtil.h"
 #include "cISC4AdvisorSystem.h"
 #include "cISC4City.h"
 #include "cISC4ResidentialSimulator.h"
@@ -45,6 +53,7 @@
 #include <cwctype>
 #include <cwchar>
 #include <filesystem>
+#include <functional>
 #include <map>
 #include <random>
 #include <string>
@@ -58,6 +67,23 @@ namespace
 	constexpr uint32_t kMessagePreCityShutdown = 0x26D31EC2;
 	constexpr uint32_t kMessageSimNewMonth = 0x66956816;
 	constexpr uint32_t kMessagePostSave = 0x26C63345;
+	// The game posts these with the city file's cIGZPersistDBSegment in Void1 (SetVoid1 at 0x0045581E after
+	// opening it for reading at 0x0045567E; at 0x00456326 while saving), so a DLL can keep its own record in the save.
+	constexpr uint32_t kMessageLoad = 0x26C63341;
+	constexpr uint32_t kMessageSave = 0x26C63344;
+	// SC4SIM's Afterlife/Deathcare record in the city file: text, one KEY=VALUE per line (the keys of the former
+	// SC4SIM_Afterlife.ini section). Unknown to the game, which keeps it as it is and ignores it.
+	constexpr uint32_t kStateRecordType = 0x5C4DA1FE;
+	constexpr uint32_t kStateRecordGroup = 0x5C4DA1FE;
+	constexpr uint32_t kStateRecordInstance = 0x00000001;
+
+	// Residential simulator tuning exemplar read by ReadTunablePopulationValues (0x006FC0C0): reset age, property
+	// 0xCA027307 (one byte, default 40), stored at tunables+0x0E and used by DoPopulationChange (0x006FAB74).
+	constexpr uint32_t kResidentialTuningType = 0x6534284A;
+	constexpr uint32_t kResidentialTuningGroup = 0xE7E2C2DB;
+	constexpr uint32_t kResidentialTuningInstance = 0x69189C84;
+	constexpr uint32_t kPropertyResetAge = 0xCA027307;
+	constexpr int kDefaultResetAge = 40;
 
 	bool enabled = true;
 	Afterlife::State state;
@@ -68,7 +94,8 @@ namespace
 	struct Settings
 	{
 		bool deathWaves = true; // DEATH_WAVES: read the residential simulator's generation resets
-		int resetAge = 40; // TRACT_RESET_AGE: the age a tract is set back to (tuning 0xCA027307)
+		int resetAgeOverride = 0; // TRACT_RESET_AGE: 0 = read the game's tuning (property 0xCA027307)
+		int resetAge = kDefaultResetAge; // the age a tract is set back to, read when a city opens
 		int chronicIntervalMonths = 12; // CHRONIC_RESET_INTERVAL_MONTHS: a tract reset every month counts once per this
 		bool saveWithCity = true; // SAVE_WITH_CITY: keep the cumulative populations in SC4SIM_Afterlife.ini
 	} settings;
@@ -466,6 +493,29 @@ namespace
 
 	// ---------------------------------------------------------------- generation resets (residential simulator)
 
+	// The reset age the game itself uses: property 0xCA027307 of the residential tuning exemplar, so a mod that
+	// changes it is followed. TRACT_RESET_AGE in SC4SIM.ini overrides it; 40 when the exemplar cannot be read.
+	int ReadResetAge()
+	{
+		if (settings.resetAgeOverride > 0)
+		{
+			return settings.resetAgeOverride;
+		}
+		cIGZPersistResourceManagerPtr resourceManager;
+		cRZAutoRefCount<cISCResExemplar> exemplar;
+		const cGZPersistResourceKey key(kResidentialTuningType, kResidentialTuningGroup, kResidentialTuningInstance);
+		if (resourceManager && resourceManager->GetResource(key, GZIID_cISCResExemplar, exemplar.AsPPVoid(), 0, nullptr) && exemplar)
+		{
+			const cISCPropertyHolder* const holder = exemplar->AsISCPropertyHolder();
+			uint8_t age8 = 0;
+			uint32_t age32 = 0;
+			if (SCPropertyUtil::GetPropertyValue(holder, kPropertyResetAge, age8) && age8 > 0) return age8;
+			if (SCPropertyUtil::GetPropertyValue(holder, kPropertyResetAge, age32) && age32 > 0 && age32 < 256)
+				return static_cast<int>(age32);
+		}
+		return kDefaultResetAge;
+	}
+
 	// The residential simulator keeps one average age per tract. When it passes the tract's life expectancy the game
 	// sets it back to the reset age (default 40) and cuts EQ and HQ: "a generation died" (docs/afterlife.md). Nothing
 	// of this is saved, so the DLL keeps last month's ages itself and compares.
@@ -478,7 +528,9 @@ namespace
 	} tracts;
 
 	using PopulationGrid = cISC4SimGrid<uint16_t>;
-	using GetPopulationGridsFn = bool(__thiscall*)(cISC4ResidentialSimulator*, PopulationGrid**, PopulationGrid**, PopulationGrid**);
+	// cSC4ResidentialSimulator::GetPopulationGrids (0x006F7340) returns void (stores and AddRefs the three pointers,
+	// EAX left as the last AddRef's count): success is judged by the three pointers alone.
+	using GetPopulationGridsFn = void(__thiscall*)(cISC4ResidentialSimulator*, PopulationGrid**, PopulationGrid**, PopulationGrid**);
 	constexpr int kGetPopulationGridsSlot = 25; // checked in 1.1.641: three out pointers, each AddRef'd
 
 	bool loggedGrids = false;
@@ -492,7 +544,8 @@ namespace
 		grid = Deathcare::TractGrid{};
 		waveTract.clear();
 		cISC4ResidentialSimulator* const sim = city ? city->GetResidentialSimulator() : nullptr;
-		if (!sim || (!settings.deathWaves && !Deathcare::Enabled()))
+		// The grid getters are raw vtable slots checked on 1.1.641 only.
+		if (!sim || (!settings.deathWaves && !Deathcare::Enabled()) || VersionDetection::GetInstance().GetGameVersion() != 641)
 		{
 			return waves;
 		}
@@ -500,7 +553,8 @@ namespace
 		auto* const ageGrid = reinterpret_cast<cISC4SimGrid<uint8_t>*>(static_cast<intptr_t>(sim->GetAverageAgeMap()));
 		PopulationGrid* population[3]{};
 		const auto getGrids = reinterpret_cast<GetPopulationGridsFn>((*reinterpret_cast<void***>(sim))[kGetPopulationGridsSlot]);
-		if (!ageGrid || !getGrids(sim, &population[0], &population[1], &population[2]) || !population[0] || !population[1] || !population[2])
+		if (ageGrid) getGrids(sim, &population[0], &population[1], &population[2]);
+		if (!ageGrid || !population[0] || !population[1] || !population[2])
 		{
 			for (PopulationGrid* populationGrid : population) if (populationGrid) populationGrid->Release();
 			return waves;
@@ -557,8 +611,15 @@ namespace
 				const int32_t lifeExpectancy = sim->GetCellLifeExpectancy(cellX, cellZ) & 0xFF;
 				const bool transition = previous != age;
 				const bool chronic = lifeExpectancy < settings.resetAge; // resets on every monthly visit
+				// DoPopulationChange (0x006FA450) adds 1 to the age in December (0x006FAA9F), averages it with the
+				// newcomers' age, and only then resets it to the reset age when it exceeds the life expectancy
+				// (0x006FAB61). Ageing from 39 and averaging also land on 40 without anyone dying, so landing on the
+				// reset age is not enough: a real reset comes down from an age above the reset age that had reached
+				// the life expectancy (one year below it, for the December step). With a life expectancy below the
+				// reset age every age resets, so landing on it there is always a reset (the chronic case).
+				const bool oldAgeReset = transition && previous > settings.resetAge && previous + 1 >= lifeExpectancy;
 				bool counted = false, premature = false;
-				if (transition && !chronic)
+				if (oldAgeReset && !chronic)
 				{
 					counted = true; // old age
 				}
@@ -659,8 +720,13 @@ namespace
 
 	// ---------------------------------------------------------------- saved with the city
 
-	// The game saves nothing about deaths, so the cumulative populations go to SC4SIM_Afterlife.ini (next to the DLL),
-	// one section per city serial number, written when the game saves the city and read when it opens.
+	// The game saves nothing about deaths, so the cumulative populations and the deathcare state go into a record of
+	// SC4SIM's own in the city file (kStateRecordKey), written on the game's save message and read on its load
+	// message. SC4SIM_Afterlife.ini (next to the DLL, one section per city serial number) is read only for a city
+	// saved before 1.11.1 that has no record yet, and written only if the city file refuses the record.
+	std::map<std::wstring, std::wstring> loadedRecord; // read on the load message, used at PostCityInit
+	bool haveLoadedRecord = false;
+
 	struct SavedField
 	{
 		const wchar_t* key;
@@ -709,8 +775,10 @@ namespace
 		{
 			return;
 		}
-		const std::wstring section = CitySection(city);
-		const std::map<std::wstring, std::wstring> keys = ReadSection(section);
+		const std::wstring section = haveLoadedRecord ? std::wstring(L"the city file") : CitySection(city);
+		const std::map<std::wstring, std::wstring> keys = haveLoadedRecord ? loadedRecord : ReadSection(section);
+		loadedRecord.clear();
+		haveLoadedRecord = false;
 		int loaded = 0;
 		for (const SavedField& field : kSavedFields)
 		{
@@ -733,6 +801,79 @@ namespace
 		}
 	}
 
+	void WriteStateKeys(const std::function<void(const std::wstring&, const std::wstring&)>& write)
+	{
+		for (const SavedField& field : kSavedFields)
+		{
+			wchar_t value[64]{};
+			swprintf(value, 64, L"%.0f", state.*field.member);
+			write(field.key, value);
+		}
+		Deathcare::SaveKeys(write);
+	}
+
+	// ---- the record in the city file (since 1.11.1). SC4SIM_Afterlife.ini, one section per city serial number,
+	// is only a fallback now: a copied or restored city kept the serial number and inherited another save's state.
+
+	cRZAutoRefCount<cIGZPersistDBSegment> SegmentOf(cIGZMessage2* message)
+	{
+		cRZAutoRefCount<cIGZPersistDBSegment> segment;
+		auto* const unknown = static_cast<cIGZUnknown*>(static_cast<cIGZMessage2Standard*>(message)->GetVoid1());
+		if (unknown) unknown->QueryInterface(GZIID_cIGZPersistDBSegment, segment.AsPPVoid());
+		return segment;
+	}
+
+	const cGZPersistResourceKey kStateRecordKey(kStateRecordType, kStateRecordGroup, kStateRecordInstance);
+	bool savedToRecord = false; // this save went to the city file: no ini section
+
+	void ReadStateRecord(cIGZMessage2* message)
+	{
+		loadedRecord.clear();
+		haveLoadedRecord = false;
+		cRZAutoRefCount<cIGZPersistDBSegment> segment = SegmentOf(message);
+		if (!segment || !segment->TestForRecord(kStateRecordKey)) return;
+		uint32_t size = segment->GetRecordSize(kStateRecordKey);
+		if (size == 0 || size > (1u << 24)) return;
+		std::string text(size, '\0');
+		if (segment->ReadRecord(kStateRecordKey, text.data(), size) == 0) return;
+		text.resize(std::min<size_t>(size, text.size()));
+		size_t start = 0;
+		while (start < text.size())
+		{
+			size_t end = text.find('\n', start);
+			if (end == std::string::npos) end = text.size();
+			const std::string line = text.substr(start, end - start);
+			start = end + 1;
+			const size_t equals = line.find('=');
+			if (equals == std::string::npos || equals == 0) continue;
+			std::wstring key(line.begin(), line.begin() + equals);
+			for (wchar_t& c : key) c = static_cast<wchar_t>(std::towupper(c));
+			loadedRecord[key] = std::wstring(line.begin() + equals + 1, line.end());
+		}
+		haveLoadedRecord = true;
+	}
+
+	void WriteStateRecord(cIGZMessage2* message)
+	{
+		savedToRecord = false;
+		if (!settings.saveWithCity || !currentCity) return;
+		cRZAutoRefCount<cIGZPersistDBSegment> segment = SegmentOf(message);
+		if (!segment) return;
+		std::string text;
+		WriteStateKeys([&text](const std::wstring& key, const std::wstring& value)
+		{
+			for (wchar_t c : key) text += static_cast<char>(c); // keys and values are ASCII
+			text += '=';
+			for (wchar_t c : value) text += static_cast<char>(c);
+			text += '\n';
+		});
+		savedToRecord = segment->WriteRecord(kStateRecordKey, text.data(), static_cast<uint32_t>(text.size()));
+		if (!savedToRecord)
+		{
+			SimLog::Write(SimLog::Level::Warning, "Afterlife: could not write the state into the city file: kept in SC4SIM_Afterlife.ini.");
+		}
+	}
+
 	// Rewrites the whole section, so cemeteries that are gone and tracts with no uncollected dead leave no stale keys.
 	void SaveState(cISC4City* city)
 	{
@@ -748,13 +889,7 @@ namespace
 			text += value;
 			text += L'\0';
 		};
-		for (const SavedField& field : kSavedFields)
-		{
-			wchar_t value[64]{};
-			swprintf(value, 64, L"%.0f", state.*field.member);
-			write(field.key, value);
-		}
-		Deathcare::SaveKeys(write);
+		WriteStateKeys(write);
 		text += L'\0';
 		WritePrivateProfileSectionW(CitySection(city).c_str(), text.c_str(), stateFile.c_str());
 	}
@@ -808,7 +943,7 @@ void Afterlife::OnStart()
 	const std::filesystem::path ini = std::filesystem::path(modulePath).replace_filename(L"SC4SIM.ini");
 	LoadConstants(ini.c_str());
 	settings.deathWaves = GetPrivateProfileIntW(L"Afterlife", L"DEATH_WAVES", 1, ini.c_str()) != 0;
-	settings.resetAge = static_cast<int>(GetPrivateProfileIntW(L"Afterlife", L"TRACT_RESET_AGE", 40, ini.c_str()));
+	settings.resetAgeOverride = std::clamp(static_cast<int>(GetPrivateProfileIntW(L"Afterlife", L"TRACT_RESET_AGE", 0, ini.c_str())), 0, 255);
 	settings.chronicIntervalMonths = std::max(1, static_cast<int>(GetPrivateProfileIntW(L"Afterlife", L"CHRONIC_RESET_INTERVAL_MONTHS", 12, ini.c_str())));
 	settings.saveWithCity = GetPrivateProfileIntW(L"Afterlife", L"SAVE_WITH_CITY", 1, ini.c_str()) != 0;
 	stateFile = std::filesystem::path(modulePath).replace_filename(L"SC4SIM_Afterlife.ini");
@@ -835,6 +970,7 @@ void Afterlife::DoMessage(cIGZMessage2* message)
 		warnedMissing = false;
 		warnedBuiltInRoster = false;
 		currentCity = static_cast<cISC4City*>(static_cast<cIGZMessage2Standard*>(message)->GetVoid1());
+		settings.resetAge = ReadResetAge();
 		Deathcare::SetCity(currentCity);
 		RegisterFunctions(currentCity);
 		LoadState(currentCity);
@@ -843,10 +979,19 @@ void Afterlife::DoMessage(cIGZMessage2* message)
 	case kMessageSimNewMonth:
 		RunMonthlyCycle();
 		break;
+	case kMessageLoad:
+		ReadStateRecord(message);
+		break;
+	case kMessageSave:
+		WriteStateRecord(message);
+		break;
 	case kMessagePostSave:
-		SaveState(currentCity);
+		if (!savedToRecord) SaveState(currentCity); // fallback when the city file could not take the record
+		savedToRecord = false;
 		break;
 	case kMessagePreCityShutdown:
+		loadedRecord.clear();
+		haveLoadedRecord = false;
 		state = Afterlife::State{};
 		tracts = TractMemory{};
 		Deathcare::SetCity(nullptr);

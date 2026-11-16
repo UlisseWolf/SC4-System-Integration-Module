@@ -49,6 +49,7 @@
 
 #include <Windows.h>
 #include <cwctype>
+#include <array>
 #include <filesystem>
 #include <string>
 
@@ -73,9 +74,15 @@ namespace
 	typedef bool(__cdecl* pfn_SetPerformanceMeterValue)(cIGZWin*, uint32_t, float);
 	pfn_SetPerformanceMeterValue SetPerformanceMeterValue = nullptr;
 
-	constexpr uintptr_t kJumpTableEntry641 = 0xA92570;          // water building efficiency (query dialog)
+	// The query control function table at 0x00A92488 holds SetOrGetWaterBuildingEfficiency (0x004C42F0) in two
+	// entries: 0x3A (0x00A92570) and 0x6D (0x00A9263C). Both are patched, or the second control keeps the vanilla
+	// meter (the upstream mod patches only 0x3A).
+	constexpr std::array<uintptr_t, 2> kJumpTableEntries641 = { 0xA92570, 0xA9263C };
+	constexpr uintptr_t kSetOrGetWaterBuildingEfficiency641 = 0x4C42F0;
 	constexpr uintptr_t kSetPerformanceMeterValue641 = 0x4C3CA0;
-	uintptr_t originalJumpTableValue = 0;
+	bool queryHookInstalled = false;
+
+	typedef bool(__cdecl* pfn_SetOrGetWaterBuildingEfficiency)(cIGZWin*, uint32_t, bool, cISC4Occupant*);
 
 	bool __cdecl Hook_SetOrGetWaterBuildingEfficiency(cIGZWin* pWin, uint32_t controlID, bool getValue, cISC4Occupant* pOccupant)
 	{
@@ -83,13 +90,22 @@ namespace
 		{
 			return true;
 		}
+		if (!pPlumbingSim)
+		{
+			// No city's plumbing simulator known: the game's own function reads its global.
+			return reinterpret_cast<pfn_SetOrGetWaterBuildingEfficiency>(kSetOrGetWaterBuildingEfficiency641)(
+				pWin, controlID, getValue, pOccupant);
+		}
 
 		SC4Percentage efficiency{};
 		uint32_t currentCapacity = 0;
 		uint32_t maxCapacity = 0;
 		bool shutDownByPollution = false;
 
-		pPlumbingSim->GetWaterProducerInfo(pOccupant, &currentCapacity, &maxCapacity, &efficiency, &shutDownByPollution, nullptr);
+		if (!pPlumbingSim->GetWaterProducerInfo(pOccupant, &currentCapacity, &maxCapacity, &efficiency, &shutDownByPollution, nullptr))
+		{
+			return false; // not a water producer: like the game, leave the meter alone
+		}
 
 		float efficiencyPercentage = efficiency.percentage * 100.0f;
 
@@ -128,26 +144,52 @@ namespace
 			return;
 		}
 
-		originalJumpTableValue = *reinterpret_cast<uintptr_t*>(kJumpTableEntry641);
+		// Verify every entry before writing any (another DLL, or another version, leaves them all untouched).
+		for (const uintptr_t entry : kJumpTableEntries641)
+		{
+			const uintptr_t value = *reinterpret_cast<const uintptr_t*>(entry);
+			if (value != kSetOrGetWaterBuildingEfficiency641)
+			{
+				LOG_ERROR("AdvancedWater: query table entry 0x{:08X} holds 0x{:08X}, expected 0x{:08X}: water building query "
+					"UI hook not installed.", static_cast<uint32_t>(entry), static_cast<uint32_t>(value),
+					static_cast<uint32_t>(kSetOrGetWaterBuildingEfficiency641));
+				return;
+			}
+		}
+
 		SetPerformanceMeterValue = reinterpret_cast<pfn_SetPerformanceMeterValue>(kSetPerformanceMeterValue641);
-		if (WriteJumpTableEntry(kJumpTableEntry641, reinterpret_cast<uintptr_t>(&Hook_SetOrGetWaterBuildingEfficiency)))
+		const uintptr_t hook = reinterpret_cast<uintptr_t>(&Hook_SetOrGetWaterBuildingEfficiency);
+		if (!WriteJumpTableEntry(kJumpTableEntries641[0], hook))
 		{
-			LOG_INFO("AdvancedWater: installed the water building query UI hook.");
-		}
-		else
-		{
-			originalJumpTableValue = 0;
 			LOG_ERROR("AdvancedWater: failed to install the water building query UI hook (VirtualProtect error {}).", GetLastError());
+			return;
 		}
+		if (!WriteJumpTableEntry(kJumpTableEntries641[1], hook))
+		{
+			LOG_ERROR("AdvancedWater: failed to install the water building query UI hook (VirtualProtect error {}).", GetLastError());
+			WriteJumpTableEntry(kJumpTableEntries641[0], kSetOrGetWaterBuildingEfficiency641);
+			return;
+		}
+		queryHookInstalled = true;
+		LOG_INFO("AdvancedWater: installed the water building query UI hook (2 table entries).");
 	}
 
 	void UninstallQueryHook()
 	{
-		if (originalJumpTableValue != 0)
+		if (!queryHookInstalled)
 		{
-			WriteJumpTableEntry(kJumpTableEntry641, originalJumpTableValue);
-			originalJumpTableValue = 0;
+			return;
 		}
+		const uintptr_t hook = reinterpret_cast<uintptr_t>(&Hook_SetOrGetWaterBuildingEfficiency);
+		for (const uintptr_t entry : kJumpTableEntries641)
+		{
+			// Only our own value is restored: a later DLL's hook in the entry is left alone.
+			if (*reinterpret_cast<const uintptr_t*>(entry) == hook)
+			{
+				WriteJumpTableEntry(entry, kSetOrGetWaterBuildingEfficiency641);
+			}
+		}
+		queryHookInstalled = false;
 	}
 
 	// ---------------------------------------------------------------- monthly pump check
@@ -267,7 +309,10 @@ namespace
 			uint32_t currentCapacity = 0;
 			uint32_t maxCapacity = 0;
 			bool shutDownByPollution = false;
-			pPlumbingSim->GetWaterProducerInfo(occupant, &currentCapacity, &maxCapacity, &efficiency, &shutDownByPollution, nullptr);
+			if (!pPlumbingSim->GetWaterProducerInfo(occupant, &currentCapacity, &maxCapacity, &efficiency, &shutDownByPollution, nullptr))
+			{
+				return false; // not a water producer: the game's own tool tip
+			}
 
 			// Both the background and meter image must be set for the meter to appear.
 			backgroundImageIID = kUtilityToolTipBackgroundBitmapIID;
