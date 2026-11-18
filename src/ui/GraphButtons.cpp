@@ -14,13 +14,14 @@
 // (User Visible Name Key 0x8A416A99, else the exemplar name).
 //
 // The window is driven by Graph Button Cell (0x5C4DE350: column 0-2, row 0-31) alone: only graph exemplars with it get
-// a button, in that cell of the 3-column grid; a graph without it is ignored (a button of the UI for it is hidden),
-// whoever made it (Maxis, CAM or another mod), so an old or foreign exemplar cannot take a cell or add a button by
-// mistake. Graph Button Hidden (0x5C4DE351, Bool) also gives a graph no button. A cell outside the grid or already
+// a button, in that cell of the 3-column grid; a new graph without it is ignored, so an old or foreign exemplar cannot
+// take a cell or add a button by mistake. A Maxis graph (its button is in the UI) replaced by a plugin with an
+// exemplar without it keeps its Maxis button where the UI has it, with a warning. Graph Button Hidden (0x5C4DE351, Bool) also gives a graph no button. A cell outside the grid or already
 // taken is logged and the graph goes to the next free cell. When no graph exemplar has Graph Button Cell (SC4SIM data
-// not installed, Maxis files only), the window is left as the game builds it. The panel grows upward by one 18-pixel
-// row for every row past the 6 Maxis rows; the two graph windows (0x8A8B5B71 expanded, 0x8A8B5B72 collapsed) move up
-// with it, and the filler 0x5C4DE310 (in CAM_UI.dat) paints the new rows.
+// not installed, Maxis files only), the window is left as the game builds it. CAM_UI.dat sizes the panel for every
+// CAM graph (a window resized at run time keeps its old paint buffer); only for rows past those does the panel grow
+// upward at run time, one 18-pixel row per row, the two graph windows (0x8A8B5B71 expanded, 0x8A8B5B72 collapsed)
+// moving up with it and the filler 0x5C4DE310 (in CAM_UI.dat) painting the new rows.
 //
 ////////////////////////////////////////////////////////////////////////////
 
@@ -96,6 +97,7 @@ namespace
 		bool listed = false;        // has Graph Button Cell: the graph gets a button
 		bool hasCell = false;       // ... and the cell is inside the grid
 		bool hidden = false;        // no Graph Button Cell, or Graph Button Hidden: no button
+		bool keep = false;          // Maxis button whose exemplar lost Graph Button Cell: stays where the UI has it
 		int32_t column = 0;
 		int32_t row = 0;
 	};
@@ -227,8 +229,30 @@ namespace
 		// 3) Those whose cell is outside the grid or taken fill the free cells row by row.
 		uint32_t hiddenCount = 0;
 		uint32_t ignoredCount = 0;
+		uint32_t keptCount = 0;
+		std::array<std::array<bool, kColumns>, kMaxRows> taken{};
 		for (GraphInfo& info : graphs)
 		{
+			// A Maxis graph (its button is in the UI) whose exemplar has no Graph Button Cell was replaced by a plugin
+			// loaded after CAM_Exemplar_Graphs.dat: its button stays where the UI puts it, so the graph is not lost.
+			if (!info.listed && !info.hidden && info.button)
+			{
+				const int32_t left = info.button->GetL();
+				int32_t column = 0;
+				for (int32_t c = 1; c < kColumns; ++c)
+				{
+					if (left >= columnLeft[c]) column = c;
+				}
+				info.column = column;
+				info.row = std::clamp((info.button->GetT() + kRowHeight / 2 - 1) / kRowHeight, 0, kMaxRows - 1);
+				info.keep = true;
+				taken[info.row][info.column] = true;
+				++keptCount;
+				SimLog::Write(SimLog::Level::Warning,
+					"GraphWindow: graph 0x%02X \"%s\" has no Graph Button Cell (replaced by another plugin?); its Maxis button stays at column %d, row %d.",
+					info.instance, info.name.ToChar(), info.column, info.row);
+				continue;
+			}
 			if (!info.listed && !info.hidden)
 			{
 				SimLog::Write(SimLog::Level::Debug, "GraphWindow: graph 0x%02X \"%s\" has no Graph Button Cell; ignored.",
@@ -244,10 +268,9 @@ namespace
 			if (info.button) info.button->HideWindow();
 			info.row = -1;
 		}
-		std::array<std::array<bool, kColumns>, kMaxRows> taken{};
 		for (GraphInfo& info : graphs)
 		{
-			if (info.hidden || !info.hasCell) continue;
+			if (info.hidden || info.keep || !info.hasCell) continue;
 			if (taken[info.row][info.column])
 			{
 				SimLog::Write(SimLog::Level::Warning, "GraphWindow: graph 0x%02X: cell (%d, %d) is taken; next free cell used.",
@@ -260,7 +283,7 @@ namespace
 		int32_t nextCell = 0;
 		for (GraphInfo& info : graphs)
 		{
-			if (info.hidden || info.hasCell) continue;
+			if (info.hidden || info.keep || info.hasCell) continue;
 			while (nextCell < kMaxRows * kColumns && taken[nextCell / kColumns][nextCell % kColumns]) ++nextCell;
 			if (nextCell >= kMaxRows * kColumns)
 			{
@@ -280,6 +303,7 @@ namespace
 		{
 			if (info.row < 0) continue;
 			lastRow = std::max(lastRow, info.row);
+			if (info.keep) continue;
 			cIGZWin* button = info.button;
 			cRZAutoRefCount<cIGZWin> created;
 			if (!button)
@@ -306,9 +330,12 @@ namespace
 				kGraphButtonBase + info.instance, info.name.ToChar(), info.column, info.row);
 		}
 		SimLog::Write(SimLog::Level::Info,
-			"GraphWindow: %u graphs, %u buttons added, %u moved, %u hidden, %u ignored (no Graph Button Cell).",
-			static_cast<unsigned>(graphs.size()), added, moved, hiddenCount, ignoredCount);
-		if (lastRow < kVanillaRows)
+			"GraphWindow: %u graphs, %u buttons added, %u moved, %u hidden, %u ignored, %u Maxis buttons kept (no Graph Button Cell).",
+			static_cast<unsigned>(graphs.size()), added, moved, hiddenCount, ignoredCount, keptCount);
+		// Rows the container already has: CAM_UI.dat sizes it for every CAM graph (a container grown at run time keeps
+		// its old paint buffer, so rows outside it draw badly and may not take clicks); 6 in the Maxis UI.
+		const int32_t containerRows = std::max(kVanillaRows, (container->GetB() - container->GetT() - 1 + kRowHeight - 1) / kRowHeight);
+		if (lastRow < containerRows)
 		{
 			container->InvalidateSelf();
 			return;
@@ -316,7 +343,10 @@ namespace
 
 		// Grow upward: the panel's top moves up by the new rows, the button container and the filler grow down by
 		// the same amount (so the bottom stays where it was), the graph windows above move up with the panel.
-		const int32_t delta = (lastRow + 1 - kVanillaRows) * kRowHeight;
+		const int32_t delta = (lastRow + 1 - containerRows) * kRowHeight;
+		SimLog::Write(SimLog::Level::Warning,
+			"GraphWindow: %d rows needed, the UI has %d; the panel grows at run time (CAM_UI.dat should have room for them).",
+			lastRow + 1, containerRows);
 		const int32_t containerBottom = container->GetB();
 		panel->SetArea(panel->GetL(), panel->GetT() - delta, panel->GetR(), panel->GetB());
 		container->SetArea(container->GetL(), container->GetT(), container->GetR(), containerBottom + delta);

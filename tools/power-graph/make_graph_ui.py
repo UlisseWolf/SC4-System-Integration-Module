@@ -30,6 +30,12 @@ SPLIT_COLUMN = 258  # background column copied to widen the images (middle of th
 IMG_COLLAPSED = 0x5C4DE201  # wider background of the collapsed window (PNG 0x856DDBAC / 0x46A006B0 / 0xABBEAD86)
 IMG_COLLAPSED_SRC = 0xABBEAD86
 assert (488 + WIDTH) % 3 == 0
+ROWS = max(6, max(row for _, row in LAYOUT.values()) + 1)   # button rows of the panel (every graph of graph_layout.py)
+EXTRA = (ROWS - 6) * 18     # panel height added for the rows past the 6 Maxis rows: the panel and both graph windows
+                            # grow upward by EXTRA (SC4SIM.dll grows the panel at run time only past ROWS: a window
+                            # resized at run time keeps its old paint buffer, so new rows drew badly)
+PANEL_ROW = 400             # background row (inside the button panel) repeated EXTRA times, expanded window image
+COLLAPSED_PANEL_ROW = 100   # the same, collapsed window image
 
 def find(entries, t, g, i):
     for e in entries:
@@ -74,7 +80,35 @@ def edit_ui(text, h):
                     a[1] += h; a[3] += h; line = set_area(line, a)
         out.append(line)
     assert done
-    return edit_panel(order_buttons(widen(out, h)), h)
+    return edit_panel(order_buttons(taller_panel(widen(out, h))), h)
+
+def taller_panel(lines):
+    """Room for ROWS button rows: the three windows grow upward by EXTRA (their bottoms stay), the backgrounds get
+    EXTRA more panel rows, the resize grips (negative x, at the bottom) move down with the bottom."""
+    out, root, depth = [], None, 0
+    for line in lines:
+        s = line.strip()
+        if s == '<CHILDREN>': depth += 1
+        elif s == '</CHILDREN>': depth -= 1
+        elif s.startswith('<LEGACY'):
+            m = re.search(r' id=(0x[0-9a-f]+)', s)
+            wid = m.group(1) if m else None
+            _, a = area(line)
+            if depth == 0:
+                root = wid
+                if root in ('0x8a8b5b71', '0x8a8b5b72', '0x0a4a8176'):
+                    a[1] -= EXTRA; line = set_area(line, a)
+            elif depth == 1 and root in ('0x8a8b5b71', '0x8a8b5b72'):
+                if wid == '0x6a2871bc':                                    # background
+                    a[3] += EXTRA; line = set_area(line, a)
+                    line = re.sub(r'imagerect=\((\d+),(\d+),(\d+),(\d+)\)',
+                                  lambda m: 'imagerect=(%s,%s,%s,%d)' % (m.group(1), m.group(2), m.group(3), int(m.group(4)) + EXTRA), line)
+                elif 'GZWinBMP' in s and a[0] < 0:                          # resize grip at the bottom
+                    a[1] += EXTRA; a[3] += EXTRA; line = set_area(line, a)
+            elif depth == 1 and root == '0x0a4a8176' and wid == '0xaa9244b6':  # button container
+                a[3] += EXTRA; line = set_area(line, a)
+        out.append(line)
+    return out
 
 def widen(lines, h):
     """The three windows WIDTH pixels wider, to the left: the root moves left, backgrounds, title bars, graph frame,
@@ -114,17 +148,8 @@ COLUMN_X = ((0, (488 + WIDTH) // 3), ((488 + WIDTH) // 3 + 4, 2 * (488 + WIDTH) 
 CAPTIONS = {0x08: (0x5C4DE190, 'Pollution'), 0x0C: (0x5C4DE1A8, 'Crime')}
 
 def order_buttons(lines):
-    """The Maxis graph buttons (IDs 0x4000 + instance) in the order of graph_layout.py (rows 0-5); buttons of
+    """The Maxis graph buttons (IDs 0x4000 + instance) in their cells of graph_layout.py; buttons of
     hidden graphs removed; captions of changed graphs replaced."""
-    # Row in the UI: rank of the button among the Maxis buttons of its column (same order as LAYOUT, no gaps for the
-    # graphs whose button the DLL adds); the DLL moves each button to its exact cell.
-    present = [int(m.group(1), 16) - 0x4000 for line in lines
-               for m in [re.search(r'id=0x0000(4[0-9a-f]{3})', line)] if m and 'clsid=GZWinBtn' in line]
-    shown = [i for i in present if i not in HIDDEN]
-    ui_row = {}
-    for column in range(3):
-        for rank, instance in enumerate(sorted((i for i in shown if LAYOUT[i][0] == column), key=lambda i: LAYOUT[i][1])):
-            ui_row[instance] = rank
     out, placed = [], set()
     for line in lines:
         m = re.search(r'id=0x0000(4[0-9a-f]{3})', line)
@@ -137,8 +162,8 @@ def order_buttons(lines):
                 ltext, text = CAPTIONS[instance]
                 line = re.sub(r'caption="[^"]*" captionres=\{[^}]*\}', 'caption="%s" captionres={6a231eaa,%08x}' % (text, ltext), line)
                 assert '%08x' % ltext in line
-            column, row = LAYOUT[instance][0], ui_row[instance]
-            assert row < 6, 'Maxis graph 0x%02X outside the 6 rows of the UI' % instance
+            column, row = LAYOUT[instance]
+            assert row < ROWS, 'Maxis graph 0x%02X outside the rows of the UI' % instance
             left, right = COLUMN_X[column]
             line = set_area(line, [left, 1 + 18 * row, right, 19 + 18 * row])
             placed.add(instance)
@@ -155,9 +180,9 @@ def edit_panel(lines, h):
         if not done and s.startswith('<LEGACY') and 'id=0xaa9244b6' in s:
             assert 'image={46a006b0,ebbeae28} imagerect=(6,332,509,448)' in line and 'winflag_sizeable=no' in line
             line = line.replace('image={46a006b0,ebbeae28} imagerect=(6,332,509,448)',
-                                'image={46a006b0,%08x} imagerect=(6,%d,%d,%d)' % (IMG_TALL, 332 + h, 509 + WIDTH, 439 + h))
+                                'image={46a006b0,%08x} imagerect=(6,%d,%d,%d)' % (IMG_TALL, 332 + h, 509 + WIDTH, 439 + h + EXTRA))
             _, a = area(line)
-            assert a == [6, 4, 505 + WIDTH, 111], a
+            assert a == [6, 4, 505 + WIDTH, 111 + EXTRA], a
             line = line.replace('winflag_sizeable=no', 'winflag_sizeable=yes')
             indent = line[:len(line) - len(line.lstrip())]
             out.append(indent + filler_line(lines))
@@ -170,7 +195,7 @@ def filler_line(lines):
     """The filler: a copy of the graph frame FlatRect of the Maxis UI, hidden, blue, zero height."""
     frame = next(l for l in lines if 'clsid=GZWinFlatRect' in l and 'area=(9,32,%d,' % (507 + WIDTH) in l).strip()
     frame = frame.replace('clsid=GZWinFlatRect iid=IGZWinFlatRect ', 'clsid=GZWinFlatRect iid=IGZWinFlatRect id=0x%08x ' % FILLER_ID, 1)
-    frame = re.sub(r'area=\([^)]*\)', 'area=(6,111,%d,111)' % (505 + WIDTH), frame, count=1)
+    frame = re.sub(r'area=\([^)]*\)', 'area=(6,%d,%d,%d)' % (111 + EXTRA, 505 + WIDTH, 111 + EXTRA), frame, count=1)
     blue = '(%d,%d,%d)' % PANEL_BLUE
     frame = re.sub(r'(fillcolor|colorleft|colortop|colorright|colorbottom)=\([^)]*\)', lambda m: m.group(1) + '=' + blue, frame)
     frame = frame.replace('winflag_visible=yes', 'winflag_visible=no').replace('winflag_ignoremouse=no', 'winflag_ignoremouse=yes')
@@ -198,8 +223,20 @@ def wide_image(im):
     new.paste(im.crop((SPLIT_COLUMN, 0, w, ht)), (SPLIT_COLUMN + WIDTH, 0))
     return new
 
+def taller_image(im, row):
+    """EXTRA copies of the given row inserted there."""
+    w, ht = im.size
+    new = Image.new('RGBA', (w, ht + EXTRA))
+    new.paste(im.crop((0, 0, w, row)), (0, 0))
+    line = im.crop((0, row, w, row + 1))
+    for y in range(EXTRA):
+        new.paste(line, (0, row + y))
+    new.paste(im.crop((0, row, w, ht)), (0, row + EXTRA))
+    return new
+
 def collapsed_image(png):
-    buf = io.BytesIO(); wide_image(Image.open(io.BytesIO(png)).convert('RGBA')).save(buf, 'PNG')
+    im = taller_image(Image.open(io.BytesIO(png)).convert('RGBA'), COLLAPSED_PANEL_ROW)
+    buf = io.BytesIO(); wide_image(im).save(buf, 'PNG')
     return buf.getvalue()
 
 def tall_image(png, h):
@@ -211,7 +248,7 @@ def tall_image(png, h):
     for y in range(h):
         new.paste(row, (0, SPLIT_ROW + y))
     new.paste(im.crop((0, SPLIT_ROW, w, ht)), (0, SPLIT_ROW + h))
-    buf = io.BytesIO(); wide_image(new).save(buf, 'PNG')
+    buf = io.BytesIO(); wide_image(taller_image(new, PANEL_ROW + h)).save(buf, 'PNG')
     return buf.getvalue()
 
 def main(game, cam_ui, out_dir, h='180'):

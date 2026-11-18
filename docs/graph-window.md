@@ -29,10 +29,12 @@ built it, the module:
    `0x4000 + instance` and the graph's name (the LTEXT of *User Visible Name Key* `0x8A416A99`, else the exemplar
    name), and puts it in the cell the exemplar asks for;
 3. places the buttons in the columns of the UI's Maxis buttons (CAM_UI.dat makes them 176 pixels wide, see the wider
-   window in `docs/power-graph.md`) and makes the panel one 18-pixel row taller for every row past the 6 Maxis rows, upward so its bottom stays in place, and moves the
-   two graph windows (`0x8A8B5B71` expanded, `0x8A8B5B72` collapsed) up by the same amount. The new rows are painted
-   by the filler `0x5C4DE310` (hidden blue FlatRect in `CAM_UI.dat`, behind the button container, whose background
-   image now ends at the container's bottom).
+   window in `docs/power-graph.md`). `CAM_UI.dat` already sizes the panel for every row of `graph_layout.py` (10
+   rows: the panel and both graph windows are 72 pixels taller upward, with taller backgrounds), because a window
+   resized at run time keeps its old paint buffer: in the first test the rows past the sixth drew in magenta and did
+   not all take clicks. Only when a graph needs a row past those of the UI does the DLL still grow the panel upward
+   (one 18-pixel row per row, moving the two graph windows `0x8A8B5B71` and `0x8A8B5B72` up and showing the filler
+   `0x5C4DE310`), and it logs a warning.
 
 ## Button position: Graph Button Cell
 
@@ -53,9 +55,12 @@ New_Properties.xml (Reader and PIM-X show them).
 of the UI for it (one of the 18 Maxis buttons) is hidden, whoever made the exemplar: the Maxis originals in
 `SimCity_1.dat`, an older CAM version or another mod. So:
 
-- an exemplar that overrides one of `CAM_Exemplar_Graphs.dat` without the property (an older mod loaded later)
-  removes that graph's button instead of taking a cell at random; it is listed in `SC4SIM.log` (Debug level) as
-  "has no Graph Button Cell; ignored", and adding the property brings it back;
+- an exemplar of a **new** graph without the property adds no button; it is listed in `SC4SIM.log` (Debug level) as
+  "has no Graph Button Cell; ignored";
+- exception, for the 18 **Maxis** graphs (their buttons are in the UI): when a plugin loaded after
+  `CAM_Exemplar_Graphs.dat` replaces one of them with an exemplar without the property, the Maxis button stays
+  where the UI puts it (its cell of `graph_layout.py`) and a warning names the graph, so the graph is not lost. In
+  the first test RCI Demand and Commute Time vanished this way;
 - a stray exemplar in group `0xCA4AD545` adds no button;
 - the window is described by the data alone: the set of exemplars with Graph Button Cell *is* the list of buttons,
   without relying on the 18 buttons of the Maxis UI. This is meant to ease a later move from the Maxis files to
