@@ -79,6 +79,7 @@
     <ClCompile Include="src\afterlife\Afterlife.cpp" />
     <ClCompile Include="src\afterlife\AfterlifeModel.cpp" />
     <ClCompile Include="src\afterlife\Deathcare.cpp" />
+    <ClCompile Include="src\power\PowerGraphHistory.cpp" />
     <ClCompile Include="vendor\gzcom-dll\gzcom-dll\src\cRZBaseString.cpp">
       <WarningLevel>Level3</WarningLevel>
     </ClCompile>
@@ -105,6 +106,7 @@
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ItemGroup>
     <ClInclude Include="src\SimLog.h" />
+    <ClInclude Include="src\power\PowerGraphHistory.h" />
     <ClInclude Include="src\SimLogFormat.h" />
     <ClInclude Include="src\powerpoles\PowerPoleCustomization.h" />
     <ClInclude Include="src\powerpoles\RelativeCallPatch.h" />

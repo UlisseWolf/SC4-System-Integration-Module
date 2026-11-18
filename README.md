@@ -47,6 +47,7 @@ such as NEON.
 | Game fixes | 1.9.3 | `cSC4Lot::UpdateJobs` reads the $$ and $$$ trip capacities for their own wealth: fixes the "high-tech industry has no $$$ jobs" bug for every building (also the Medical Clinic, the solar and nuclear plants and mixed lots). Two bytes, checked before patching. 1.10.0: phantom funding sliders. A mod that changes the monthly cost of civic buildings already in the city no longer drives their funding sliders to 0 % or 120 %. The `FundingResync` and `FundingReset` cheats are included, along with `RemovePhantomBudgetItems`, merged from [sc4-remove-phantom-budget-items](https://github.com/0xC0000054/sc4-remove-phantom-budget-items) with the author's consent. See `docs/game-fixes.md`. *1.10.0 not yet tested in game.* |
 | Underfunded notice priorities | 1.10.0 | The priority of each of the eight notices of CoriBoom's Fixed Underfunded Notices (FUN, included in CAM) comes from `SC4SIM.ini`: the Urgent or Med-High preset of the two original files, or a priority per notice. See `docs/underfunded-notices.md`. *Not yet tested in game.* |
 | Advanced Water Management | 1.2.0 | The real efficiency of water buildings in the query dialog and tool tip, a monthly warning for fresh or salt water pumps that produce nothing, and the `ScanPumps` cheat. |
+| Power graph by energy class | 1.13.0 | The Power graph shows the energy bought and sold and the production of each energy class (coal, oil, natural gas, nuclear fission, nuclear fusion, solar, wind, geothermal, hydroelectric, tidal, microwave), recorded monthly in the city history. See `docs/power-graph.md`. *Not yet tested in game.* |
 
 ## Requirements
 
@@ -68,7 +69,7 @@ it and says so in the log:
    [Building](#building)).
 2. Copy `SC4SIM.dll` and, optionally, `SC4SIM.ini` to your SimCity 4 **Plugins** folder.
 3. Start the game. `SC4SIM.log`, created next to the DLL, should report:
-   - `SC4 SIM DLL 1.12.0`;
+   - `SC4 SIM DLL 1.13.0`;
    - `PowerPoleCustomization: installed N of N patches`;
    - `AdvancedWater: installed the water building query UI hook`;
    - `MixedOccupancy: enabled (...)`;
@@ -310,6 +311,7 @@ Details, the news events and the tests are in [`docs/afterlife.md`](docs/afterli
 | | `DebugLog` | `false` | Writes the cheat's report of the mixed lots to `SC4SIM.log` at the start of every month. |
 | | `MixedTraffic` | `true` | Commuters and freight for the secondary classes, and secondary jobs as commute destinations. |
 | `[Afterlife]` | `Enabled` | `true` | Registers the DLL version of the Afterlife functions in the advisor Lua. |
+| `[PowerGraph]` | `Enabled` | `true` | Records the monthly production of each energy class for the Power graph. |
 | `[ManufacturingZone]` | `Enabled` | `true` | Turns the I-M zone on or off. |
 | | `ZoneSlot` | `13` | Zone slot reused for the I-M zone: 13 Spaceport or 10 Military (other values refused). |
 | | `StageHook` | `true` | Every growth stage fits the slot; required for the I-M redirect. |

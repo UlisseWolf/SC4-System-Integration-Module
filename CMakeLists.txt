@@ -33,6 +33,7 @@ add_library(SC4SIM SHARED
   src/afterlife/Afterlife.cpp
   src/afterlife/AfterlifeModel.cpp
   src/afterlife/Deathcare.cpp
+  src/power/PowerGraphHistory.cpp
   ${GZCOM}/src/cRZBaseString.cpp
   ${GZCOM}/src/cRZBaseVariant.cpp
   ${GZCOM}/src/cRZCOMDllDirector.cpp
