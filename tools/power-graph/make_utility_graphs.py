@@ -79,24 +79,28 @@ GARBAGE_PLOTS = [
 
 GRAPHS = {POWER_GRAPH: POWER_PLOTS, WATER_GRAPH: WATER_PLOTS, GARBAGE_GRAPH: GARBAGE_PLOTS}
 
-# New graphs: instance -> (template graph, name, title LTEXT instance, title text, plots). The template gives every
-# other property (graph type, value range); its plots are replaced.
+# New graphs: instance -> (template graph, name, title LTEXT instance, title text, button cell, plots). The template
+# gives every other property (graph type, value range); its plots are replaced. Button cell: (column 0-2, row) of the
+# button SC4SIM.dll adds in the Graphs window (Graph Button Cell 0x5C4DE350; rows 0-5 are the Maxis buttons).
 NEW_GRAPHS = {
-    0x19: (0x09, 'Garbage Pollution', 0x5C4DE140, 'Garbage Pollution',
+    0x19: (0x09, 'Garbage Pollution', 0x5C4DE140, 'Garbage Pollution', (0, 6),
            [(0xFF5D2EA7, None, 0xEA110134, (255, 0, 210))]),      # CAM label "Garbage Pollution"; G_TOTAL_GARBAGE_POLLUTION
 }
-P_NAME, P_TITLE = 0x00000020, 0x8A416A99
+P_NAME, P_TITLE, P_BUTTON_CELL = 0x00000020, 0x8A416A99, 0x5C4DE350
 T_STRING = 0x0C
 
 def string_prop(pid, text):
     data = text.encode('latin1')
     return struct.pack('<IHHBI', pid, T_STRING << 8, 0x80, 0, len(data)) + data
 
-def new_graph(template, name, title_instance, plots):
+def new_graph(template, name, title_instance, cell, plots):
     header, props = records(build_graph(template, plots))
     replace = {P_NAME: string_prop(P_NAME, name),
                P_TITLE: array(P_TITLE, T_UINT32, 'I', [LTEXT, LTEXT_GROUP, title_instance])}
-    return header + struct.pack('<I', len(props)) + b''.join(replace.get(pid, raw) for pid, raw in props)
+    out = [replace.get(pid, raw) for pid, raw in props if pid != P_BUTTON_CELL]
+    if cell is not None:
+        out.append(array(P_BUTTON_CELL, T_UINT32, 'I', list(cell)))
+    return header + struct.pack('<I', len(out)) + b''.join(out)
 
 # CAM labels whose text ends with a line break (an empty extra legend row): rewritten without it.
 TRIM_LABELS = (0xFF5D2E97, 0xFF5D2E98)
@@ -149,8 +153,8 @@ def main(exemplars, locale, out_dir):
             e['data'] = build_graph(e['data'], GRAPHS[e['i']]); done.add(e['i'])
     assert done == set(GRAPHS), 'graph exemplar missing'
     by_instance = {e['i']: e for e in entries if e['t'] == EXEMPLAR and e['g'] == GRAPH_GROUP}
-    for instance, (template, name, title, _, plots) in NEW_GRAPHS.items():
-        data = new_graph(by_instance[template]['data'], name, title, plots)
+    for instance, (template, name, title, _, cell, plots) in NEW_GRAPHS.items():
+        data = new_graph(by_instance[template]['data'], name, title, cell, plots)
         if instance in by_instance:
             by_instance[instance]['data'] = data
         else:
@@ -159,7 +163,7 @@ def main(exemplars, locale, out_dir):
 
     raw, entries = dbpf2.read(locale)
     labels = {p[0]: p[1] for plots in GRAPHS.values() for p in plots if p[1]}
-    labels.update({title: text for _, _, title, text, _ in NEW_GRAPHS.values()})
+    labels.update({title: text for _, _, title, text, _, _ in NEW_GRAPHS.values()})
     for e in entries:
         if e['t'] == LTEXT and e['g'] == LTEXT_GROUP and e['i'] in TRIM_LABELS:
             text = e['data'][4:].decode('utf-16-le').rstrip('\r\n ')

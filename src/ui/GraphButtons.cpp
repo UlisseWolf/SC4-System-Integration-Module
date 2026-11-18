@@ -11,8 +11,9 @@
 // (window 0x0A4A8176) at this+0x304. This module hooks that call and, after it, adds a button for every graph
 // exemplar of instance 0x01-0xFF that has none: the button comes from the template UI 0x00000000 / 0x96A006B0 /
 // 0x5C4DE300 (a copy of the Maxis graph button, in CAM_UI.dat), gets ID 0x4000 + instance and the graph's name
-// (User Visible Name Key 0x8A416A99, else the exemplar name), and is placed in the next free cell of the 3-column
-// grid. The panel grows upward by one 18-pixel row for every 3 new buttons; the two graph windows (0x8A8B5B71
+// (User Visible Name Key 0x8A416A99, else the exemplar name), and goes to the cell of the 3-column grid that the
+// exemplar asks for with Graph Button Cell (0x5C4DE350: column 0-2, row; rows 0-5 are the Maxis buttons), or, without
+// it or when that cell is taken, to the next free cell after the Maxis rows. The panel grows upward by one 18-pixel row for every 3 new buttons; the two graph windows (0x8A8B5B71
 // expanded, 0x8A8B5B72 collapsed) move up with it, and the filler 0x5C4DE310 (in CAM_UI.dat) paints the new rows.
 //
 ////////////////////////////////////////////////////////////////////////////
@@ -38,6 +39,7 @@
 #include "StringResourceManager.h"
 
 #include <Windows.h>
+#include <algorithm>
 #include <array>
 #include <cwctype>
 #include <filesystem>
@@ -56,6 +58,7 @@ namespace
 	constexpr uint32_t kGraphGroup = 0xCA4AD545;
 	constexpr uint32_t kPropExemplarName = 0x00000020;
 	constexpr uint32_t kPropUserVisibleNameKey = 0x8A416A99;
+	constexpr uint32_t kPropGraphButtonCell = 0x5C4DE350;   // Uint32 x2: column (0-2), row (6 = first row after Maxis)
 
 	constexpr uint32_t kUiType = 0x00000000;
 	constexpr uint32_t kUiGroup = 0x96A006B0;
@@ -70,21 +73,60 @@ namespace
 
 	constexpr int32_t kRowHeight = 18;
 	constexpr int32_t kVanillaRows = 6;
+	constexpr int32_t kMaxRows = 32;
+	constexpr int32_t kColumns = 3;
 	constexpr std::array<int32_t, 3> kColumnLeft = { 0, 170, 340 };
 	constexpr std::array<int32_t, 3> kColumnRight = { 166, 336, 496 };
 
 	bool enabled = true;
 	PowerPoles::RelativeCallPatch buildPatch;
 
-	bool ReadGraphName(cIGZPersistResourceManager* resources, uint32_t instance, cRZBaseString& name)
+	struct GraphInfo
 	{
-		cRZAutoRefCount<cISCResExemplar> exemplar;
-		if (!resources->GetResource(cGZPersistResourceKey(kExemplarType, kGraphGroup, instance), GZIID_cISCResExemplar,
-			exemplar.AsPPVoid(), 0, nullptr) || !exemplar)
+		uint32_t instance = 0;
+		cRZBaseString name;
+		bool hasCell = false;
+		int32_t column = 0;
+		int32_t row = 0;
+	};
+
+	// First two values of a numeric array property (Uint8, Uint32 or Sint32).
+	bool ReadPair(const cISCPropertyHolder* holder, uint32_t id, int32_t& first, int32_t& second)
+	{
+		const cISCProperty* const property = holder ? holder->GetProperty(id) : nullptr;
+		const cIGZVariant* const variant = property ? property->GetPropertyValue() : nullptr;
+		if (!variant || variant->GetCount() < 2) return false;
+		switch (variant->GetType())
 		{
-			return false;
+		case cIGZVariant::Uint8Array: first = variant->RefUint8()[0]; second = variant->RefUint8()[1]; return true;
+		case cIGZVariant::Uint32Array:
+			first = static_cast<int32_t>(variant->RefUint32()[0]); second = static_cast<int32_t>(variant->RefUint32()[1]);
+			return true;
+		case cIGZVariant::Sint32Array: first = variant->RefSint32()[0]; second = variant->RefSint32()[1]; return true;
+		default: return false;
 		}
-		const cISCPropertyHolder* const holder = exemplar->AsISCPropertyHolder();
+	}
+
+	void ReadGraphInfo(cIGZPersistResourceManager* resources, GraphInfo& info)
+	{
+		const uint32_t instance = info.instance;
+		cRZAutoRefCount<cISCResExemplar> exemplar;
+		const cISCPropertyHolder* holder = nullptr;
+		if (resources->GetResource(cGZPersistResourceKey(kExemplarType, kGraphGroup, instance), GZIID_cISCResExemplar,
+			exemplar.AsPPVoid(), 0, nullptr) && exemplar)
+		{
+			holder = exemplar->AsISCPropertyHolder();
+		}
+
+		info.hasCell = ReadPair(holder, kPropGraphButtonCell, info.column, info.row);
+		if (info.hasCell && (info.column < 0 || info.column >= kColumns || info.row < 0 || info.row >= kMaxRows))
+		{
+			SimLog::Write(SimLog::Level::Warning,
+				"GraphWindow: graph 0x%02X: Graph Button Cell (%d, %d) outside the grid (column 0-2, row 0-%d); "
+				"next free cell used.", instance, info.column, info.row, kMaxRows - 1);
+			info.hasCell = false;
+		}
+
 		const cISCProperty* const property = holder ? holder->GetProperty(kPropUserVisibleNameKey) : nullptr;
 		const cIGZVariant* const variant = property ? property->GetPropertyValue() : nullptr;
 		if (variant && variant->GetType() == cIGZVariant::Uint32Array && variant->GetCount() >= 3)
@@ -93,16 +135,16 @@ namespace
 			cRZAutoRefCount<cIGZString> text;
 			if (StringResourceManager::GetLocalizedString(StringResourceKey(key[1], key[2]), text) && text && text->Strlen() > 0)
 			{
-				name.Copy(*text);
-				return true;
+				info.name.Copy(*text);
+				return;
 			}
 		}
-		if (holder && holder->HasProperty(kPropExemplarName) && holder->GetProperty(kPropExemplarName, name) && name.Strlen() > 0)
+		if (holder && holder->HasProperty(kPropExemplarName) && holder->GetProperty(kPropExemplarName, info.name)
+			&& info.name.Strlen() > 0)
 		{
-			return true;
+			return;
 		}
-		name.Sprintf("Graph 0x%02X", instance);
-		return true;
+		info.name.Sprintf("Graph 0x%02X", instance);
 	}
 
 	void AddGraphButtons(void* controlPanel)
@@ -126,13 +168,15 @@ namespace
 			return;
 		}
 
-		std::vector<uint32_t> missing;
+		std::vector<GraphInfo> missing;
 		for (uint32_t instance = 1; instance <= 0xFF; ++instance)
 		{
 			if (resources->TestForKey(cGZPersistResourceKey(kExemplarType, kGraphGroup, instance))
 				&& !container->GetChildWindowFromID(kGraphButtonBase + instance))
 			{
-				missing.push_back(instance);
+				GraphInfo& info = missing.emplace_back();
+				info.instance = instance;
+				ReadGraphInfo(resources, info);
 			}
 		}
 		if (missing.empty())
@@ -141,34 +185,65 @@ namespace
 			return;
 		}
 
-		uint32_t added = 0;
-		for (const uint32_t instance : missing)
+		// Cells: the Maxis rows are taken; graphs with Graph Button Cell first (by instance), then the others in the
+		// next free cells, row by row after the Maxis rows.
+		std::array<std::array<bool, kColumns>, kMaxRows> taken{};
+		for (int32_t row = 0; row < kVanillaRows; ++row) taken[row].fill(true);
+		for (GraphInfo& info : missing)
 		{
+			if (!info.hasCell) continue;
+			if (taken[info.row][info.column])
+			{
+				SimLog::Write(SimLog::Level::Warning, "GraphWindow: graph 0x%02X: cell (%d, %d) is taken; next free cell used.",
+					info.instance, info.column, info.row);
+				info.hasCell = false;
+				continue;
+			}
+			taken[info.row][info.column] = true;
+		}
+		int32_t nextCell = kVanillaRows * kColumns;
+		for (GraphInfo& info : missing)
+		{
+			if (info.hasCell) continue;
+			while (nextCell < kMaxRows * kColumns && taken[nextCell / kColumns][nextCell % kColumns]) ++nextCell;
+			if (nextCell >= kMaxRows * kColumns)
+			{
+				SimLog::Write(SimLog::Level::Warning, "GraphWindow: no free cell for graph 0x%02X.", info.instance);
+				info.row = -1;
+				continue;
+			}
+			info.row = nextCell / kColumns;
+			info.column = nextCell % kColumns;
+			taken[info.row][info.column] = true;
+		}
+
+		uint32_t added = 0;
+		int32_t lastRow = kVanillaRows - 1;
+		for (GraphInfo& info : missing)
+		{
+			if (info.row < 0) continue;
 			cRZAutoRefCount<cIGZWin> button;
 			if (!scripts->CreateWindowFromScript(cGZPersistResourceKey(kUiType, kUiGroup, kButtonTemplateUi), container,
 				kButtonTemplateId, GZIID_cIGZWin, button.AsPPVoid()) || !button)
 			{
-				SimLog::Write(SimLog::Level::Warning, "GraphWindow: button for graph 0x%02X not created.", instance);
+				SimLog::Write(SimLog::Level::Warning, "GraphWindow: button for graph 0x%02X not created.", info.instance);
 				continue;
 			}
-			const int32_t column = static_cast<int32_t>(added % 3);
-			const int32_t row = kVanillaRows + static_cast<int32_t>(added / 3);
-			const int32_t top = 1 + row * kRowHeight;
-			button->SetID(kGraphButtonBase + instance);
-			button->SetArea(kColumnLeft[column], top, kColumnRight[column], top + kRowHeight);
-			cRZBaseString name;
-			ReadGraphName(resources, instance, name);
-			button->SetCaption(name);
+			const int32_t top = 1 + info.row * kRowHeight;
+			button->SetID(kGraphButtonBase + info.instance);
+			button->SetArea(kColumnLeft[info.column], top, kColumnRight[info.column], top + kRowHeight);
+			button->SetCaption(info.name);
 			button->ShowWindow();
 			++added;
-			SimLog::Write(SimLog::Level::Info, "GraphWindow: button 0x%04X \"%s\" added.", kGraphButtonBase + instance,
-				name.ToChar());
+			lastRow = std::max(lastRow, info.row);
+			SimLog::Write(SimLog::Level::Info, "GraphWindow: button 0x%04X \"%s\" added at column %d, row %d.",
+				kGraphButtonBase + info.instance, info.name.ToChar(), info.column, info.row);
 		}
 		if (added == 0) return;
 
 		// Grow upward: the panel's top moves up by the new rows, the button container and the filler grow down by
 		// the same amount (so the bottom stays where it was), the graph windows above move up with the panel.
-		const int32_t delta = static_cast<int32_t>((added + 2) / 3) * kRowHeight;
+		const int32_t delta = (lastRow + 1 - kVanillaRows) * kRowHeight;
 		const int32_t containerBottom = container->GetB();
 		panel->SetArea(panel->GetL(), panel->GetT() - delta, panel->GetR(), panel->GetB());
 		container->SetArea(container->GetL(), container->GetT(), container->GetR(), containerBottom + delta);

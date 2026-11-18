@@ -27,13 +27,26 @@ built it, the module:
 2. creates each missing button from the template UI `0x00000000 / 0x96A006B0 / 0x5C4DE300` (a copy of the Maxis
    graph button, in `CAM_UI.dat`) with `cIGZUIScriptService::CreateWindowFromScript`, gives it ID
    `0x4000 + instance` and the graph's name (the LTEXT of *User Visible Name Key* `0x8A416A99`, else the exemplar
-   name), and puts it in the next cell of the 3-column grid, below the 6 Maxis rows;
+   name), and puts it in the cell the exemplar asks for (*Graph Button Cell*, below) or, without it, in the next
+   free cell of the 3-column grid, below the 6 Maxis rows;
 3. makes the panel one 18-pixel row taller for every 3 new buttons, upward so its bottom stays in place, and moves the
    two graph windows (`0x8A8B5B71` expanded, `0x8A8B5B72` collapsed) up by the same amount. The new rows are painted
    by the filler `0x5C4DE310` (hidden blue FlatRect in `CAM_UI.dat`, behind the button container, whose background
    image now ends at the container's bottom).
 
-Order: by instance. `[GraphWindow] Enabled=false` in `SC4SIM.ini` turns it off. SimCity 4 1.1.641 only (the call
+## Button position: Graph Button Cell
+
+| ID | Property | Type | Meaning |
+|---|---|---|---|
+| `0x5C4DE350` | Graph Button Cell | Uint32 ×2 | Column (0-2, left to right) and row (from the top; rows 0-5 are the Maxis buttons, so the first free row is 6, up to 31) of the graph's button. |
+
+The position lives in the graph exemplar itself: no `SC4SIM.ini` key is needed. Graphs with Graph Button Cell are
+placed first (lowest instance first); a cell outside the grid or already taken (by a Maxis button or by another graph)
+is logged in `SC4SIM.log` and the graph goes to the next free cell instead. Graphs without the property fill the free
+cells row by row, left to right, in instance order. The panel gets as many rows as the lowest button needs, so an
+empty row between buttons is allowed. The property is defined in New_Properties.xml (Reader and PIM-X show it).
+
+`[GraphWindow] Enabled=false` in `SC4SIM.ini` turns it off. SimCity 4 1.1.641 only (the call
 site is checked before patching).
 
 ## Adding a graph
@@ -41,7 +54,7 @@ site is checked before patching).
 1. Make a graph exemplar (type `0x6534284A`, group `0xCA4AD545`, a free instance up to `0xFF`), for example by
    copying one of `CAM_Exemplar_Graphs.dat` and changing *Graph Plot data source 1* (`0x6A4AEE40`, history types),
    *Graph Plot label key* (`0x6A4AEEDC`), *Graph Plot color* (`0x6A4AEEDF`) and *User Visible Name Key*
-   (`0x8A416A99`, LTEXT of the title and of the button).
+   (`0x8A416A99`, LTEXT of the title and of the button); optionally add *Graph Button Cell* (`0x5C4DE350`).
 2. Put it in any plugin. The button appears the next time a city is opened.
 
 The data sources are history types of the city's history warehouse: those the game records (the `game_trends` list of
@@ -50,5 +63,5 @@ the advisor Lua) or new ones recorded by a DLL, as SC4SIM does for the Power and
 ## Included example
 
 `CAM_Exemplar_Graphs.dat` has a new graph, **Garbage Pollution** (`0x19`): the garbage pollution index
-(`G_TOTAL_GARBAGE_POLLUTION`, `0xEA110134`), which was moved out of the Garbage graph. Its button is the first one the
-DLL adds, in the first cell of a seventh row.
+(`G_TOTAL_GARBAGE_POLLUTION`, `0xEA110134`), which was moved out of the Garbage graph. Its exemplar sets Graph Button Cell to
+(0, 6): first cell of a seventh row.
