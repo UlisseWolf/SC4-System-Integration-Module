@@ -33,7 +33,7 @@ background image 0x5C4DE200). Needs Pillow.
 
 `make_graph_ui.py` also writes the button template UI (0x5C4DE300) and the panel filler (0x5C4DE310) used by
 SC4SIM.dll to add a button for every graph exemplar (`docs/graph-window.md`); `make_utility_graphs.py` writes the
-Pollution graph (0x08: air, water, garbage, radiation), the Crime (0x0C), Police & Jails (0x1C) and Fire Protection (0x1D) graphs, the Power
+Pollution graph (0x08: air, water, garbage, radiation), the Crime (0x0C), Police & Jails (0x1C), Fire Protection (0x1D) and Health (0x1E) graphs, the Power
 Grid and Water Grid graphs, and Graph Button Hidden
 (0x5C4DE351) in the merged Water Pollution graph (0x09, `HIDDEN` in `graph_layout.py`).
 
@@ -42,4 +42,4 @@ writes it into every graph exemplar (Graph Button Cell 0x5C4DE350) and `make_gra
 of the UI the same way (removing those of hidden graphs).
 
 `patch_graph_window_types.py <CAM_LUA_Controller.dat> <out_dir>` points the advisors' `graph_window_types.WATER_POLLUTION`
-to the Pollution graph and adds `POLLUTION`, `POLICE_JAILS`, `FIRE_PROTECTION`, `POWER_GRID` and `WATER_GRID` (Lua 0xFF048A3E).
+to the Pollution graph and adds `POLLUTION`, `POLICE_JAILS`, `FIRE_PROTECTION`, `HEALTH`, `POWER_GRID` and `WATER_GRID` (Lua 0xFF048A3E).

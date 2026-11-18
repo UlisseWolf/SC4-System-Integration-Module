@@ -7,6 +7,7 @@
 #    radiation pollution in one graph; Water Pollution (0x09) gets Graph Button Hidden;
 #  - Crime (0x0C): crimes and arrests with unsolved crimes, criminals and inmates; Police & Jails (0x1C), new;
 #  - Fire Protection (0x1D), new: coverage, protection, flammability, fire outbreaks, fire stations;
+#  - Health (0x1E), new: coverage, average health, health grade, hospital occupancy, hospitals, clinics;
 #  - Power Grid (0x1A) and Water Grid (0x1B), new: buttons added by SC4SIM.dll (docs/graph-window.md).
 #   python make_utility_graphs.py <CAM_Exemplar_Graphs.dat> <CAM_Locale_en.dat> <out_dir>
 # Writes <out_dir>/<same file name> (the three graph exemplars rebuilt, every other entry unchanged) and
@@ -120,6 +121,16 @@ NEW_GRAPHS = {
         (0x5C4DE1B3, 'Average Flammability', 0x2A11CB48, (255, 140, 0)),     # GA_FLAMMABILITY
         (0x5C4DE1B4, 'Fire Outbreaks', 0x5C4DE0A1, (220, 11, 11)),
         (0x5C4DE1B5, 'Fire Stations', 0x5C4DE0A2, (128, 128, 128)),
+    ]),
+    # Health: coverage, average health (CAM's Health Rating), health grade, hospital occupancy, hospitals and clinics,
+    # all from SC4SIM.dll (the advisor Lua's game table). See docs/health-graph.md.
+    0x1E: (0x0C, 'Health', 0x5C4DE1C0, 'Health', LAYOUT[0x1E], [
+        (0x5C4DE1C1, 'Health Coverage %', 0x5C4DE0C1, (40, 110, 255)),
+        (0x5C4DE1C2, 'Average Health %', 0x5C4DE0C2, (93, 189, 152)),
+        (0x5C4DE1C3, 'Health Grade %', 0x5C4DE0C3, (170, 60, 255)),
+        (0x5C4DE1C4, 'Hospital Occupancy %', 0x5C4DE0C4, (220, 11, 11)),
+        (0x5C4DE1C5, 'Hospitals', 0x5C4DE0C5, (128, 128, 128)),
+        (0x5C4DE1C6, 'Clinics', 0x5C4DE0C6, (255, 140, 0)),
     ]),
     # Power grid: demand and unused power (game), production by load class (SC4SIM.dll, from NEON when installed),
     # NEON's load balance and free grid capacities (SC4SIM.dll, only with NEON). See docs/power-grid-graph.md.
