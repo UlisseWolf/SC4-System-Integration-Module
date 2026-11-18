@@ -74,8 +74,17 @@ COLUMN_X = ((0, 166), (170, 336), (340, 496))
 CAPTIONS = {0x08: (0x5C4DE190, 'Pollution'), 0x0C: (0x5C4DE1A8, 'Crime')}
 
 def order_buttons(lines):
-    """The Maxis graph buttons (IDs 0x4000 + instance) in the cells of graph_layout.py (rows 0-5); buttons of
+    """The Maxis graph buttons (IDs 0x4000 + instance) in the order of graph_layout.py (rows 0-5); buttons of
     hidden graphs removed; captions of changed graphs replaced."""
+    # Row in the UI: rank of the button among the Maxis buttons of its column (same order as LAYOUT, no gaps for the
+    # graphs whose button the DLL adds); the DLL moves each button to its exact cell.
+    present = [int(m.group(1), 16) - 0x4000 for line in lines
+               for m in [re.search(r'id=0x0000(4[0-9a-f]{3})', line)] if m and 'clsid=GZWinBtn' in line]
+    shown = [i for i in present if i not in HIDDEN]
+    ui_row = {}
+    for column in range(3):
+        for rank, instance in enumerate(sorted((i for i in shown if LAYOUT[i][0] == column), key=lambda i: LAYOUT[i][1])):
+            ui_row[instance] = rank
     out, placed = [], set()
     for line in lines:
         m = re.search(r'id=0x0000(4[0-9a-f]{3})', line)
@@ -88,7 +97,7 @@ def order_buttons(lines):
                 ltext, text = CAPTIONS[instance]
                 line = re.sub(r'caption="[^"]*" captionres=\{[^}]*\}', 'caption="%s" captionres={6a231eaa,%08x}' % (text, ltext), line)
                 assert '%08x' % ltext in line
-            column, row = LAYOUT[instance]
+            column, row = LAYOUT[instance][0], ui_row[instance]
             assert row < 6, 'Maxis graph 0x%02X outside the 6 rows of the UI' % instance
             left, right = COLUMN_X[column]
             line = set_area(line, [left, 1 + 18 * row, right, 19 + 18 * row])

@@ -6,6 +6,7 @@
 #  - Pollution (0x6534284A / 0xCA4AD545 / 0x00000008, the Maxis Air Pollution graph): air, water, garbage and
 #    radiation pollution in one graph; Water Pollution (0x09) gets Graph Button Hidden;
 #  - Crime (0x0C): crimes and arrests with unsolved crimes, criminals and inmates; Police & Jails (0x1C), new;
+#  - Fire Protection (0x1D), new: coverage, protection, flammability, fire outbreaks, fire stations;
 #  - Power Grid (0x1A) and Water Grid (0x1B), new: buttons added by SC4SIM.dll (docs/graph-window.md).
 #   python make_utility_graphs.py <CAM_Exemplar_Graphs.dat> <CAM_Locale_en.dat> <out_dir>
 # Writes <out_dir>/<same file name> (the three graph exemplars rebuilt, every other entry unchanged) and
@@ -109,6 +110,16 @@ NEW_GRAPHS = {
         (0x5C4DE1A5, 'Average Crime', 0xAA662693, (220, 11, 11)),        # GA_CRIME
         (0x5C4DE1A6, 'Police Efficiency %', 0x5C4DE084, (93, 189, 152)),  # as CAM's Police panel
         (0x5C4DE1A7, 'Jail Occupancy %', 0x5C4DE085, (128, 128, 128)),
+    ]),
+    # Fire Protection: the game's fire coverage, average fire protection and average flammability (both 0-256, CAM's
+    # tuning: flammability low 50, medium 70, tinderbox 140), with fire outbreaks and fire stations (SC4SIM.dll). See
+    # docs/fire-graph.md.
+    0x1D: (0x0C, 'Fire Protection', 0x5C4DE1B0, 'Fire Protection', LAYOUT[0x1D], [
+        (0x5C4DE1B1, 'Fire Coverage %', 0x2A11D203, (40, 110, 255)),         # G_FIRE_PROTECTION_COVERAGE_P
+        (0x5C4DE1B2, 'Average Fire Protection', 0x2A11D204, (93, 189, 152)), # GA_FIRE_PROTECTION
+        (0x5C4DE1B3, 'Average Flammability', 0x2A11CB48, (255, 140, 0)),     # GA_FLAMMABILITY
+        (0x5C4DE1B4, 'Fire Outbreaks', 0x5C4DE0A1, (220, 11, 11)),
+        (0x5C4DE1B5, 'Fire Stations', 0x5C4DE0A2, (128, 128, 128)),
     ]),
     # Power grid: demand and unused power (game), production by load class (SC4SIM.dll, from NEON when installed),
     # NEON's load balance and free grid capacities (SC4SIM.dll, only with NEON). See docs/power-grid-graph.md.

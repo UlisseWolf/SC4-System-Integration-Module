@@ -77,15 +77,17 @@ exemplar of `CAM_Exemplar_Graphs.dat` as Graph Button Cell):
 |---|---|---|---|
 | 0 | Jobs & Pop. | Mayor Rating | Crime |
 | 1 | RCI Demand | Funds | Police & Jails |
-| 2 | Population by Age | City Income/Expenses | Power |
-| 3 | Life Expectancy | Res. Avg. Income | Water |
-| 4 | Education | Commute Time | Garbage |
-| 5 | Education by Age | Traffic Volume | Pollution |
-| 6 | | | Power Grid |
-| 7 | | | Water Grid |
+| 2 | Population by Age | City Income/Expenses | Fire Protection |
+| 3 | Life Expectancy | Res. Avg. Income | Power |
+| 4 | Education | Commute Time | Power Grid |
+| 5 | Education by Age | Traffic Volume | Water |
+| 6 | | | Water Grid |
+| 7 | | | Garbage |
+| 8 | | | Pollution |
 
-The 17 remaining Maxis buttons are also placed this way in the Graphs UI of `CAM_UI.dat`, so the order is the same
-without the DLL (which only adds Police & Jails, Power Grid and Water Grid). The Water Pollution button (`0x4009`) is removed from the
+The 17 remaining Maxis buttons are placed in the same order in the Graphs UI of `CAM_UI.dat`, packed in its 6 rows
+(column 2: Crime, Power, Water, Garbage, Pollution), so the order is the same without the DLL; the DLL adds Police &
+Jails, Fire Protection, Power Grid and Water Grid and moves every button to its cell. The Water Pollution button (`0x4009`) is removed from the
 UI and its exemplar has Graph Button Hidden, since its data is now in the Pollution graph.
 
 ## Adding a graph
@@ -118,6 +120,6 @@ no button, because the UI no longer has it.
 
 ## Included graphs
 
-The Police & Jails (`0x1C`, `docs/crime-graph.md`), Power Grid (`0x1A`, `docs/power-grid-graph.md`) and Water Grid
-(`0x1B`, `docs/water-grid-graph.md`) graphs are new exemplars whose buttons are added by the DLL, at (2, 1), (2, 6)
-and (2, 7). The Crime graph (`0x0C`) is also rebuilt (`docs/crime-graph.md`).
+The Police & Jails (`0x1C`, `docs/crime-graph.md`), Fire Protection (`0x1D`, `docs/fire-graph.md`), Power Grid
+(`0x1A`, `docs/power-grid-graph.md`) and Water Grid (`0x1B`, `docs/water-grid-graph.md`) graphs are new exemplars
+whose buttons are added by the DLL, at (2, 1), (2, 2), (2, 4) and (2, 6). The Crime graph (`0x0C`) is also rebuilt (`docs/crime-graph.md`).

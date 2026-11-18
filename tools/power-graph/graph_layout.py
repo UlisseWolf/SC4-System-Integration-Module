@@ -1,9 +1,9 @@
 # Order of the buttons of the Graphs window, by theme, one column per theme:
 #   column 0: population and education    column 1: government, economy, transport    column 2: services, environment
-# instance of the graph exemplar (0x6534284A / 0xCA4AD545) -> (column 0-2, row). Rows 0-5 hold the 18 Maxis graphs
-# (the Graphs UI has 6 rows); rows from 6 need SC4SIM.dll, which adds the panel rows (docs/graph-window.md).
-# Written into every graph exemplar as Graph Button Cell (0x5C4DE350) by make_utility_graphs.py, and used by
-# make_graph_ui.py to place the 18 Maxis buttons of the UI, so the order is the same with or without the DLL.
+# instance of the graph exemplar (0x6534284A / 0xCA4AD545) -> (column 0-2, row 0-31). Rows from 6 need SC4SIM.dll,
+# which adds the panel rows (docs/graph-window.md). Written into every graph exemplar as Graph Button Cell
+# (0x5C4DE350) by make_utility_graphs.py. make_graph_ui.py places the Maxis buttons of the Graphs UI (used without the
+# DLL) in the same order, packed in its 6 rows; the DLL then moves every button to its cell.
 LAYOUT = {
     # population and education
     0x11: (0, 0),   # Jobs & Pop.
@@ -22,12 +22,13 @@ LAYOUT = {
     # services and environment
     0x0C: (2, 0),   # Crime (crimes, arrests, unsolved crimes, criminals, inmates)
     0x1C: (2, 1),   # Police & Jails (SC4SIM graph, button added by the DLL)
-    0x06: (2, 2),   # Power
-    0x07: (2, 3),   # Water
-    0x0A: (2, 4),   # Garbage
-    0x08: (2, 5),   # Pollution (the Maxis Air Pollution graph, now air, water, garbage and radiation)
-    0x1A: (2, 6),   # Power Grid (SC4SIM graph, button added by the DLL)
-    0x1B: (2, 7),   # Water Grid (SC4SIM graph, button added by the DLL)
+    0x1D: (2, 2),   # Fire Protection (SC4SIM graph, button added by the DLL)
+    0x06: (2, 3),   # Power
+    0x1A: (2, 4),   # Power Grid (SC4SIM graph, button added by the DLL)
+    0x07: (2, 5),   # Water
+    0x1B: (2, 6),   # Water Grid (SC4SIM graph, button added by the DLL)
+    0x0A: (2, 7),   # Garbage
+    0x08: (2, 8),   # Pollution (the Maxis Air Pollution graph, now air, water, garbage and radiation)
 }
 
 # Graphs without a button: Graph Button Hidden (0x5C4DE351) in the exemplar, and the button removed from the UI.

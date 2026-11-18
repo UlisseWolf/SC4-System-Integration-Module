@@ -116,6 +116,7 @@
 #include "power/PowerGraphHistory.h"
 #include "water/WaterGraphHistory.h"
 #include "safety/CrimeGraphHistory.h"
+#include "safety/FireGraphHistory.h"
 #include "ui/GraphButtons.h"
 #include "version.h"
 
@@ -212,6 +213,7 @@ public:
 		PowerGraphHistory::OnStart();
 		WaterGraphHistory::OnStart();
 		CrimeGraphHistory::OnStart();
+		FireGraphHistory::OnStart();
 		GraphButtons::OnStart();
 		Afterlife::OnStart();
 		cIGZFrameWork* const framework = pCOM->FrameWork();
@@ -321,6 +323,7 @@ public:
 			PowerGraphHistory::DoMessage(message);
 			WaterGraphHistory::DoMessage(message);
 			CrimeGraphHistory::DoMessage(message);
+			FireGraphHistory::DoMessage(message);
 		}
 		else if (type == kMsgPostSave || type == kMsgLoad || type == kMsgSave)
 		{
