@@ -80,6 +80,7 @@
     <ClCompile Include="src\afterlife\AfterlifeModel.cpp" />
     <ClCompile Include="src\afterlife\Deathcare.cpp" />
     <ClCompile Include="src\power\PowerGraphHistory.cpp" />
+    <ClCompile Include="src\water\WaterGraphHistory.cpp" />
     <ClCompile Include="vendor\gzcom-dll\gzcom-dll\src\cRZBaseString.cpp">
       <WarningLevel>Level3</WarningLevel>
     </ClCompile>
@@ -107,6 +108,7 @@
   <ItemGroup>
     <ClInclude Include="src\SimLog.h" />
     <ClInclude Include="src\power\PowerGraphHistory.h" />
+    <ClInclude Include="src\water\WaterGraphHistory.h" />
     <ClInclude Include="src\SimLogFormat.h" />
     <ClInclude Include="src\powerpoles\PowerPoleCustomization.h" />
     <ClInclude Include="src\powerpoles\RelativeCallPatch.h" />

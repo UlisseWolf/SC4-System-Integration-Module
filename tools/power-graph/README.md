@@ -1,14 +1,16 @@
-# Power graph data
+# Power and Water graph data
 
-`make_power_graph.py` adds energy bought and sold and the production of each energy class to CAM's Power graph:
+`make_utility_graphs.py` adds energy bought and sold and the production of each energy class to CAM's Power graph,
+and water bought and sold, water by source and wastewater to its Water graph:
 
 ```
-python make_power_graph.py "<SIM>/a_CAM/1 CAM Core/CAM_Exemplars.dat" "<SIM>/a_CAM/1 CAM Core/CAM Locale/CAM_Locale_en.dat" out
+python make_utility_graphs.py "<SIM>/a_CAM/1 CAM Core/CAM_Exemplars.dat" "<SIM>/a_CAM/1 CAM Core/CAM Locale/CAM_Locale_en.dat" out
 ```
 
-It writes `out/CAM_Exemplars.dat` (graph exemplar `0x6534284A / 0xCA4AD545 / 0x00000006` rebuilt with 18 plots) and
-`out/CAM_Locale_en.dat` (16 plot labels added). Copy both back into the package. Plot list, colours and labels are the
-`PLOTS` table of the script. The class lines need SC4SIM.dll 1.13.0 or later; see `docs/power-graph.md`.
+It writes `out/CAM_Exemplars.dat` (graph exemplars `0x6534284A / 0xCA4AD545 / 0x00000006` with 18 plots and
+`0x00000007` with 10 plots) and `out/CAM_Locale_en.dat` (the plot labels added). Copy both back into the package. Plot
+lists, colours and labels are the `POWER_PLOTS` and `WATER_PLOTS` tables of the script. The new lines need SC4SIM.dll
+1.13.0 or later; see `docs/power-graph.md` and `docs/water-graph.md`.
 
 `make_graph_ui.py` makes the Graphs window taller so the 18-line legend fits:
 

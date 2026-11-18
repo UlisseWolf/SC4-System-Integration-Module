@@ -34,6 +34,7 @@
     <ClCompile Include="src\afterlife\AfterlifeModel.cpp"><Filter>Afterlife</Filter></ClCompile>
     <ClCompile Include="src\afterlife\Deathcare.cpp"><Filter>Afterlife</Filter></ClCompile>
     <ClCompile Include="src\power\PowerGraphHistory.cpp"><Filter>Power</Filter></ClCompile>
+    <ClCompile Include="src\water\WaterGraphHistory.cpp"><Filter>Water</Filter></ClCompile>
     <ClCompile Include="vendor\gzcom-dll\gzcom-dll\src\cRZBaseString.cpp"><Filter>Vendor</Filter></ClCompile>
     <ClCompile Include="vendor\gzcom-dll\gzcom-dll\src\cRZBaseVariant.cpp"><Filter>Vendor</Filter></ClCompile>
     <ClCompile Include="vendor\gzcom-dll\gzcom-dll\src\cRZCOMDllDirector.cpp"><Filter>Vendor</Filter></ClCompile>
@@ -45,6 +46,7 @@
   <ItemGroup>
     <ClInclude Include="src\SimLog.h"><Filter>Source</Filter></ClInclude>
     <ClInclude Include="src\power\PowerGraphHistory.h"><Filter>Power</Filter></ClInclude>
+    <ClInclude Include="src\water\WaterGraphHistory.h"><Filter>Water</Filter></ClInclude>
     <ClInclude Include="src\SimLogFormat.h"><Filter>Source</Filter></ClInclude>
     <ClInclude Include="src\powerpoles\PowerPoleCustomization.h"><Filter>Power poles</Filter></ClInclude>
     <ClInclude Include="src\powerpoles\RelativeCallPatch.h"><Filter>Power poles</Filter></ClInclude>

@@ -114,6 +114,7 @@
 #include "fixes/SeaportDemandCapFix.h"
 #include "advisors/UnderfundedNotices.h"
 #include "power/PowerGraphHistory.h"
+#include "water/WaterGraphHistory.h"
 #include "version.h"
 
 #include "cIGZCOM.h"
@@ -207,6 +208,7 @@ public:
 		SeaportDemandCapFix::OnStart();
 		UnderfundedNotices::OnStart();
 		PowerGraphHistory::OnStart();
+		WaterGraphHistory::OnStart();
 		Afterlife::OnStart();
 		cIGZFrameWork* const framework = pCOM->FrameWork();
 		if (framework->GetState() < cIGZFrameWork::kStatePreAppInit) framework->AddHook(this);
@@ -311,6 +313,7 @@ public:
 			MixedOccupancy::DoMessage(message);
 			Afterlife::DoMessage(message);
 			PowerGraphHistory::DoMessage(message);
+			WaterGraphHistory::DoMessage(message);
 		}
 		else if (type == kMsgPostSave || type == kMsgLoad || type == kMsgSave)
 		{

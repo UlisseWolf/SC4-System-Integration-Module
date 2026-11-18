@@ -81,5 +81,6 @@ own UI file.
 
 ## Data files
 
-`tools/power-graph/make_power_graph.py <CAM_Exemplars.dat> <CAM_Locale_en.dat> <out_dir>` rebuilds the graph
-exemplar (every other entry and property unchanged) and adds the 16 labels.
+`tools/power-graph/make_utility_graphs.py <CAM_Exemplars.dat> <CAM_Locale_en.dat> <out_dir>` rebuilds the Power and
+Water graph exemplars (every other entry and property unchanged) and adds their labels. The Water graph is described
+in `docs/water-graph.md`.

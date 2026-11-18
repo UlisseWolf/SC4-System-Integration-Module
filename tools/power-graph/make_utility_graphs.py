@@ -1,23 +1,28 @@
-# Adds bought / sold energy and the production of each energy class to the Power graph of CAM.
-#   python make_power_graph.py <CAM_Exemplars.dat> <CAM_Locale_en.dat> <out_dir>
-# Writes <out_dir>/CAM_Exemplars.dat (graph exemplar 0x6534284A / 0xCA4AD545 / 0x00000006 rebuilt, every other entry
-# unchanged) and <out_dir>/CAM_Locale_en.dat (the 16 plot labels added, LTEXT group 0x6A231EAA). The class lines read
-# the history types SC4SIM.dll 1.13+ records every month (src/power/PowerGraphHistory.h). See docs/power-graph.md.
+# Rebuilds CAM's Power and Water graphs:
+#  - Power (0x6534284A / 0xCA4AD545 / 0x00000006): energy bought and sold and the production of each energy class;
+#  - Water (0x6534284A / 0xCA4AD545 / 0x00000007): water bought and sold, water by source and wastewater.
+#   python make_utility_graphs.py <CAM_Exemplars.dat> <CAM_Locale_en.dat> <out_dir>
+# Writes <out_dir>/CAM_Exemplars.dat (the two graph exemplars rebuilt, every other entry unchanged) and
+# <out_dir>/CAM_Locale_en.dat (the plot labels added, LTEXT group 0x6A231EAA). The new lines read the history types
+# SC4SIM.dll 1.13+ records every month (src/power/PowerGraphHistory.h, src/water/WaterGraphHistory.h).
+# See docs/power-graph.md and docs/water-graph.md.
 import os, struct, sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import dbpf2
 
 EXEMPLAR, LTEXT = 0x6534284A, 0x2026960B
-GRAPH_GROUP, POWER_GRAPH = 0xCA4AD545, 0x00000006
+GRAPH_GROUP, POWER_GRAPH, WATER_GRAPH = 0xCA4AD545, 0x00000006, 0x00000007
 LTEXT_GROUP = 0x6A231EAA
 P_SOURCE1, P_SOURCE2, P_COMBINE, P_LABEL, P_COLOR = 0x6A4AEE40, 0x6A4AEE5F, 0x6A4AEE68, 0x6A4AEEDC, 0x6A4AEEDF
 T_UINT8, T_UINT32 = 0x01, 0x03
 
 G_POWER_PRODUCED, G_POWER_CONSUMED = 0xAA11F7CE, 0xAA11F7D2
 G_POWER_IMPORTED, G_POWER_EXPORTED = 0xAA11F837, 0xAA11F83A
+G_WATER_PRODUCED, G_WATER_CONSUMED = 0x0A14EBB4, 0xCA14EBD0
+G_WATER_IMPORTED, G_WATER_EXPORTED = 0x0A14EBB5, 0xCA14EBC6
 
 # label instance, text, history type (None = vanilla), RGB
-PLOTS = [
+POWER_PLOTS = [
     (0x0A5D2E9D, None, G_POWER_PRODUCED, (83, 101, 153)),     # game label; + bought (data source 2)
     (0x0A5D2E9E, None, G_POWER_CONSUMED, (93, 189, 152)),     # game label; + sold (data source 2)
     (0x5C4DE10C, 'Energy Bought', G_POWER_IMPORTED, (220, 11, 11)),
@@ -37,6 +42,21 @@ PLOTS = [
     (0x5C4DE10F, 'Generators', 0x5C4DE00D, (230, 230, 230)),
     (0x5C4DE110, 'Waste to Energy', 0x5C4DE00E, (140, 60, 90)),
 ]
+
+WATER_PLOTS = [
+    (0x0A5D2E9D, None, G_WATER_PRODUCED, (83, 101, 153)),     # game label; + bought (data source 2)
+    (0x0A5D2E9E, None, G_WATER_CONSUMED, (93, 189, 152)),     # game label; + sold (data source 2)
+    (0x5C4DE121, 'Water Bought', G_WATER_IMPORTED, (220, 11, 11)),
+    (0x5C4DE122, 'Water Sold', G_WATER_EXPORTED, (0, 234, 255)),
+    (0x5C4DE123, 'Aquifer', 0x5C4DE021, (150, 95, 40)),
+    (0x5C4DE124, 'Fresh Water', 0x5C4DE022, (40, 110, 255)),
+    (0x5C4DE125, 'Salt Water', 0x5C4DE023, (0, 160, 150)),
+    (0x5C4DE126, 'Wastewater Produced', 0x5C4DE024, (128, 128, 128)),
+    (0x5C4DE127, 'Wastewater Treated', 0x5C4DE025, (170, 60, 255)),
+    (0x5C4DE128, 'Recycled to Fresh Water', 0x5C4DE026, (60, 150, 40)),
+]
+
+GRAPHS = {POWER_GRAPH: POWER_PLOTS, WATER_GRAPH: WATER_PLOTS}
 
 def records(data):
     """Exemplar -> (header, [(id, raw record bytes)]), raw kept for every property."""
@@ -59,14 +79,14 @@ def records(data):
 def array(pid, typ, fmt, values):
     return struct.pack('<IHHBI', pid, typ << 8, 0x80, 0, len(values)) + struct.pack('<%d%s' % (len(values), fmt), *values)
 
-def build_graph(data):
+def build_graph(data, plots):
     header, props = records(data)
     new = {
-        P_SOURCE1: array(P_SOURCE1, T_UINT32, 'I', [p[2] for p in PLOTS]),
-        P_LABEL: array(P_LABEL, T_UINT32, 'I', [p[0] for p in PLOTS]),
-        P_COLOR: array(P_COLOR, T_UINT8, 'B', [c for p in PLOTS for c in p[3]]),
+        P_SOURCE1: array(P_SOURCE1, T_UINT32, 'I', [p[2] for p in plots]),
+        P_LABEL: array(P_LABEL, T_UINT32, 'I', [p[0] for p in plots]),
+        P_COLOR: array(P_COLOR, T_UINT8, 'B', [c for p in plots for c in p[3]]),
     }
-    # Data source 2 and combine op keep the vanilla two entries: plot 1 = produced + bought, plot 2 = consumed + sold.
+    # Data source 2 and combine op keep the two vanilla entries: plot 1 = produced + bought, plot 2 = consumed + sold.
     ids = [pid for pid, _ in props]
     assert P_SOURCE2 in ids and P_COMBINE in ids
     out = [new.get(pid, raw) for pid, raw in props]
@@ -78,15 +98,15 @@ def ltext(text):
 def main(exemplars, locale, out_dir):
     os.makedirs(out_dir, exist_ok=True)
     raw, entries = dbpf2.read(exemplars)
-    hits = 0
+    done = set()
     for e in entries:
-        if (e['t'], e['g'], e['i']) == (EXEMPLAR, GRAPH_GROUP, POWER_GRAPH):
-            e['data'] = build_graph(e['data']); hits += 1
-    assert hits == 1, 'Power graph exemplar not found'
+        if e['t'] == EXEMPLAR and e['g'] == GRAPH_GROUP and e['i'] in GRAPHS:
+            e['data'] = build_graph(e['data'], GRAPHS[e['i']]); done.add(e['i'])
+    assert done == set(GRAPHS), 'graph exemplar missing'
     dbpf2.write(os.path.join(out_dir, 'CAM_Exemplars.dat'), entries, header_src=raw)
 
     raw, entries = dbpf2.read(locale)
-    labels = {p[0]: p[1] for p in PLOTS if p[1]}
+    labels = {p[0]: p[1] for plots in GRAPHS.values() for p in plots if p[1]}
     entries = [e for e in entries if not (e['t'] == LTEXT and e['g'] == LTEXT_GROUP and e['i'] in labels)]
     for instance, text in labels.items():
         entries.append(dict(t=LTEXT, g=LTEXT_GROUP, i=instance, data=ltext(text)))
