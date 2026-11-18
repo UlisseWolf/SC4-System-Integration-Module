@@ -1,7 +1,8 @@
 # Rebuilds CAM's Power and Water graphs:
 #  - Power (0x6534284A / 0xCA4AD545 / 0x00000006): energy bought and sold and the production of each energy class;
 #  - Water (0x6534284A / 0xCA4AD545 / 0x00000007): water bought and sold, water by source and wastewater;
-#  - Garbage (0x6534284A / 0xCA4AD545 / 0x0000000A): own labels for garbage imported and exported (lines unchanged).
+#  - Garbage (0x6534284A / 0xCA4AD545 / 0x0000000A): garbage produced added, real scale, garbage pollution moved out,
+#    own labels for garbage imported and exported, trailing line breaks removed from two labels.
 #   python make_utility_graphs.py <CAM_Exemplars.dat> <CAM_Locale_en.dat> <out_dir>
 # Writes <out_dir>/CAM_Exemplars.dat (the two graph exemplars rebuilt, every other entry unchanged) and
 # <out_dir>/CAM_Locale_en.dat (the plot labels added, LTEXT group 0x6A231EAA). The new lines read the history types
@@ -15,7 +16,8 @@ EXEMPLAR, LTEXT = 0x6534284A, 0x2026960B
 GRAPH_GROUP, POWER_GRAPH, WATER_GRAPH, GARBAGE_GRAPH = 0xCA4AD545, 0x00000006, 0x00000007, 0x0000000A
 LTEXT_GROUP = 0x6A231EAA
 P_SOURCE1, P_SOURCE2, P_COMBINE, P_LABEL, P_COLOR = 0x6A4AEE40, 0x6A4AEE5F, 0x6A4AEE68, 0x6A4AEEDC, 0x6A4AEEDF
-T_UINT8, T_UINT32 = 0x01, 0x03
+P_SCALE = 0x6A4AEEE2
+T_UINT8, T_UINT32, T_FLOAT32 = 0x01, 0x03, 0x09
 
 G_POWER_PRODUCED, G_POWER_CONSUMED = 0xAA11F7CE, 0xAA11F7D2
 G_POWER_IMPORTED, G_POWER_EXPORTED = 0xAA11F837, 0xAA11F83A
@@ -57,26 +59,26 @@ WATER_PLOTS = [
     (0x5C4DE128, 'Recycled to Fresh Water', 0x5C4DE026, (60, 150, 40)),
 ]
 
-GRAPHS = {POWER_GRAPH: POWER_PLOTS, WATER_GRAPH: WATER_PLOTS}
+# Garbage graph. CAM drew the eight amounts at 1/100 (Graph Plot scale 0.01) next to the garbage pollution index
+# (G_TOTAL_GARBAGE_POLLUTION 0xEA110134, scale 1): the amounts are now at real scale and the pollution index, a
+# different unit, is left to the pollution data views. Garbage produced (G_GARBAGE_PRODUCED 0xEA110158, recorded by
+# the game) is added; imported and exported get their own labels.
+GARBAGE_PLOTS = [
+    (0x0A5D2E9D, None, 0x2A8C4696, (83, 101, 153)),            # game label "Capacity"
+    (0xFF5D2E97, None, 0x2A8C4697, (93, 189, 170)),            # CAM label "Total Garbage" (line break removed)
+    (0x5C4DE133, 'Garbage Produced', 0xEA110158, (255, 140, 0)),
+    (0x5C4DE131, 'Garbage Imported', 0xEA11017B, (0, 234, 255)),
+    (0x5C4DE132, 'Garbage Exported', 0xEA11017E, (220, 11, 11)),
+    (0xFF5D2E95, None, 0xEA1101AA, (147, 88, 31)),             # Landfill
+    (0xFF5D2E93, None, 0xEA11016F, (0, 216, 0)),               # Recycled
+    (0xFF5D2E96, None, 0xEA110197, (0, 0, 0)),                 # Incinerated
+    (0xFF5D2E94, None, 0xEA1101A1, (224, 224, 0)),             # Waste to Energy
+]
 
-# Garbage graph: only the labels change. Plots 3 and 4 (G_GARBAGE_IMPORTED 0xEA11017B, G_GARBAGE_EXPORTED 0xEA11017E)
-# used "Imported" (0xFF5D2E9E) and "Exported" (0xFF5D2E98); old label -> (new label, text).
-GARBAGE_LABELS = {
-    0xFF5D2E9E: (0x5C4DE131, 'Garbage Imported'),
-    0xFF5D2E98: (0x5C4DE132, 'Garbage Exported'),
-}
+GRAPHS = {POWER_GRAPH: POWER_PLOTS, WATER_GRAPH: WATER_PLOTS, GARBAGE_GRAPH: GARBAGE_PLOTS}
 
-def relabel_graph(data, relabels):
-    header, props = records(data)
-    out = []
-    for pid, raw in props:
-        if pid == P_LABEL:
-            count = struct.unpack_from('<I', raw, 9)[0]
-            labels = list(struct.unpack_from('<%dI' % count, raw, 13))
-            assert all(old in labels for old in relabels), 'garbage labels changed'
-            raw = array(P_LABEL, T_UINT32, 'I', [relabels[l][0] if l in relabels else l for l in labels])
-        out.append(raw)
-    return header + struct.pack('<I', len(out)) + b''.join(out)
+# CAM labels whose text ends with a line break (an empty extra legend row): rewritten without it.
+TRIM_LABELS = (0xFF5D2E97, 0xFF5D2E98)
 
 def records(data):
     """Exemplar -> (header, [(id, raw record bytes)]), raw kept for every property."""
@@ -106,9 +108,11 @@ def build_graph(data, plots):
         P_LABEL: array(P_LABEL, T_UINT32, 'I', [p[0] for p in plots]),
         P_COLOR: array(P_COLOR, T_UINT8, 'B', [c for p in plots for c in p[3]]),
     }
-    # Data source 2 and combine op keep the two vanilla entries: plot 1 = produced + bought, plot 2 = consumed + sold.
+    # Data source 2 and combine op (Power and Water) keep their two entries: plot 1 = produced + bought, plot 2 =
+    # consumed + sold. Graph Plot scale, where present (Garbage), becomes 1.0 for every plot.
     ids = [pid for pid, _ in props]
-    assert P_SOURCE2 in ids and P_COMBINE in ids
+    if P_SCALE in ids:
+        new[P_SCALE] = array(P_SCALE, T_FLOAT32, 'f', [1.0] * len(plots))
     out = [new.get(pid, raw) for pid, raw in props]
     return header + struct.pack('<I', len(out)) + b''.join(out)
 
@@ -122,14 +126,15 @@ def main(exemplars, locale, out_dir):
     for e in entries:
         if e['t'] == EXEMPLAR and e['g'] == GRAPH_GROUP and e['i'] in GRAPHS:
             e['data'] = build_graph(e['data'], GRAPHS[e['i']]); done.add(e['i'])
-        elif e['t'] == EXEMPLAR and e['g'] == GRAPH_GROUP and e['i'] == GARBAGE_GRAPH:
-            e['data'] = relabel_graph(e['data'], GARBAGE_LABELS); done.add(e['i'])
-    assert done == set(GRAPHS) | {GARBAGE_GRAPH}, 'graph exemplar missing'
+    assert done == set(GRAPHS), 'graph exemplar missing'
     dbpf2.write(os.path.join(out_dir, 'CAM_Exemplars.dat'), entries, header_src=raw)
 
     raw, entries = dbpf2.read(locale)
     labels = {p[0]: p[1] for plots in GRAPHS.values() for p in plots if p[1]}
-    labels.update({new: text for new, text in GARBAGE_LABELS.values()})
+    for e in entries:
+        if e['t'] == LTEXT and e['g'] == LTEXT_GROUP and e['i'] in TRIM_LABELS:
+            text = e['data'][4:].decode('utf-16-le').rstrip('\r\n ')
+            e['data'] = ltext(text)
     entries = [e for e in entries if not (e['t'] == LTEXT and e['g'] == LTEXT_GROUP and e['i'] in labels)]
     for instance, text in labels.items():
         entries.append(dict(t=LTEXT, g=LTEXT_GROUP, i=instance, data=ltext(text)))

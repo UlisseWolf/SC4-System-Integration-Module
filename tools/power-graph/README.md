@@ -1,8 +1,8 @@
 # Power and Water graph data
 
 `make_utility_graphs.py` adds energy bought and sold and the production of each energy class to CAM's Power graph,
-and water bought and sold, water by source and wastewater to its Water graph; the Garbage graph gets its own labels
-for garbage imported and exported:
+and water bought and sold, water by source and wastewater to its Water graph; the Garbage graph gets garbage produced, real
+scale and its own labels:
 
 ```
 python make_utility_graphs.py "<SIM>/a_CAM/1 CAM Core/CAM_Exemplars.dat" "<SIM>/a_CAM/1 CAM Core/CAM Locale/CAM_Locale_en.dat" out

@@ -50,6 +50,23 @@ like the power graph (see `docs/power-graph.md`). It looks at the water building
 
 ## Garbage graph
 
-The Garbage graph (`0x6534284A / 0xCA4AD545 / 0x0000000A`) keeps its 9 lines, all recorded by the game. Only plots 3
-and 4 get their own labels: "Garbage Imported" (`0x5C4DE131`, was "Imported" `0xFF5D2E9E`) and "Garbage Exported"
-(`0x5C4DE132`, was "Exported" `0xFF5D2E98`).
+The Garbage graph (`0x6534284A / 0xCA4AD545 / 0x0000000A`) needs no DLL: every line is recorded by the game. CAM's
+version is revised:
+
+| # | Line | History type | Label |
+|---|---|---|---|
+| 1 | Capacity | `0x2A8C4696` | game `0x0A5D2E9D` |
+| 2 | Total Garbage | `0x2A8C4697` | `0xFF5D2E97` |
+| 3 | Garbage Produced (new) | `0xEA110158` (`G_GARBAGE_PRODUCED`) | `0x5C4DE133` |
+| 4 | Garbage Imported | `0xEA11017B` | `0x5C4DE131` (was "Imported" `0xFF5D2E9E`) |
+| 5 | Garbage Exported | `0xEA11017E` | `0x5C4DE132` (was "Exported" `0xFF5D2E98`) |
+| 6 | Landfill | `0xEA1101AA` | `0xFF5D2E95` |
+| 7 | Recycled | `0xEA11016F` | `0xFF5D2E93` |
+| 8 | Incinerated | `0xEA110197` | `0xFF5D2E96` |
+| 9 | Waste to Energy | `0xEA1101A1` | `0xFF5D2E94` |
+
+- CAM drew the amounts at 1/100 (Graph Plot scale `0x6A4AEEE2` = 0.01) so they would sit next to the garbage
+  pollution index (`G_TOTAL_GARBAGE_POLLUTION`, `0xEA110134`). The amounts are now at real scale (1.0) and the
+  pollution index, a different unit, is no longer in this graph.
+- The texts of "Total Garbage" and "Exported" ended with a line break, which took an empty legend row; they are
+  rewritten without it.
