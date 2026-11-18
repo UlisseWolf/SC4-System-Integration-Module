@@ -28,7 +28,8 @@ built it, the module:
    graph button, in `CAM_UI.dat`) with `cIGZUIScriptService::CreateWindowFromScript`, gives it ID
    `0x4000 + instance` and the graph's name (the LTEXT of *User Visible Name Key* `0x8A416A99`, else the exemplar
    name), and puts it in the cell the exemplar asks for;
-3. makes the panel one 18-pixel row taller for every row past the 6 Maxis rows, upward so its bottom stays in place, and moves the
+3. places the buttons in the columns of the UI's Maxis buttons (CAM_UI.dat makes them 176 pixels wide, see the wider
+   window in `docs/power-graph.md`) and makes the panel one 18-pixel row taller for every row past the 6 Maxis rows, upward so its bottom stays in place, and moves the
    two graph windows (`0x8A8B5B71` expanded, `0x8A8B5B72` collapsed) up by the same amount. The new rows are painted
    by the filler `0x5C4DE310` (hidden blue FlatRect in `CAM_UI.dat`, behind the button container, whose background
    image now ends at the container's bottom).

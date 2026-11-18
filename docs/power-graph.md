@@ -79,6 +79,30 @@ gets the taller area.
 `tools/power-graph/make_graph_ui.py <SimCity_1.dat> <CAM_UI.dat> <out_dir> [extra_height]` builds it from the game's
 own UI file.
 
+## Wider Graphs window and legend (1.13.0)
+
+> **Not yet tested in game.**
+
+The legend has a fixed width: the line graph (layout at `0x0076DAF1`) ends the plot at W - 110 (W = width of the
+graph area), puts each colour swatch at W - 108 .. W - 92 and starts the text at W - 90 (W - 106 with 1 or 2 plots);
+the text window ends at W - 4. A legend text gets 72 pixels, so *Nuclear Fission* and *Nuclear Fusion* wrap to two
+lines, and widening the window alone would only widen the plot.
+
+- **SC4SIM.dll** (`src/ui/GraphLegendPatch.cpp`) moves the five offsets (`0x0076DD4E` plot end, `0x0076E0F5` and
+  `0x0076E1F8` text start, `0x0076E159` / `0x0076E162` swatch) 40 pixels further left (`[GraphWindow]
+  LegendExtraWidth`, 0 = off): legend texts get 112 pixels. The offsets are 8-bit immediates (at most 17 more
+  pixels), so each site jumps to a small block of the DLL that runs the same instructions with 32-bit offsets and
+  jumps back. All five sites are checked before patching and restored when the game closes.
+- **CAM_UI.dat** (`make_graph_ui.py`, `WIDTH` = 40) makes the expanded and collapsed graph windows and the button
+  panel 40 pixels wider, to the left: the graph area and its frame, the title bars and the button container widen,
+  the close buttons move right, and both backgrounds are widened copies of the Maxis images (a middle column
+  repeated; expanded `0x5C4DE200`, collapsed `0x5C4DE201`). So the plot keeps its vanilla 333 pixels. The three
+  button columns become 176 pixels wide (0-176, 180-356, 360-536); SC4SIM.dll takes the column positions from the
+  Maxis buttons of the UI, so it follows whatever width the UI has.
+
+Each half works without the other: without the DLL the plot is 40 pixels wider and the legend stays narrow; with the
+vanilla UI the legend is wider and the plot 40 pixels narrower.
+
 ## Data files
 
 Since 1.13.0 every graph exemplar of the Graphs window is in `a_CAM/1 CAM Core/CAM_Exemplar_Graphs.dat`: the 18 of

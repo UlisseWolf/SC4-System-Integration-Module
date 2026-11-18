@@ -46,6 +46,7 @@
     <ClCompile Include="src\population\EducationGraphHistory.cpp"><Filter>Population</Filter></ClCompile>
     <ClCompile Include="src\economy\AdvisorGraphHistory.cpp"><Filter>Economy</Filter></ClCompile>
     <ClCompile Include="src\ui\GraphButtons.cpp"><Filter>UI</Filter></ClCompile>
+    <ClCompile Include="src\ui\GraphLegendPatch.cpp"><Filter>UI</Filter></ClCompile>
     <ClCompile Include="vendor\gzcom-dll\gzcom-dll\src\cRZBaseString.cpp"><Filter>Vendor</Filter></ClCompile>
     <ClCompile Include="vendor\gzcom-dll\gzcom-dll\src\cRZBaseVariant.cpp"><Filter>Vendor</Filter></ClCompile>
     <ClCompile Include="vendor\gzcom-dll\gzcom-dll\src\cRZCOMDllDirector.cpp"><Filter>Vendor</Filter></ClCompile>
@@ -65,6 +66,7 @@
     <ClInclude Include="src\population\EducationGraphHistory.h"><Filter>Population</Filter></ClInclude>
     <ClInclude Include="src\economy\AdvisorGraphHistory.h"><Filter>Economy</Filter></ClInclude>
     <ClInclude Include="src\ui\GraphButtons.h"><Filter>UI</Filter></ClInclude>
+    <ClInclude Include="src\ui\GraphLegendPatch.h"><Filter>UI</Filter></ClInclude>
     <ClInclude Include="src\SimLogFormat.h"><Filter>Source</Filter></ClInclude>
     <ClInclude Include="src\powerpoles\PowerPoleCustomization.h"><Filter>Power poles</Filter></ClInclude>
     <ClInclude Include="src\powerpoles\RelativeCallPatch.h"><Filter>Power poles</Filter></ClInclude>

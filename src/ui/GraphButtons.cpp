@@ -208,6 +208,20 @@ namespace
 			return;
 		}
 
+		// Column geometry from the Maxis buttons of the UI (CAM_UI.dat can make the window wider): each column spans the
+		// buttons the UI puts in it; a column without one keeps the vanilla 166-pixel layout.
+		std::array<int32_t, kColumns> columnLeft = kColumnLeft;
+		std::array<int32_t, kColumns> columnRight = kColumnRight;
+		std::array<bool, kColumns> columnSeen{};
+		for (const GraphInfo& info : graphs)
+		{
+			if (!info.button || !info.listed || info.hidden || info.column < 0 || info.column >= kColumns) continue;
+			const int32_t c = info.column;
+			columnLeft[c] = columnSeen[c] ? std::min(columnLeft[c], info.button->GetL()) : info.button->GetL();
+			columnRight[c] = columnSeen[c] ? std::max(columnRight[c], info.button->GetR()) : info.button->GetR();
+			columnSeen[c] = true;
+		}
+
 		// Cells. 1) Graphs without Graph Button Cell, or with Graph Button Hidden, are ignored: no button, a button of
 		// the UI is hidden. 2) The others (lowest instance first) take their cell; buttons of the UI are moved there.
 		// 3) Those whose cell is outside the grid or taken fill the free cells row by row.
@@ -287,7 +301,7 @@ namespace
 				++moved;
 			}
 			const int32_t top = 1 + info.row * kRowHeight;
-			button->SetArea(kColumnLeft[info.column], top, kColumnRight[info.column], top + kRowHeight);
+			button->SetArea(columnLeft[info.column], top, columnRight[info.column], top + kRowHeight);
 			SimLog::Write(SimLog::Level::Debug, "GraphWindow: button 0x%04X \"%s\" at column %d, row %d.",
 				kGraphButtonBase + info.instance, info.name.ToChar(), info.column, info.row);
 		}

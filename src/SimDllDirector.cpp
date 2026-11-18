@@ -122,6 +122,7 @@
 #include "population/EducationGraphHistory.h"
 #include "economy/AdvisorGraphHistory.h"
 #include "ui/GraphButtons.h"
+#include "ui/GraphLegendPatch.h"
 #include "version.h"
 
 #include "cIGZCOM.h"
@@ -223,6 +224,7 @@ public:
 		EducationGraphHistory::OnStart();
 		AdvisorGraphHistory::OnStart();
 		GraphButtons::OnStart();
+		GraphLegendPatch::OnStart();
 		Afterlife::OnStart();
 		cIGZFrameWork* const framework = pCOM->FrameWork();
 		if (framework->GetState() < cIGZFrameWork::kStatePreAppInit) framework->AddHook(this);
@@ -258,6 +260,7 @@ public:
 		PortUpgradeFix::PostAppInit();
 		SeaportDemandCapFix::PostAppInit();
 		GraphButtons::PostAppInit();
+		GraphLegendPatch::PostAppInit();
 
 		// Cheat codes (keepwires, ScanPumps, MixedOccupancy, IMZone, RemovePhantomBudgetItems...) are registered by the modules; the notification is added once here.
 		cISC4AppPtr app;
@@ -288,6 +291,7 @@ public:
 			}
 		}
 		GraphButtons::PostAppShutdown();
+		GraphLegendPatch::PostAppShutdown();
 		SeaportDemandCapFix::PostAppShutdown();
 		PortUpgradeFix::PostAppShutdown();
 		BudgetFixes::PostAppShutdown();

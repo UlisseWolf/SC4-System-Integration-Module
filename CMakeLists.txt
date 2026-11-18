@@ -42,6 +42,7 @@ add_library(SC4SIM SHARED
   src/population/EducationGraphHistory.cpp
   src/economy/AdvisorGraphHistory.cpp
   src/ui/GraphButtons.cpp
+  src/ui/GraphLegendPatch.cpp
   ${GZCOM}/src/cRZBaseString.cpp
   ${GZCOM}/src/cRZBaseVariant.cpp
   ${GZCOM}/src/cRZCOMDllDirector.cpp

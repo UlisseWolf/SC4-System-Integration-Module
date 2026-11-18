@@ -88,6 +88,7 @@
     <ClCompile Include="src\population\EducationGraphHistory.cpp" />
     <ClCompile Include="src\economy\AdvisorGraphHistory.cpp" />
     <ClCompile Include="src\ui\GraphButtons.cpp" />
+    <ClCompile Include="src\ui\GraphLegendPatch.cpp" />
     <ClCompile Include="vendor\gzcom-dll\gzcom-dll\src\cRZBaseString.cpp">
       <WarningLevel>Level3</WarningLevel>
     </ClCompile>
@@ -123,6 +124,7 @@
     <ClInclude Include="src\population\EducationGraphHistory.h" />
     <ClInclude Include="src\economy\AdvisorGraphHistory.h" />
     <ClInclude Include="src\ui\GraphButtons.h" />
+    <ClInclude Include="src\ui\GraphLegendPatch.h" />
     <ClInclude Include="src\SimLogFormat.h" />
     <ClInclude Include="src\powerpoles\PowerPoleCustomization.h" />
     <ClInclude Include="src\powerpoles\RelativeCallPatch.h" />
