@@ -4,7 +4,7 @@
 #   python make_graph_ui.py <SimCity_1.dat> <CAM_UI.dat> <out_dir> [extra_height]
 # Reads the Graphs window UI (0x00000000 / 0x96A006B0 / 0x6BC9065A) and its background image
 # (PNG 0x856DDBAC / 0x46A006B0 / 0xEBBEAE28) from the game, grows the expanded graph window (0x8A8B5B71) upward by
-# extra_height pixels (default 108: the 18 lines of the Power graph legend need 94; 180 before 1.13.0's 10 button rows) and writes <out_dir>/CAM_UI.dat = the input CAM_UI.dat plus the edited UI and a
+# extra_height pixels (default 96: the 18 lines of the Power graph legend need 94; 180 before 1.13.0's 10 button rows) and writes <out_dir>/CAM_UI.dat = the input CAM_UI.dat plus the edited UI and a
 # taller background image (PNG 0x856DDBAC / 0x46A006B0 / 0x5C4DE200). The radio-button panel and the collapsed
 # window are unchanged; the graph area (0x8A4B0AA0), its frame, the Time Scale texts and the slider keep their
 # distance from the bottom. The game lays the legend out from the graph area's height (0x0076E0F0 and following), so
@@ -35,6 +35,8 @@ ROWS = max(6, max(row for _, row in LAYOUT.values()) + 1)   # button rows of the
 EXTRA = (ROWS - 6) * 18     # panel height added for the rows past the 6 Maxis rows: the panel and both graph windows
                             # grow upward by EXTRA (SC4SIM.dll grows the panel at run time only past ROWS: a window
                             # resized at run time keeps its old paint buffer, so new rows drew badly)
+LIFT = 36                   # the three windows move up by this many pixels, so that the 10 button rows clear the
+                            # news ticker at the bottom of the screen (third in-game test: the last rows were behind it)
 PANEL_ROW = 400             # background row (inside the button panel) repeated EXTRA times, expanded window image
 COLLAPSED_PANEL_ROW = 100   # the same, collapsed window image
 
@@ -98,7 +100,7 @@ def taller_panel(lines):
             if depth == 0:
                 root = wid
                 if root in ('0x8a8b5b71', '0x8a8b5b72', '0x0a4a8176'):
-                    a[1] -= EXTRA; line = set_area(line, a)
+                    a[1] -= EXTRA + LIFT; a[3] -= LIFT; line = set_area(line, a)
             elif depth == 1 and root in ('0x8a8b5b71', '0x8a8b5b72'):
                 if wid == '0x6a2871bc':                                    # background
                     a[3] += EXTRA; line = set_area(line, a)
@@ -275,7 +277,7 @@ def tall_image(png, h):
     buf = io.BytesIO(); wide_image(taller_image(new, PANEL_ROW + h)).save(buf, 'PNG')
     return buf.getvalue()
 
-def main(game, cam_ui, out_dir, h='108'):
+def main(game, cam_ui, out_dir, h='96'):
     h = int(h)
     _, game_entries = dbpf2.read(game)
     ui = find(game_entries, UI, UI_GROUP, UI_GRAPHS).decode('latin1')

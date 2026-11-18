@@ -38,6 +38,9 @@ writes a button for every graph of `graph_layout.py` into `CAM_UI.dat` (a copy o
 `0x4000 + instance`, caption = the graph's title); the DLL only moves them to their cells. Buttons for graphs of
 other plugins are still created at run time; until their clicks are routed to the game they may not work.
 
+The three windows are also lifted 36 pixels (`LIFT`), so that the 10 button rows clear the news ticker at the
+bottom of the screen (third test: the last rows were hidden behind it).
+
 `CAM_UI.dat` already sizes the panel for every row of `graph_layout.py` (10
    rows: the panel and both graph windows are 72 pixels taller upward, with taller backgrounds), because a window
    resized at run time keeps its old paint buffer: in the first test the rows past the sixth drew in magenta and did
