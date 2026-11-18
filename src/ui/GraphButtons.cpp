@@ -18,10 +18,13 @@
 // take a cell or add a button by mistake. A Maxis graph (its button is in the UI) replaced by a plugin with an
 // exemplar without it keeps its Maxis button where the UI has it, with a warning. Graph Button Hidden (0x5C4DE351, Bool) also gives a graph no button. A cell outside the grid or already
 // taken is logged and the graph goes to the next free cell. When no graph exemplar has Graph Button Cell (SC4SIM data
-// not installed, Maxis files only), the window is left as the game builds it. CAM_UI.dat sizes the panel for every
-// CAM graph (a window resized at run time keeps its old paint buffer); only for rows past those does the panel grow
-// upward at run time, one 18-pixel row per row, the two graph windows (0x8A8B5B71 expanded, 0x8A8B5B72 collapsed)
-// moving up with it and the filler 0x5C4DE310 (in CAM_UI.dat) painting the new rows.
+// not installed, Maxis files only), the window is left as the game builds it.
+//
+// Pages: the button container keeps its 6 rows; row r of Graph Button Cell is row r % 6 of page r / 6, and one page
+// is shown at a time. CAM_UI.dat has every CAM button (pages past the first hidden) and, under the container, the
+// Previous / Next buttons and the page number (0x5C4DE320-0x5C4DE322); their clicks are taken from the graph window's
+// message handler (vtable slot 0x00AB4FEC, 0x0076E500) before it handles the graph buttons. Buttons created here
+// from the template (graphs of other plugins) do not receive clicks yet: CAM's buttons are therefore in the UI.
 //
 ////////////////////////////////////////////////////////////////////////////
 
@@ -72,22 +75,78 @@ namespace
 	constexpr uint32_t kUiGroup = 0x96A006B0;
 	constexpr uint32_t kButtonTemplateUi = 0x5C4DE300;
 	constexpr uint32_t kButtonTemplateId = 0x5C4DE301;
-	constexpr uint32_t kFillerId = 0x5C4DE310;
 
 	constexpr uint32_t kButtonContainerId = 0xAA9244B6;
-	constexpr uint32_t kGraphWindowExpandedId = 0x8A8B5B71;
-	constexpr uint32_t kGraphWindowCollapsedId = 0x8A8B5B72;
 	constexpr uint32_t kGraphButtonBase = 0x4000;
 
 	constexpr int32_t kRowHeight = 18;
-	constexpr int32_t kVanillaRows = 6;
 	constexpr int32_t kMaxRows = 32;
 	constexpr int32_t kColumns = 3;
 	constexpr std::array<int32_t, 3> kColumnLeft = { 0, 170, 340 };
 	constexpr std::array<int32_t, 3> kColumnRight = { 166, 336, 496 };
 
+	// Pages: Previous / Next buttons and the page number (CAM_UI.dat, hidden until the DLL shows them).
+	constexpr uint32_t kNavPrevId = 0x5C4DE320;
+	constexpr uint32_t kNavNextId = 0x5C4DE321;
+	constexpr uint32_t kNavLabelId = 0x5C4DE322;
+	// The graph window's message handler (cIGZWinProc::DoWinProcMessage of the object built at 0x0076CFE0), slot 3
+	// of its vtable 0x00AB4FE0: button clicks of the Graphs window (message type 3, 0x287259F6, button ID) arrive
+	// there; the Previous / Next clicks are taken before it.
+	constexpr uintptr_t kGraphProcSlot = 0x00AB4FEC;
+	constexpr uintptr_t kGraphProc = 0x0076E500;
+	constexpr uint32_t kButtonClickMessage = 0x287259F6;
+
 	bool enabled = true;
 	PowerPoles::RelativeCallPatch buildPatch;
+	bool procPatched = false;
+
+	// Buttons by page, the navigation windows and the page shown.
+	std::vector<std::pair<cRZAutoRefCount<cIGZWin>, int32_t>> pageButtons;
+	cRZAutoRefCount<cIGZWin> navPrev, navNext, navLabel, buttonContainer;
+	int32_t pageCount = 1;
+	int32_t currentPage = 0;
+
+	void ShowPage(int32_t page)
+	{
+		currentPage = (page % pageCount + pageCount) % pageCount;
+		for (auto& [button, buttonPage] : pageButtons)
+		{
+			if (buttonPage == currentPage) button->ShowWindow(); else button->HideWindow();
+		}
+		if (navLabel)
+		{
+			cRZBaseString text;
+			text.Sprintf("Page %d / %d", currentPage + 1, pageCount);
+			navLabel->SetCaption(text);
+		}
+		if (buttonContainer) buttonContainer->InvalidateSelf();
+	}
+
+	using GraphProcFn = bool(__thiscall*)(void*, void*, void*);
+
+	bool __fastcall GraphProcHook(void* self, void* /*edx*/, void* window, void* message)
+	{
+		if (message && pageCount > 1)
+		{
+			const uint32_t* const m = static_cast<const uint32_t*>(message);
+			if (m[0] == 3 && m[1] == kButtonClickMessage && (m[2] == kNavPrevId || m[2] == kNavNextId))
+			{
+				ShowPage(currentPage + (m[2] == kNavNextId ? 1 : -1));
+				return false;
+			}
+		}
+		return reinterpret_cast<GraphProcFn>(kGraphProc)(self, window, message);
+	}
+
+	bool WriteSlot(uintptr_t slot, uintptr_t value)
+	{
+		DWORD oldProtect = 0;
+		if (!VirtualProtect(reinterpret_cast<void*>(slot), sizeof(uintptr_t), PAGE_READWRITE, &oldProtect)) return false;
+		*reinterpret_cast<uintptr_t*>(slot) = value;
+		DWORD ignored = 0;
+		VirtualProtect(reinterpret_cast<void*>(slot), sizeof(uintptr_t), oldProtect, &ignored);
+		return true;
+	}
 
 	struct GraphInfo
 	{
@@ -296,16 +355,26 @@ namespace
 			taken[info.row][info.column] = true;
 		}
 
+		// Pages of as many rows as the button container has (6): row r of Graph Button Cell is row r % rows of page
+		// r / rows. One page is shown at a time; Previous / Next (CAM_UI.dat) turn the pages.
+		const int32_t pageRows = std::max(1, (container->GetB() - container->GetT() - 1 + kRowHeight - 1) / kRowHeight);
 		uint32_t added = 0;
 		uint32_t moved = 0;
-		int32_t lastRow = kVanillaRows - 1;
+		pageButtons.clear();
+		int32_t lastPage = 0;
 		for (GraphInfo& info : graphs)
 		{
 			if (info.row < 0) continue;
-			lastRow = std::max(lastRow, info.row);
-			if (info.keep) continue;
 			cIGZWin* button = info.button;
 			cRZAutoRefCount<cIGZWin> created;
+			if (info.keep)
+			{
+				// Kept where the UI has it: on the first page if the UI shows it, else on the second.
+				const int32_t page = button->IsVisible() ? 0 : 1;
+				pageButtons.emplace_back(cRZAutoRefCount<cIGZWin>(button, cRZAutoRefCount<cIGZWin>::kAddRef), page);
+				lastPage = std::max(lastPage, page);
+				continue;
+			}
 			if (!button)
 			{
 				if (!scripts->CreateWindowFromScript(cGZPersistResourceKey(kUiType, kUiGroup, kButtonTemplateUi), container,
@@ -317,53 +386,41 @@ namespace
 				button = created;
 				button->SetID(kGraphButtonBase + info.instance);
 				button->SetCaption(info.name);
-				button->ShowWindow();
 				++added;
 			}
 			else
 			{
 				++moved;
 			}
-			const int32_t top = 1 + info.row * kRowHeight;
+			const int32_t page = info.row / pageRows;
+			const int32_t top = 1 + (info.row % pageRows) * kRowHeight;
 			button->SetArea(columnLeft[info.column], top, columnRight[info.column], top + kRowHeight);
-			SimLog::Write(SimLog::Level::Debug, "GraphWindow: button 0x%04X \"%s\" at column %d, row %d.",
-				kGraphButtonBase + info.instance, info.name.ToChar(), info.column, info.row);
-		}
-		SimLog::Write(SimLog::Level::Info,
-			"GraphWindow: %u graphs, %u buttons added, %u moved, %u hidden, %u ignored, %u Maxis buttons kept (no Graph Button Cell).",
-			static_cast<unsigned>(graphs.size()), added, moved, hiddenCount, ignoredCount, keptCount);
-		// Rows the container already has: CAM_UI.dat sizes it for every CAM graph (a container grown at run time keeps
-		// its old paint buffer, so rows outside it draw badly and may not take clicks); 6 in the Maxis UI.
-		const int32_t containerRows = std::max(kVanillaRows, (container->GetB() - container->GetT() - 1 + kRowHeight - 1) / kRowHeight);
-		if (lastRow < containerRows)
-		{
-			container->InvalidateSelf();
-			return;
+			pageButtons.emplace_back(cRZAutoRefCount<cIGZWin>(button, cRZAutoRefCount<cIGZWin>::kAddRef), page);
+			lastPage = std::max(lastPage, page);
+			SimLog::Write(SimLog::Level::Debug, "GraphWindow: button 0x%04X \"%s\" on page %d, column %d, row %d.",
+				kGraphButtonBase + info.instance, info.name.ToChar(), page + 1, info.column, info.row % pageRows);
 		}
 
-		// Grow upward: the panel's top moves up by the new rows, the button container and the filler grow down by
-		// the same amount (so the bottom stays where it was), the graph windows above move up with the panel.
-		const int32_t delta = (lastRow + 1 - containerRows) * kRowHeight;
-		SimLog::Write(SimLog::Level::Warning,
-			"GraphWindow: %d rows needed, the UI has %d; the panel grows at run time (CAM_UI.dat should have room for them).",
-			lastRow + 1, containerRows);
-		const int32_t containerBottom = container->GetB();
-		panel->SetArea(panel->GetL(), panel->GetT() - delta, panel->GetR(), panel->GetB());
-		container->SetArea(container->GetL(), container->GetT(), container->GetR(), containerBottom + delta);
-		if (cIGZWin* const filler = panel->GetChildWindowFromID(kFillerId))
+		pageCount = lastPage + 1;
+		buttonContainer = container;
+		navPrev = panel->GetChildWindowFromID(kNavPrevId);
+		navNext = panel->GetChildWindowFromID(kNavNextId);
+		navLabel = panel->GetChildWindowFromID(kNavLabelId);
+		for (cIGZWin* const nav : { static_cast<cIGZWin*>(navPrev), static_cast<cIGZWin*>(navNext), static_cast<cIGZWin*>(navLabel) })
 		{
-			filler->SetArea(container->GetL(), containerBottom, container->GetR(), containerBottom + delta);
-			filler->ShowWindow();
+			if (!nav) continue;
+			if (pageCount > 1) nav->ShowWindow(); else nav->HideWindow();
 		}
-		for (const uint32_t id : { kGraphWindowExpandedId, kGraphWindowCollapsedId })
+		if (pageCount > 1 && (!navPrev || !navNext || !procPatched))
 		{
-			if (cIGZWin* const window = parent->GetChildWindowFromID(id))
-			{
-				window->GZWinOffset(0, -delta);
-			}
+			SimLog::Write(SimLog::Level::Warning,
+				"GraphWindow: %d pages but no page buttons (CAM_UI.dat %s); only the first page can be shown.",
+				pageCount, procPatched ? "without Previous / Next" : "handler not patched");
 		}
-		panel->InvalidateSelfAndParents();
-		SimLog::Write(SimLog::Level::Info, "GraphWindow: panel %d pixels taller.", delta);
+		ShowPage(0);
+		SimLog::Write(SimLog::Level::Info,
+			"GraphWindow: %u graphs, %u buttons added, %u moved, %u hidden, %u ignored, %u Maxis buttons kept; %d page(s) of %d rows.",
+			static_cast<unsigned>(graphs.size()), added, moved, hiddenCount, ignoredCount, keptCount, pageCount, pageRows);
 	}
 
 	void __fastcall BuildGraphsUiHook(void* controlPanel, void* /*edx*/)
@@ -396,6 +453,14 @@ void GraphButtons::PostAppInit()
 	}
 	buildPatch.Configure("GraphWindow BuildGraphsUI", kBuildGraphsUiCall, reinterpret_cast<void*>(&BuildGraphsUiHook),
 		kBuildGraphsUi);
+	if (*reinterpret_cast<const uintptr_t*>(kGraphProcSlot) == kGraphProc)
+	{
+		procPatched = WriteSlot(kGraphProcSlot, reinterpret_cast<uintptr_t>(&GraphProcHook));
+	}
+	if (!procPatched)
+	{
+		SimLog::Write(SimLog::Level::Warning, "GraphWindow: graph window handler not as expected; page buttons disabled.");
+	}
 	if (buildPatch.Install())
 	{
 		SimLog::Write(SimLog::Level::Info, "GraphWindow: a button for every graph exemplar with Graph Button Cell.");
@@ -409,4 +474,11 @@ void GraphButtons::PostAppInit()
 void GraphButtons::PostAppShutdown()
 {
 	buildPatch.Uninstall();
+	if (procPatched)
+	{
+		WriteSlot(kGraphProcSlot, kGraphProc);
+		procPatched = false;
+	}
+	pageButtons.clear();
+	navPrev = nullptr; navNext = nullptr; navLabel = nullptr; buttonContainer = nullptr;
 }

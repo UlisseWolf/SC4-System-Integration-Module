@@ -48,6 +48,23 @@ bottom of the screen (third test: the last rows were hidden behind it).
    (one 18-pixel row per row, moving the two graph windows `0x8A8B5B71` and `0x8A8B5B72` up and showing the filler
    `0x5C4DE310`), and it logs a warning.
 
+## Pages (1.13.0)
+
+The button container keeps the 6 rows of the Maxis window, and the graphs are split in **pages** of 6 rows: row r
+of *Graph Button Cell* is row r % 6 of page r / 6 (so rows 6-11 are page 2, 12-17 page 3, up to 31). One page is
+shown at a time; a row under the buttons holds **< Previous**, the page number and **Next >** (`0x5C4DE320`,
+`0x5C4DE322`, `0x5C4DE321` in `CAM_UI.dat`), shown only when there is more than one page. Page 1 holds the Maxis
+graphs, as in the original window, page 2 the graphs SC4SIM adds, each in the column of its theme.
+
+The DLL takes the Previous / Next clicks from the graph window's message handler (`cIGZWinProc` built at
+`0x0076CFE0`, `DoWinProcMessage` = `0x0076E500` in vtable slot `0x00AB4FEC`; button clicks arrive there as message
+type 3, `0x287259F6`, button ID), turns the page and leaves every other message to the game. The slot is checked
+before patching and restored when the game closes. Every CAM button is in `CAM_UI.dat` (pages after the first start
+hidden), since buttons created at run time do not receive clicks yet. Without the DLL only page 1 is shown.
+
+The window is 24 pixels taller than the Maxis one for the page row, plus 120 pixels of graph area, and lifted 36
+pixels.
+
 ## Button position: Graph Button Cell
 
 | ID | Property | Type | Meaning |
@@ -91,18 +108,18 @@ site is checked before patching).
 CAM orders the graphs by theme, one column per theme (`tools/power-graph/graph_layout.py`, written into every graph
 exemplar of `CAM_Exemplar_Graphs.dat` as Graph Button Cell):
 
-| Row | Population and education | Government, economy, transport | Services and environment |
-|---|---|---|---|
-| 0 | Jobs & Pop. | Mayor Rating | Crime |
-| 1 | Population R/C/I | Funds | Police & Jails |
-| 2 | RCI Demand | City Income/Expenses | Fire Protection |
-| 3 | Demand Forecast | Tax Rates | Power |
-| 4 | Population by Age | Res. Avg. Income | Power Grid |
-| 5 | Life Expectancy | Commute Time | Water |
-| 6 | Health | Mass Transit | Water Grid |
-| 7 | Afterlife | Traffic Volume | Garbage |
-| 8 | Education | Traffic Congestion | Pollution |
-| 9 | Education by Age | | |
+| Page | Row | Population, health, education | Government, economy, transport | Services, environment |
+|---|---|---|---|---|
+| 1 | 0 | Jobs & Pop. | Mayor Rating | Crime |
+| 1 | 1 | RCI Demand | Funds | Power |
+| 1 | 2 | Population by Age | City Income/Expenses | Water |
+| 1 | 3 | Life Expectancy | Res. Avg. Income | Garbage |
+| 1 | 4 | Education | Commute Time | Pollution |
+| 1 | 5 | Education by Age | Traffic Volume | |
+| 2 | 6 | Population R/C/I | Tax Rates | Police & Jails |
+| 2 | 7 | Demand Forecast | Mass Transit | Fire Protection |
+| 2 | 8 | Health | Traffic Congestion | Power Grid |
+| 2 | 9 | Afterlife | | Water Grid |
 
 The 17 remaining Maxis buttons are placed in the same order in the Graphs UI of `CAM_UI.dat`, packed in its 6 rows
 (column 2: Crime, Power, Water, Garbage, Pollution), so the order is the same without the DLL; the DLL adds Population R/C/I,
