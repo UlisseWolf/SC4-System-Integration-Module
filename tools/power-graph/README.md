@@ -40,3 +40,6 @@ Grid and Water Grid graphs, and Graph Button Hidden
 `graph_layout.py` is the order of the graph buttons by theme (column, row per graph instance): `make_utility_graphs.py`
 writes it into every graph exemplar (Graph Button Cell 0x5C4DE350) and `make_graph_ui.py` places the Maxis buttons
 of the UI the same way (removing those of hidden graphs).
+
+`patch_graph_window_types.py <CAM_LUA_Controller.dat> <out_dir>` points the advisors' `graph_window_types.WATER_POLLUTION`
+to the Pollution graph and adds `POLLUTION`, `POLICE_JAILS`, `POWER_GRID` and `WATER_GRID` (Lua 0xFF048A3E).

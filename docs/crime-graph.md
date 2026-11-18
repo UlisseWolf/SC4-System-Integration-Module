@@ -28,7 +28,7 @@ Percentages and indexes, on a 0-100 scale.
 |---|---|---|---|
 | Police Coverage % | `0x4A11D354` (`G_POLICE_PROTECTION_COVERAGE_P`) | game | `0x5C4DE1A4` |
 | Average Crime | `0xAA662693` (`GA_CRIME`) | game | `0x5C4DE1A5` |
-| Arrest Rate % | `0x5C4DE084` | SC4SIM.dll | `0x5C4DE1A6` |
+| Police Efficiency % | `0x5C4DE084` | SC4SIM.dll | `0x5C4DE1A6` |
 | Jail Occupancy % | `0x5C4DE085` | SC4SIM.dll | `0x5C4DE1A7` |
 
 Title and button caption: LTEXT `0x5C4DE1A0` "Police & Jails". Its button is added by SC4SIM.dll (Graph Button Cell
@@ -42,7 +42,7 @@ Title and button caption: LTEXT `0x5C4DE1A0` "Police & Jails". Its button is add
 - **Inmates** (`0x5C4DE082`): the jail population (`g_inmate_count`);
 - **Unsolved Crimes** (`0x5C4DE083`): crimes of the month (crime simulator, `g_crime_commited_count`) minus arrests
   (`g_arrest_count`), never below 0;
-- **Arrest Rate %** (`0x5C4DE084`): arrests × 100 / crimes, at most 100, 0 without crimes;
+- **Police Efficiency %** (`0x5C4DE084`): arrests × 100 / crimes, at most 100, and 100 without crimes;
 - **Jail Occupancy %** (`0x5C4DE085`): inmates × 100 / jail capacity (`g_jail_capacity`), 0 without jails. Above 100
   means overcrowded jails.
 
@@ -56,5 +56,25 @@ after the header. The module calls these getters through the offsets the game it
 
 The game already records crimes and arrests at `0x006E2C99` and police coverage at `0x006E0647` (coverage × 100), and
 the advisor data pump records the average crime at `0x0041680E`.
+
+## Consistency with CAM_LUA_Controller.dat
+
+CAM's Lua (police panel and advisor constants) was checked against the graphs:
+
+- **Police Efficiency**: CAM's Police panel (`cmPoliceEfficiency`, Lua `0xF8B4440E`) shows arrests / crimes × 100
+  over the last 12 months, and 100 % when there were no crimes. The graph uses the same name and the same rule, per
+  month (the yearly value is the panel's job).
+- **Inmates**: the panel shows `game.g_inmate_count`, the same jail population the DLL records.
+- **Crimes and arrests**: the panel sums `game_trends.G_NUM_CRIMES` / `G_NUM_ARRESTS`, the history types the Crime
+  graph plots.
+- **Average Crime**: CAM's tuning constants put `GA_CRIME` low at 10, medium at 50 and high at 100, so it fits the
+  0-100 scale of Police & Jails next to the percentages. The crimes per 100,000 people of the panel (C-1, yearly) are
+  not plotted: a different scale.
+- **graph_window_types** (advisor constants, Lua `0xFF048A3E`): `game.window_graph(graph_window_types.X)` opens a
+  graph from advisor messages and scripts. `WATER_POLLUTION` (0x09) would open a graph without a button, so it now
+  points to Pollution (0x08); `POLLUTION`, `POLICE_JAILS` (0x1C), `POWER_GRID` (0x1A) and `WATER_GRID` (0x1B) are
+  added for scripts. No message of the game or of CAM links to the pollution or crime graphs today
+  (SimCityLocale.DAT links Power, Funds, Life Expectancy, Water, EQ and Garbage). Patch:
+  `tools/power-graph/patch_graph_window_types.py`.
 
 `[CrimeGraph] Enabled=false` in `SC4SIM.ini` stops the recording (the game's series still show).

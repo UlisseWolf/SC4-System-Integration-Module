@@ -18,6 +18,8 @@ namespace CrimeGraphHistory
 	inline constexpr uint32_t kHistoryUnsolvedCrimes = 0x5C4DE083;  // crimes - arrests of the month, never below 0
 
 	// Police & Jails graph (0x6534284A / 0xCA4AD545 / 0x0000001C), next to the game's police coverage and average crime.
-	inline constexpr uint32_t kHistoryArrestRate = 0x5C4DE084;      // arrests * 100 / crimes of the month
+	// arrests * 100 / crimes of the month, 100 without crimes: the Police Efficiency of CAM's Police panel
+	// (CAM_LUA_Controller cmPoliceEfficiency), monthly instead of yearly.
+	inline constexpr uint32_t kHistoryPoliceEfficiency = 0x5C4DE084;
 	inline constexpr uint32_t kHistoryJailOccupancy = 0x5C4DE085;   // inmates * 100 / jail capacity
 }

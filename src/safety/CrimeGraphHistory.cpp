@@ -84,7 +84,8 @@ namespace
 		history->RecordHistoryData(CrimeGraphHistory::kHistoryCriminals, Clamp(criminals));
 		history->RecordHistoryData(CrimeGraphHistory::kHistoryInmates, Clamp(inmates));
 		history->RecordHistoryData(CrimeGraphHistory::kHistoryUnsolvedCrimes, Clamp(crimes > arrests ? crimes - arrests : 0));
-		history->RecordHistoryData(CrimeGraphHistory::kHistoryArrestRate, std::min(Percent(arrests, crimes), 100));
+		// Same rule as CAM's Police panel: no crimes means 100 % efficiency.
+		history->RecordHistoryData(CrimeGraphHistory::kHistoryPoliceEfficiency, crimes == 0 ? 100 : std::min(Percent(arrests, crimes), 100));
 		history->RecordHistoryData(CrimeGraphHistory::kHistoryJailOccupancy, Percent(inmates, capacity));
 		SimLog::Write(SimLog::Level::Debug,
 			"CrimeGraph: %u crimes, %u arrests, %u criminals, %u inmates of %u places, %u police stations, %u jails.",

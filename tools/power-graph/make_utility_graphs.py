@@ -107,7 +107,7 @@ NEW_GRAPHS = {
     0x1C: (0x0C, 'Police & Jails', 0x5C4DE1A0, 'Police & Jails', LAYOUT[0x1C], [
         (0x5C4DE1A4, 'Police Coverage %', 0x4A11D354, (40, 110, 255)),   # G_POLICE_PROTECTION_COVERAGE_P
         (0x5C4DE1A5, 'Average Crime', 0xAA662693, (220, 11, 11)),        # GA_CRIME
-        (0x5C4DE1A6, 'Arrest Rate %', 0x5C4DE084, (93, 189, 152)),
+        (0x5C4DE1A6, 'Police Efficiency %', 0x5C4DE084, (93, 189, 152)),  # as CAM's Police panel
         (0x5C4DE1A7, 'Jail Occupancy %', 0x5C4DE085, (128, 128, 128)),
     ]),
     # Power grid: demand and unused power (game), production by load class (SC4SIM.dll, from NEON when installed),
