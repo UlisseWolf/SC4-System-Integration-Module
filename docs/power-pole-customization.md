@@ -158,11 +158,36 @@ attachment bearings remain controlled by the attachment properties.
 
 ## Switching pole styles in-game (Tab / Shift-Tab)
 
-When at least one `[PowerPoles.<Name>]` style is loaded, **Tab** cycles the active style forward and
+When at least one style is loaded (an ini `[PowerPoles.<Name>]` section or a pole-style exemplar), **Tab** cycles the active style forward and
 **Shift-Tab** backward (vanilla counts as a style, so one style already gives two choices) while the
 power-line tool is selected; the change applies to newly-placed poles. This works with no other
 mods. See `docs/power-line-style-ui-design.md` for the hook details. SC4SIM has no on-screen overlay
 (the sc4-render-services sample's ImGui overlay was not ported).
+
+## Pole styles in a .dat (exemplars, since 1.12)
+
+A plugin can ship its pole styles instead of asking players to copy `[PowerPoles.*]` sections into `SC4SIM.ini`.
+Each style is one exemplar, type `0x6534284A`, group `0x5C4DB000`, any instance:
+
+| Property | ID | Type | Meaning |
+| --- | --- | --- | --- |
+| Exemplar Name | `0x00000020` | String | Style name, written to `SC4SIM.log` when Tab selects it |
+| SC4SIM Pole Style: Regular Poles | `0x5C4DB001` | Uint32 x 16 | Pole instance per direction mask, in `REG.*` order: None, X, DP, X+DP, Z, X+Z, DP+Z, X+DP+Z, DN, X+DN, DP+DN, X+DP+DN, Z+DN, X+Z+DN, DP+Z+DN, X+DP+Z+DN. 0 = the vanilla pole |
+| SC4SIM Pole Style: FAR Poles | `0x5C4DB002` | Uint32 x 16 | FAR-1.5, FAR-2, FAR-3, FAR-6, each XP, XN, ZP, ZN. 0 = the usual fallback (FAR default, then the diagonal `REG.*` pole) |
+| SC4SIM Pole Style: Inter-Pole Distance | `0x5C4DB003` | Uint32 | Max cells between poles while the style is active (1-50); absent = vanilla |
+| SC4SIM Pole Style: Order | `0x5C4DB004` | Uint32 | Position in the Tab cycle (lower first, then by instance) |
+| SC4SIM Pole Style: FAR Default | `0x5C4DB005` | Bool | True = the style-independent FAR fallback (`[PowerPoles.FAR]`), not a cyclable style |
+
+The DLL reads them once, when the first city opens (every plugin is loaded by then); the log lists each style with its
+exemplar instance. When two plugins hold the same instance, the one the game loads last wins, as for any exemplar.
+`SC4SIM.ini` keeps priority: a `[PowerPoles.<Name>]` section with the same name replaces the exemplar style in its
+place in the cycle, the other ini styles follow the exemplar ones, and `[PowerPoles.FAR]` keys override the exemplar
+FAR default heading by heading.
+
+`tools/pole-styles/make_pole_styles.py` turns `[PowerPoles.*]` sections (the ini syntax, plus optional `Instance` and
+`Order` keys) into such a .dat; `tools/pole-styles/p3_styles.ini` is the source of `CAM_PowerPoleStyles.dat`, the P3
+Wood and P3 Steel styles of the SIM package. The properties are also defined in New_Properties.xml for iLive/SC4
+Reader.
 
 ## Property definitions
 

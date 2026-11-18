@@ -81,6 +81,10 @@
 //    for commercial relief (src/fixes/SeaportDemandCapFix.cpp, [GameFixes] SeaportDemandCapFix;
 //    LogIndustrialDemandValues cheat).
 //
+// Version 1.12.0: power-pole styles can come from pole-style exemplars in any plugin (type 0x6534284A, group
+// 0x5C4DB000, read at the first city), as well as from SC4SIM.ini, which keeps priority on equal names. The P3
+// styles of the SIM package moved from SC4SIM.ini to CAM_PowerPoleStyles.dat (tools/pole-styles).
+//
 // Version 1.11.1 (fixes from the static review of 1.11.0 against 1.1.641):
 //  * Power poles: the texture rebind resets the zoom global to 5 (zooms are 0-4; 0 left a texture registered at zoom 0
 //    unbound); floor/wall textures look the pole up from Draw's +0x120 subobject; per-wire width, wire/buoy textures and

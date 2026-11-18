@@ -68,7 +68,7 @@ it and says so in the log:
    [Building](#building)).
 2. Copy `SC4SIM.dll` and, optionally, `SC4SIM.ini` to your SimCity 4 **Plugins** folder.
 3. Start the game. `SC4SIM.log`, created next to the DLL, should report:
-   - `SC4 SIM DLL 1.11.1`;
+   - `SC4 SIM DLL 1.12.0`;
    - `PowerPoleCustomization: installed N of N patches`;
    - `AdvancedWater: installed the water building query UI hook`;
    - `MixedOccupancy: enabled (...)`;
@@ -232,9 +232,12 @@ SC4SIM includes only the power-pole module: it does not contain SC4RenderService
 
   The properties are 0xB22A0000–0xB22A0013, documented in [`docs/power-pole-customization.md`](docs/power-pole-customization.md).
   Props without them render exactly as in the base game.
-- **Pole styles.** Named `[PowerPoles.<name>]` sections in `SC4SIM.ini` choose a pole model for every combination of
-  connected headings (`REG.*`). `InterPoleDistance` sets the pole spacing, 1–50 cells (vanilla 10). With the
-  power-line tool active, **Tab** / **Shift+Tab** cycle through the styles; the active style is written to the log.
+- **Pole styles.** A style chooses a pole model for every combination of connected headings (`REG.*`);
+  `InterPoleDistance` sets the pole spacing, 1–50 cells (vanilla 10). Styles come from pole-style exemplars in any
+  plugin .dat (since 1.12, read when the first city opens) and from named `[PowerPoles.<name>]` sections in
+  `SC4SIM.ini`, which win on equal names. With the power-line tool active, **Tab** / **Shift+Tab** cycle through the
+  styles; the active style is written to the log. See "Pole styles in a .dat" in
+  [`docs/power-pole-customization.md`](docs/power-pole-customization.md) and `tools/pole-styles`.
 - **FAR power lines.** Drags snap automatically to 33.7°, 26.6°, 18.4° and 9.5° and use the style's `FAR-*` models
   or the `[PowerPoles.FAR]` defaults. Hold **Shift** for a regular line. See
   [`docs/far-power-lines-design.md`](docs/far-power-lines-design.md).
@@ -242,9 +245,9 @@ SC4SIM includes only the power-pole module: it does not contain SC4RenderService
 - **P3 poles** *(SIM Experimental package)*. `CAM_PowerPoles.dat` holds 20 pole prop exemplars from the sample of
   sc4-render-services; their meshes, from Metarvo's P3 set (MTO P3) and included with his permission, are in
   `CAM_PowerPoles_Models.dat`: wood H-frame and
-  Texas steel V poles, and wood H-frame tangents for the four FAR angles. `SC4SIM.ini` defines the styles
-  `[PowerPoles.P3Wood]` (with the FAR tangents) and `[PowerPoles.P3Steel]`; a commented `[PowerPoles.FAR]` section uses
-  the tangents for every style.
+  Texas steel V poles, and wood H-frame tangents for the four FAR angles. `CAM_PowerPoleStyles.dat` defines the styles
+  P3Wood (with the FAR tangents) and P3Steel (in `SC4SIM.ini` until 1.11); a commented `[PowerPoles.FAR]` section in
+  `SC4SIM.ini` uses the tangents for every style.
 - **Across zones and farm fields** *(SC4SIM addition, not in the original sample)*. In the base game a pole can
   never stand on a zoned cell, so a zone or a farm field wider than the pole spacing cuts the line. SC4SIM lets
   poles stand on empty zones and on farm fields; lots with a building still block. `CrossZones=false` turns it
@@ -332,7 +335,7 @@ Details, the news events and the tests are in [`docs/afterlife.md`](docs/afterli
 | | `DezoneFieldCells` | `true` | Also on farm fields; the game demolishes that field lot. |
 | | `DebugLog` | `false` | Writes every `[DEBUG]` line to `SC4SIM.log`: the power-pole traces and the monthly deathcare totals. |
 | | `MaxPointsPerDirection` | `8` | Maximum number of cables per direction (1–15). |
-| `[PowerPoles.<name>]` | `REG.*`, `FAR-*`, `InterPoleDistance` | — | Pole styles, see above. |
+| `[PowerPoles.<name>]` | `REG.*`, `FAR-*`, `InterPoleDistance` | — | Pole styles, see above (they can also come from exemplars in a .dat). |
 
 ## Building
 

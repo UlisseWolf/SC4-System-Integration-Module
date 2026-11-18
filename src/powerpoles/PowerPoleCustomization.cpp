@@ -47,6 +47,8 @@
 #include "cIGZMessage2.h"
 #include "cIGZMessage2Standard.h"
 #include "cIGZMessageServer2.h"
+#include "cIGZPersistResourceKeyFilter.h"
+#include "cIGZPersistResourceKeyList.h"
 #include "cIGZPersistResourceManager.h"
 #include "cIGZWin.h"
 #include "cISC4App.h"
@@ -85,6 +87,7 @@
 #include <cstdint>
 #include <cstring>
 #include <filesystem>
+#include <format>
 #include <functional>
 #include <limits>
 #include <memory>
@@ -3188,6 +3191,253 @@ namespace {
         }
     }
 
+    // ------------------------------------------------------------------
+    // Pole styles from exemplars (SC4SIM 1.12): a plugin can ship its styles in a .dat instead of
+    // asking the player to copy [PowerPoles.*] sections into SC4SIM.ini. One exemplar per style,
+    // type 0x6534284A, group kPoleStyleGroup, any instance:
+    //   0x00000020 Exemplar Name       string     style name (shown in SC4SIM.log when Tab selects it)
+    //   0x5C4DB001 Regular poles       Uint32 x16 pole instance per direction mask, REG.* order
+    //                                             (None, X, DP, X+DP, Z, X+Z, ...); 0 = vanilla pole
+    //   0x5C4DB002 FAR poles           Uint32 x16 FAR-1.5/2/3/6 x XP/XN/ZP/ZN; 0 = fallback
+    //   0x5C4DB003 Inter-pole distance Uint32     max cells between poles, 1-50 (absent = vanilla)
+    //   0x5C4DB004 Order               Uint32     position in the Tab cycle (then by instance)
+    //   0x5C4DB005 FAR default         Bool       true = the [PowerPoles.FAR] fallback, not a style
+    // Read once, at the first PostCityInit (every plugin is loaded by then). The resource manager
+    // resolves duplicates like any other exemplar: the plugin loaded last wins for one instance.
+    // SC4SIM.ini keeps priority: an ini style with the same name replaces the exemplar style, and
+    // the ini [PowerPoles.FAR] keys override the exemplar FAR default heading by heading.
+    // ------------------------------------------------------------------
+    constexpr uint32_t kExemplarType = 0x6534284A;
+    constexpr uint32_t kPoleStyleGroup = 0x5C4DB000;
+    constexpr uint32_t kPropExemplarName = 0x00000020;
+    constexpr uint32_t kPropStyleRegular = 0x5C4DB001;
+    constexpr uint32_t kPropStyleFar = 0x5C4DB002;
+    constexpr uint32_t kPropStyleInterPoleDistance = 0x5C4DB003;
+    constexpr uint32_t kPropStyleOrder = 0x5C4DB004;
+    constexpr uint32_t kPropStyleFarDefault = 0x5C4DB005;
+    bool gExemplarStylesLoaded = false;
+
+    // Stack-allocated filter for GetAvailableResourceList: exemplars of the pole-style group.
+    class PoleStyleKeyFilter final : public cIGZPersistResourceKeyFilter {
+    public:
+        bool QueryInterface(const uint32_t riid, void** ppvObj) override {
+            if (riid == GZIID_cIGZPersistResourceKeyFilter || riid == GZIID_cIGZUnknown) {
+                *ppvObj = static_cast<cIGZPersistResourceKeyFilter*>(this);
+                AddRef();
+                return true;
+            }
+            *ppvObj = nullptr;
+            return false;
+        }
+        uint32_t AddRef() override { return ++refCount_; }
+        uint32_t Release() override { return refCount_ > 0 ? --refCount_ : 0; } // owned by the caller's stack
+        bool IsKeyIncluded(cGZPersistResourceKey const& key) override {
+            return key.type == kExemplarType && key.group == kPoleStyleGroup;
+        }
+    private:
+        uint32_t refCount_ = 0;
+    };
+
+    // Up to 16 Uint32 values of an array property (Sint32 arrays are accepted too: some editors
+    // write instance IDs as signed). Returns how many were read.
+    uint32_t ReadUint32Array16(const cISCPropertyHolder* holder, const uint32_t propertyId,
+                               std::array<uint32_t, 16>& out, const uint32_t instance) {
+        if (holder == nullptr || !holder->HasProperty(propertyId)) {
+            return 0;
+        }
+        const cISCProperty* const prop = holder->GetProperty(propertyId);
+        const cIGZVariant* const variant = prop ? prop->GetPropertyValue() : nullptr;
+        if (variant == nullptr || (variant->GetType() != cIGZVariant::Uint32Array &&
+                                   variant->GetType() != cIGZVariant::Sint32Array)) {
+            LOG_WARN("PowerPoleCustomization: pole style exemplar 0x{:08X}: property 0x{:08X} must be a Uint32 "
+                     "array; ignoring it.", instance, propertyId);
+            return 0;
+        }
+        const uint32_t count = std::min<uint32_t>(variant->GetCount(), 16);
+        if (variant->GetCount() > 16) {
+            LOG_WARN("PowerPoleCustomization: pole style exemplar 0x{:08X}: property 0x{:08X} has {} values; only "
+                     "the first 16 are used.", instance, propertyId, variant->GetCount());
+        }
+        const uint32_t* const values = variant->RefUint32();
+        if (values == nullptr) {
+            return 0;
+        }
+        std::copy_n(values, count, out.begin());
+        return count;
+    }
+
+    struct ExemplarStyle {
+        PoleStyle style;
+        uint32_t order = 0;
+        uint32_t instance = 0;
+        bool farDefault = false;
+    };
+
+    bool ReadStyleExemplar(cIGZPersistResourceManager* resourceManager, const cGZPersistResourceKey& key,
+                           ExemplarStyle& out) {
+        cRZAutoRefCount<cISCResExemplar> exemplar;
+        if (!resourceManager->GetResource(key, GZIID_cISCResExemplar, exemplar.AsPPVoid(), 0, nullptr) || !exemplar) {
+            return false;
+        }
+        const cISCPropertyHolder* const holder = exemplar->AsISCPropertyHolder();
+        out = ExemplarStyle{};
+        out.instance = key.instance;
+
+        cRZBaseString name;
+        if (holder->HasProperty(kPropExemplarName) && holder->GetProperty(kPropExemplarName, name) && name.Strlen() > 0) {
+            out.style.name.assign(name.ToChar(), name.Strlen());
+        } else {
+            out.style.name = std::format("Style 0x{:08X}", key.instance);
+        }
+        TryReadUint32Property(holder, kPropStyleOrder, out.order);
+        TryReadBoolProperty(holder, kPropStyleFarDefault, out.farDefault);
+
+        std::array<uint32_t, 16> regular{};
+        const uint32_t regularCount = ReadUint32Array16(holder, kPropStyleRegular, regular, key.instance);
+        for (uint32_t mask = 0; mask < regularCount; ++mask) {
+            if (regular[mask] != 0) {
+                out.style.instanceByDirectionMask[mask] = regular[mask];
+                out.style.hasMask[mask] = true;
+            }
+        }
+        std::array<uint32_t, 16> farPoles{}; // not `far`: a Windows macro
+        const uint32_t farCount = ReadUint32Array16(holder, kPropStyleFar, farPoles, key.instance);
+        for (uint32_t i = 0; i < farCount && i < kFarHeadingCount; ++i) {
+            if (farPoles[i] != 0) {
+                out.style.farInstanceByHeading[i] = farPoles[i];
+                out.style.hasFarHeading[i] = true;
+            }
+        }
+        uint32_t distance = 0;
+        if (TryReadUint32Property(holder, kPropStyleInterPoleDistance, distance) && distance > 0) {
+            out.style.maxCellsBetweenPoles = std::clamp(distance, 1u, kMaxInterPoleDistance);
+            out.style.hasMaxCells = true;
+        }
+        return true;
+    }
+
+    uint32_t CountTrue(const auto& flags) {
+        return static_cast<uint32_t>(std::ranges::count(flags, true));
+    }
+
+    bool SameStyleName(const std::string& a, const std::string& b) {
+        return std::ranges::equal(a, b, [](const unsigned char x, const unsigned char y) {
+            return std::tolower(x) == std::tolower(y);
+        });
+    }
+
+    // Merges the exemplar styles into gStyles / gFarDefaultStyle, which hold the SC4SIM.ini ones.
+    // Final Tab order: exemplar styles (by Order, then instance), each replaced in place by an ini
+    // style of the same name, then the remaining ini styles in ini order.
+    void LoadExemplarPoleStylesOnce() {
+        if (gExemplarStylesLoaded || !gSettings.enabled) {
+            return;
+        }
+        gExemplarStylesLoaded = true;
+
+        cIGZPersistResourceManagerPtr resourceManager;
+        if (!resourceManager) {
+            LOG_WARN("PowerPoleCustomization: no resource manager; pole styles from exemplars not read.");
+            return;
+        }
+        PoleStyleKeyFilter filter;
+        cRZAutoRefCount<cIGZPersistResourceKeyList> keys;
+        resourceManager->GetAvailableResourceList(keys.AsPPObj(), &filter);
+        if (!keys || keys->Size() == 0) {
+            return;
+        }
+
+        std::vector<ExemplarStyle> found;
+        std::vector<uint32_t> seenInstances;
+        for (uint32_t i = 0; i < keys->Size(); ++i) {
+            const cGZPersistResourceKey& key = keys->GetKey(i);
+            if (std::ranges::find(seenInstances, key.instance) != seenInstances.end()) {
+                continue; // the same key from several plugins: GetResource returns the winning one
+            }
+            seenInstances.push_back(key.instance);
+            ExemplarStyle entry;
+            if (ReadStyleExemplar(resourceManager, key, entry)) {
+                found.push_back(std::move(entry));
+            }
+        }
+        std::ranges::sort(found, [](const ExemplarStyle& a, const ExemplarStyle& b) {
+            return a.order != b.order ? a.order < b.order : a.instance < b.instance;
+        });
+
+        // FAR default: exemplar defaults first (later Order wins per heading), then the ini keys.
+        PoleStyle farDefault;
+        bool hasFarDefault = false;
+        for (const ExemplarStyle& entry : found) {
+            if (!entry.farDefault) {
+                continue;
+            }
+            for (uint32_t i = 0; i < kFarHeadingCount; ++i) {
+                if (entry.style.hasFarHeading[i]) {
+                    farDefault.farInstanceByHeading[i] = entry.style.farInstanceByHeading[i];
+                    farDefault.hasFarHeading[i] = true;
+                    hasFarDefault = true;
+                }
+            }
+            LOG_INFO("PowerPoleCustomization: FAR default from exemplar 0x{:08X} ({} of {} FAR headings).",
+                     entry.instance, CountTrue(entry.style.hasFarHeading), kFarHeadingCount);
+        }
+        if (gHasFarDefault) {
+            for (uint32_t i = 0; i < kFarHeadingCount; ++i) {
+                if (gFarDefaultStyle.hasFarHeading[i]) {
+                    farDefault.farInstanceByHeading[i] = gFarDefaultStyle.farInstanceByHeading[i];
+                    farDefault.hasFarHeading[i] = true;
+                    hasFarDefault = true;
+                }
+            }
+        }
+        gFarDefaultStyle = farDefault;
+        gHasFarDefault = hasFarDefault;
+
+        std::vector<PoleStyle> iniStyles = std::move(gStyles);
+        std::vector<bool> iniUsed(iniStyles.size(), false);
+        std::vector<PoleStyle> merged;
+        uint32_t fromExemplars = 0;
+        for (ExemplarStyle& entry : found) {
+            if (entry.farDefault) {
+                continue;
+            }
+            const auto iniMatch = std::ranges::find_if(iniStyles, [&entry](const PoleStyle& s) {
+                return SameStyleName(s.name, entry.style.name);
+            });
+            if (iniMatch != iniStyles.end()) {
+                iniUsed[static_cast<size_t>(iniMatch - iniStyles.begin())] = true;
+                LOG_INFO("PowerPoleCustomization: pole style \"{}\" (exemplar 0x{:08X}) is replaced by the "
+                         "[PowerPoles.{}] section of SC4SIM.ini.", entry.style.name, entry.instance, iniMatch->name);
+                merged.push_back(*iniMatch);
+                continue;
+            }
+            const uint32_t regularCount = CountTrue(entry.style.hasMask);
+            const uint32_t farCount = CountTrue(entry.style.hasFarHeading);
+            if (regularCount == 0 && farCount == 0 && !entry.style.hasMaxCells) {
+                LOG_WARN("PowerPoleCustomization: pole style exemplar 0x{:08X} (\"{}\") defines no pole, FAR pole "
+                         "or inter-pole distance; skipping it.", entry.instance, entry.style.name);
+                continue;
+            }
+            LOG_INFO("PowerPoleCustomization: loaded pole style \"{}\" from exemplar 0x{:08X} ({} of 16 direction "
+                     "masks, {} of {} FAR headings; InterPoleDistance={}).", entry.style.name, entry.instance,
+                     regularCount, farCount, kFarHeadingCount,
+                     entry.style.hasMaxCells ? std::to_string(entry.style.maxCellsBetweenPoles) : std::string("vanilla"));
+            merged.push_back(std::move(entry.style));
+            ++fromExemplars;
+        }
+        for (size_t i = 0; i < iniStyles.size(); ++i) {
+            if (!iniUsed[i]) {
+                merged.push_back(std::move(iniStyles[i]));
+            }
+        }
+        gStyles = std::move(merged);
+        if (gActiveStyleIndex > gStyles.size()) {
+            gActiveStyleIndex = 0;
+        }
+        LOG_INFO("PowerPoleCustomization: {} pole style(s) from exemplars, {} in all (Tab / Shift-Tab cycles them).",
+                 fromExemplars, gStyles.size());
+    }
+
     void LoadSettings() {
         gSettings = {};
         gStyles.clear();
@@ -3569,6 +3819,7 @@ public:
             auto* const stdMsg = static_cast<cIGZMessage2Standard*>(pMsg);
             if (stdMsg->GetType() == kSC4MessagePostCityInit) {
                 gCityShuttingDown = false;
+                LoadExemplarPoleStylesOnce();
             } else if (stdMsg->GetType() == kSC4MessagePreCityShutdown) {
                 gCityShuttingDown = true;
                 FlushCityScopedState();

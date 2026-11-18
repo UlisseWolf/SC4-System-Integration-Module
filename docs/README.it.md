@@ -60,7 +60,8 @@ ImGui, e non serve installarli.
   (1–15, `MaxPointsPerDirection`) e dove si attaccano, più larghezza, flessione, texture dei cavi e delle boe e
   texture delle fondazioni (proprietà 0xB22A0000–0xB22A0013, in `docs/power-pole-customization.md`). I prop senza
   queste proprietà restano identici a Maxis.
-* **Stili di tralicci** (`[PowerPoles.<nome>]` in `SC4SIM.ini`): modelli per ogni combinazione di direzioni
+* **Stili di tralicci** (exemplar di stile in un .dat dalla 1.12, come `CAM_PowerPoleStyles.dat`, oppure
+  `[PowerPoles.<nome>]` in `SC4SIM.ini`, che vince a parità di nome): modelli per ogni combinazione di direzioni
   (`REG.*`) e distanza tra i tralicci (`InterPoleDistance`, 1–50, Maxis 10). Con lo strumento linee elettriche,
   **Tab** passa allo stile successivo e **Maiusc+Tab** al precedente (solo per i nuovi tralicci); lo stile attivo
   è scritto in `SC4SIM.log`.
