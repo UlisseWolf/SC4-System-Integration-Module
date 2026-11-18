@@ -7,6 +7,7 @@
 #    radiation pollution in one graph; Water Pollution (0x09) gets Graph Button Hidden;
 #  - Crime (0x0C): crimes and arrests with unsolved crimes, criminals and inmates; Police & Jails (0x1C), new;
 #  - Fire Protection (0x1D), new: coverage, protection, flammability, fire outbreaks, fire stations;
+#  - Population R/C/I (0x1F) and Demand Forecast (0x20), new;
 #  - Health (0x1E), new: coverage, average health, health grade, hospital occupancy, hospitals, clinics;
 #  - Power Grid (0x1A) and Water Grid (0x1B), new: buttons added by SC4SIM.dll (docs/graph-window.md).
 #   python make_utility_graphs.py <CAM_Exemplar_Graphs.dat> <CAM_Locale_en.dat> <out_dir>
@@ -131,6 +132,22 @@ NEW_GRAPHS = {
         (0x5C4DE1C4, 'Hospital Occupancy %', 0x5C4DE0C4, (220, 11, 11)),
         (0x5C4DE1C5, 'Hospitals', 0x5C4DE0C5, (128, 128, 128)),
         (0x5C4DE1C6, 'Clinics', 0x5C4DE0C6, (255, 140, 0)),
+    ]),
+    # Population R/C/I: total population and the R / C / I totals (game), workforce (SC4SIM.dll). Demand Forecast: the
+    # demand simulator's extrapolated R / C / I demand and the workforce demand (SC4SIM.dll, from the advisor Lua's
+    # game table). See docs/population-graph.md.
+    0x1F: (0x0C, 'Population R/C/I', 0x5C4DE1D0, 'Population R/C/I', LAYOUT[0x1F], [
+        (0x5C4DE1D1, 'Total Population', 0xAA1A2CCA, (0, 0, 0)),          # G_POPULATION
+        (0x5C4DE1D2, 'Residential', 0x2A4E2003, (0, 170, 0)),             # G_R_POPULATION
+        (0x5C4DE1D3, 'Commercial', 0x0A4E2056, (40, 110, 255)),           # G_C_POPULATION
+        (0x5C4DE1D4, 'Industrial', 0x4A4E206B, (220, 180, 0)),            # G_I_POPULATION
+        (0x5C4DE1D5, 'Workforce', 0x5C4DE0E1, (170, 60, 255)),
+    ]),
+    0x20: (0x0C, 'Demand Forecast', 0x5C4DE1E0, 'Demand Forecast', LAYOUT[0x20], [
+        (0x5C4DE1E1, 'Residential Forecast', 0x5C4DE0E2, (0, 170, 0)),
+        (0x5C4DE1E2, 'Commercial Forecast', 0x5C4DE0E3, (40, 110, 255)),
+        (0x5C4DE1E3, 'Industrial Forecast', 0x5C4DE0E4, (220, 180, 0)),
+        (0x5C4DE1E4, 'Workforce Demand', 0x5C4DE0E5, (170, 60, 255)),
     ]),
     # Power grid: demand and unused power (game), production by load class (SC4SIM.dll, from NEON when installed),
     # NEON's load balance and free grid capacities (SC4SIM.dll, only with NEON). See docs/power-grid-graph.md.

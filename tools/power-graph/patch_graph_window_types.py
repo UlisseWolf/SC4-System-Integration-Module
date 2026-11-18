@@ -2,7 +2,8 @@
 # 0xFF048A3E) for the graphs of CAM_Exemplar_Graphs.dat. game.window_graph(graph_window_types.X) opens a graph from
 # advisor messages and scripts:
 #  - WATER_POLLUTION (0x09) has no button any more (merged into Pollution, Graph Button Hidden): it now opens 0x08;
-#  - POLLUTION (0x08), POLICE_JAILS (0x1C), FIRE_PROTECTION (0x1D), HEALTH (0x1E), POWER_GRID (0x1A) and WATER_GRID (0x1B) are added.
+#  - POLLUTION (0x08), POLICE_JAILS (0x1C), FIRE_PROTECTION (0x1D), HEALTH (0x1E), POPULATION_RCI (0x1F),
+#    DEMAND_FORECAST (0x20), POWER_GRID (0x1A) and WATER_GRID (0x1B) are added.
 #   python patch_graph_window_types.py <CAM_LUA_Controller.dat> <out_dir>
 # Writes <out_dir>/CAM_LUA_Controller.dat; every other entry is unchanged. Running it twice changes nothing more.
 import os, sys
@@ -16,6 +17,8 @@ NEW = (b"   graph_window_types.WATER_POLLUTION = hex2dec('00000008') -- SC4SIM: 
        b"   graph_window_types.POLICE_JAILS = hex2dec('0000001C') -- SC4SIM\r\n"
        b"   graph_window_types.FIRE_PROTECTION = hex2dec('0000001D') -- SC4SIM\r\n"
        b"   graph_window_types.HEALTH = hex2dec('0000001E') -- SC4SIM\r\n"
+       b"   graph_window_types.POPULATION_RCI = hex2dec('0000001F') -- SC4SIM\r\n"
+       b"   graph_window_types.DEMAND_FORECAST = hex2dec('00000020') -- SC4SIM\r\n"
        b"   graph_window_types.POWER_GRID = hex2dec('0000001A') -- SC4SIM\r\n"
        b"   graph_window_types.WATER_GRID = hex2dec('0000001B') -- SC4SIM\r\n")
 

@@ -7,12 +7,14 @@
 LAYOUT = {
     # population, health and education
     0x11: (0, 0),   # Jobs & Pop.
-    0x0E: (0, 1),   # RCI Demand
-    0x13: (0, 2),   # Population by Age
-    0x05: (0, 3),   # Life Expectancy
-    0x1E: (0, 4),   # Health (SC4SIM graph, button added by the DLL)
-    0x0D: (0, 5),   # Education
-    0x12: (0, 6),   # Education by Age
+    0x1F: (0, 1),   # Population R/C/I (SC4SIM graph, button added by the DLL)
+    0x0E: (0, 2),   # RCI Demand
+    0x20: (0, 3),   # Demand Forecast (SC4SIM graph, button added by the DLL)
+    0x13: (0, 4),   # Population by Age
+    0x05: (0, 5),   # Life Expectancy
+    0x1E: (0, 6),   # Health (SC4SIM graph, button added by the DLL)
+    0x0D: (0, 7),   # Education
+    0x12: (0, 8),   # Education by Age
     # government, economy, transport
     0x01: (1, 0),   # Mayor Rating
     0x02: (1, 1),   # Funds
