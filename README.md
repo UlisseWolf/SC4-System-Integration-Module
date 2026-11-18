@@ -51,6 +51,7 @@ such as NEON.
 | Water graph by source and wastewater | 1.13.0 | The Water graph shows the water bought and sold, the water from aquifers, fresh water and salt water, the wastewater produced, treated by treatment plants and recycled by sewage plants, recorded monthly in the city history. See `docs/water-graph.md`. *Not yet tested in game.* |
 | Graph buttons | 1.13.0 | The Graphs window gets a button for every graph exemplar (instances up to 0xFF), added when a city opens; a new graph is just a new exemplar. Example included: Garbage Pollution. See `docs/graph-window.md`. *Not yet tested in game.* |
 | Power Grid graph | 1.13.0 | New graph: power demand, unused power and production by load class (base, intermediate, peak); with the NEON mod installed, also NEON's load balance, peak shortage and free grid capacities, read automatically from its Lua. See `docs/power-grid-graph.md`. *Not yet tested in game.* |
+| Water Grid graph | 1.13.0 | New graph: water demand and surplus, watered and unwatered buildings, pipes, distressed and burst pipes, water sources and polluted sources. See `docs/water-grid-graph.md`. *Not yet tested in game.* |
 
 ## Requirements
 

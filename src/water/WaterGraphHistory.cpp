@@ -18,6 +18,10 @@
 //    2000): 2000*Water Consumed/10 - 1000). Never more than the wastewater produced.
 //  - wastewater recycled: output of the sewage plants, never more than the wastewater produced.
 //
+// Water Grid graph: the plumbing simulator's burst pipes, water sources, polluted water sources, water demand and the
+// surplus (production capacity - consumption), next to the watered / unwatered buildings and the pipe counts the game
+// records itself (0xCA78A955, 0x8A78AB06, 0xCA14EBFE, 0xCA14EC19).
+//
 ////////////////////////////////////////////////////////////////////////////
 
 #include "WaterGraphHistory.h"
@@ -162,6 +166,18 @@ namespace
 		history->RecordHistoryData(WaterGraphHistory::kHistoryWastewaterProduced, Clamp(wastewater));
 		history->RecordHistoryData(WaterGraphHistory::kHistoryWastewaterTreated, Clamp(treated));
 		history->RecordHistoryData(WaterGraphHistory::kHistoryWastewaterRecycled, Clamp(recycled));
+
+		// Water Grid graph.
+		const int64_t capacity = plumbing->GetWaterProductionCapacity();
+		const int64_t demand = plumbing->GetWaterDemand();
+		const int64_t surplus = capacity - consumedSigned;
+		history->RecordHistoryData(WaterGraphHistory::kHistoryBurstPipes, Clamp(plumbing->GetNumBurstPipes()));
+		history->RecordHistoryData(WaterGraphHistory::kHistoryWaterSources, Clamp(plumbing->GetNumWaterSources()));
+		history->RecordHistoryData(WaterGraphHistory::kHistoryPollutedSources, Clamp(plumbing->GetNumPollutedWaterSources()));
+		history->RecordHistoryData(WaterGraphHistory::kHistoryWaterDemand, Clamp(demand > 0 ? static_cast<uint64_t>(demand) : 0));
+		history->RecordHistoryData(WaterGraphHistory::kHistoryWaterSurplus, Clamp(surplus > 0 ? static_cast<uint64_t>(surplus) : 0));
+		SimLog::Write(SimLog::Level::Debug, "WaterGraph: grid: demand %lld, capacity %lld, %u burst pipes, %u sources (%u polluted).",
+			demand, capacity, plumbing->GetNumBurstPipes(), plumbing->GetNumWaterSources(), plumbing->GetNumPollutedWaterSources());
 
 		SimLog::Write(SimLog::Level::Debug,
 			"WaterGraph: %u water buildings; aquifer %llu, fresh %llu, salt %llu; wastewater %llu, treated %llu "

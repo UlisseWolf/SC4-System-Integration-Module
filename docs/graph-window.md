@@ -64,7 +64,8 @@ exemplar of `CAM_Exemplar_Graphs.dat` as Graph Button Cell):
 | 4 | Education | Commute Time | Air Pollution |
 | 5 | Education by Age | Traffic Volume | Water Pollution |
 | 6 | | | Power Grid |
-| 7 | | | Garbage Pollution |
+| 7 | | | Water Grid |
+| 8 | | | Garbage Pollution |
 
 The 18 Maxis buttons are also placed this way in the Graphs UI of `CAM_UI.dat`, so the order is the same without the
 DLL (which only adds row 6 and later).
@@ -84,4 +85,5 @@ the advisor Lua) or new ones recorded by a DLL, as SC4SIM does for the Power and
 
 `CAM_Exemplar_Graphs.dat` has a new graph, **Garbage Pollution** (`0x19`): the garbage pollution index
 (`G_TOTAL_GARBAGE_POLLUTION`, `0xEA110134`), which was moved out of the Garbage graph. Its exemplar sets Graph Button Cell to
-(2, 7). The Power Grid graph (`0x1A`, `docs/power-grid-graph.md`) is at (2, 6).
+(2, 8). The Power Grid (`0x1A`, `docs/power-grid-graph.md`) and Water Grid (`0x1B`, `docs/water-grid-graph.md`)
+graphs are at (2, 6) and (2, 7).

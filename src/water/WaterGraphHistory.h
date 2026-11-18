@@ -19,4 +19,11 @@ namespace WaterGraphHistory
 	inline constexpr uint32_t kHistoryWastewaterProduced = 0x5C4DE024; // water consumed by the city
 	inline constexpr uint32_t kHistoryWastewaterTreated = 0x5C4DE025;  // by treatment plants
 	inline constexpr uint32_t kHistoryWastewaterRecycled = 0x5C4DE026; // turned back into water by sewage plants
+
+	// Water Grid graph (0x6534284A / 0xCA4AD545 / 0x0000001B), with the game's watered / unwatered buildings and pipe counts.
+	inline constexpr uint32_t kHistoryBurstPipes = 0x5C4DE061;
+	inline constexpr uint32_t kHistoryWaterSources = 0x5C4DE062;
+	inline constexpr uint32_t kHistoryPollutedSources = 0x5C4DE063;
+	inline constexpr uint32_t kHistoryWaterDemand = 0x5C4DE064;
+	inline constexpr uint32_t kHistoryWaterSurplus = 0x5C4DE065;      // production capacity - consumption, never below 0
 }

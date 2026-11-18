@@ -102,6 +102,19 @@ NEW_GRAPHS = {
         (0x5C4DE15A, 'Distribution Free kVA (NEON)', 0x5C4DE049, (40, 110, 255)),
         (0x5C4DE15B, 'Transformer Free kVA (NEON)', 0x5C4DE04A, (0, 160, 150)),
     ]),
+    # Water grid: demand and surplus (SC4SIM.dll), watered / unwatered buildings and pipes (game), burst pipes and
+    # water sources (SC4SIM.dll). See docs/water-grid-graph.md.
+    0x1B: (0x09, 'Water Grid', 0x5C4DE180, 'Water Grid', LAYOUT[0x1B], [
+        (0x5C4DE170, 'Water Demand', 0x5C4DE064, (83, 101, 153)),
+        (0x5C4DE171, 'Water Surplus', 0x5C4DE065, (93, 189, 152)),
+        (0x5C4DE172, 'Watered Buildings', 0xCA78A955, (40, 110, 255)),       # G_WATERED_BUILDING_COUNT
+        (0x5C4DE173, 'Unwatered Buildings', 0x8A78AB06, (220, 11, 11)),      # G_UNWATERED_BUILDING_COUNT
+        (0x5C4DE174, 'Water Pipes', 0xCA14EBFE, (128, 128, 128)),            # G_WATER_PIPES_COUNT
+        (0x5C4DE175, 'Distressed Pipes', 0xCA14EC19, (255, 140, 0)),         # G_WATER_PIPES_COUNT_DISTRESSED
+        (0x5C4DE176, 'Burst Pipes', 0x5C4DE061, (140, 60, 90)),
+        (0x5C4DE177, 'Water Sources', 0x5C4DE062, (0, 160, 150)),
+        (0x5C4DE178, 'Polluted Sources', 0x5C4DE063, (150, 95, 40)),
+    ]),
 }
 P_NAME, P_TITLE, P_BUTTON_CELL = 0x00000020, 0x8A416A99, 0x5C4DE350
 T_STRING = 0x0C

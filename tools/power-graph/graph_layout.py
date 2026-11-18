@@ -27,5 +27,6 @@ LAYOUT = {
     0x08: (2, 4),   # Air Pollution
     0x09: (2, 5),   # Water Pollution
     0x1A: (2, 6),   # Power Grid (SC4SIM graph, button added by the DLL)
-    0x19: (2, 7),   # Garbage Pollution (SC4SIM graph, button added by the DLL)
+    0x1B: (2, 7),   # Water Grid (SC4SIM graph, button added by the DLL)
+    0x19: (2, 8),   # Garbage Pollution (SC4SIM graph, button added by the DLL)
 }
