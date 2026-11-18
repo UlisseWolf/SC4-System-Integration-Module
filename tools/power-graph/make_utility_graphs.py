@@ -86,6 +86,22 @@ GRAPHS = {POWER_GRAPH: POWER_PLOTS, WATER_GRAPH: WATER_PLOTS, GARBAGE_GRAPH: GAR
 NEW_GRAPHS = {
     0x19: (0x09, 'Garbage Pollution', 0x5C4DE140, 'Garbage Pollution', LAYOUT[0x19],
            [(0xFF5D2EA7, None, 0xEA110134, (255, 0, 210))]),      # CAM label "Garbage Pollution"; G_TOTAL_GARBAGE_POLLUTION
+    # Power grid: demand and unused power (game), production by load class (SC4SIM.dll, from NEON when installed),
+    # NEON's load balance and free grid capacities (SC4SIM.dll, only with NEON). See docs/power-grid-graph.md.
+    0x1A: (0x09, 'Power Grid', 0x5C4DE160, 'Power Grid', LAYOUT[0x1A], [
+        (0x5C4DE150, 'Power Demand', 0xAA11F7D5, (83, 101, 153)),          # G_POWER_DEMANDED
+        (0x5C4DE151, 'Unused Power', 0xAA11F7D8, (128, 128, 128)),         # G_POWER_UNUSED
+        (0x5C4DE152, 'Base Load', 0x5C4DE041, (150, 95, 40)),
+        (0x5C4DE153, 'Intermediate Load', 0x5C4DE042, (60, 150, 40)),
+        (0x5C4DE154, 'Peak Load', 0x5C4DE043, (255, 140, 0)),
+        (0x5C4DE155, 'Base Used (NEON)', 0x5C4DE044, (200, 120, 70)),
+        (0x5C4DE156, 'Intermediate Used (NEON)', 0x5C4DE045, (120, 210, 90)),
+        (0x5C4DE157, 'Peak Used (NEON)', 0x5C4DE046, (255, 200, 60)),
+        (0x5C4DE158, 'Peak Shortage (NEON)', 0x5C4DE047, (220, 11, 11)),
+        (0x5C4DE159, 'Transmission Free kVA (NEON)', 0x5C4DE048, (170, 60, 255)),
+        (0x5C4DE15A, 'Distribution Free kVA (NEON)', 0x5C4DE049, (40, 110, 255)),
+        (0x5C4DE15B, 'Transformer Free kVA (NEON)', 0x5C4DE04A, (0, 160, 150)),
+    ]),
 }
 P_NAME, P_TITLE, P_BUTTON_CELL = 0x00000020, 0x8A416A99, 0x5C4DE350
 T_STRING = 0x0C
@@ -174,6 +190,7 @@ def main(exemplars, locale, out_dir):
     raw, entries = dbpf2.read(locale)
     labels = {p[0]: p[1] for plots in GRAPHS.values() for p in plots if p[1]}
     labels.update({title: text for _, _, title, text, _, _ in NEW_GRAPHS.values()})
+    labels.update({p[0]: p[1] for *_, plots in NEW_GRAPHS.values() for p in plots if p[1]})
     for e in entries:
         if e['t'] == LTEXT and e['g'] == LTEXT_GROUP and e['i'] in TRIM_LABELS:
             text = e['data'][4:].decode('utf-16-le').rstrip('\r\n ')

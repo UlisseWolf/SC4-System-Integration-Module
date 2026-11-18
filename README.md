@@ -50,6 +50,7 @@ such as NEON.
 | Power graph by energy class | 1.13.0 | The Power graph shows the energy bought and sold and the production of each energy class (coal, oil, natural gas, nuclear fission, nuclear fusion, solar, wind, geothermal, hydroelectric, tidal, microwave, biomass, generators, waste to energy), recorded monthly in the city history. See `docs/power-graph.md`. *Not yet tested in game.* |
 | Water graph by source and wastewater | 1.13.0 | The Water graph shows the water bought and sold, the water from aquifers, fresh water and salt water, the wastewater produced, treated by treatment plants and recycled by sewage plants, recorded monthly in the city history. See `docs/water-graph.md`. *Not yet tested in game.* |
 | Graph buttons | 1.13.0 | The Graphs window gets a button for every graph exemplar (instances up to 0xFF), added when a city opens; a new graph is just a new exemplar. Example included: Garbage Pollution. See `docs/graph-window.md`. *Not yet tested in game.* |
+| Power Grid graph | 1.13.0 | New graph: power demand, unused power and production by load class (base, intermediate, peak); with the NEON mod installed, also NEON's load balance, peak shortage and free grid capacities, read automatically from its Lua. See `docs/power-grid-graph.md`. *Not yet tested in game.* |
 
 ## Requirements
 

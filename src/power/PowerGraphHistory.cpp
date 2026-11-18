@@ -19,6 +19,14 @@
 //
 // Class of a plant: ExtendedPowerType (0x713C8912, New_Properties.xml / AMPS), else Power Plant Type (0x27812853).
 //
+// Power Grid graph: the same month also records production by load class, grouped as NEON does (run_grid_balance_
+// variables, NEON.lua): base = coal, nuclear fission and fusion, geothermal, hydroelectric, biomass, waste to energy;
+// intermediate = solar, wind, tidal; peak = oil, natural gas, microwave, generators. When NEON is installed (the
+// advisor Lua has run_grid_balance_variables and grid_logic_var), the module calls run_grid_balance_variables() and
+// takes the three productions from NEON (GEN_B/I/P_POWER), then records NEON's load balance (USED_B/I/P_POWER,
+// SHORT_P_POWER) and free grid capacities in kVA (TRANSMIT/DISTRIB/TRANSFORM_AVAILABLE, never below 0). Without NEON
+// those seven lines are not recorded.
+//
 ////////////////////////////////////////////////////////////////////////////
 
 #include "PowerGraphHistory.h"
@@ -27,6 +35,8 @@
 #include <limits> // before cISC4PowerSimulator.h: its ilist allocator uses std::numeric_limits
 
 #include "cIGZMessage2Standard.h"
+#include "cISC4AdvisorSystem.h"
+#include "cISCLua.h"
 #include "cIGZVariant.h"
 #include "cISC4App.h"
 #include "cISC4City.h"
@@ -91,6 +101,89 @@ namespace
 	} };
 
 	bool enabled = true;
+
+	enum LoadClass : size_t { BaseLoad, IntermediateLoad, PeakLoad };
+
+	constexpr std::array<LoadClass, ClassCount> kLoadOfClass = {
+		BaseLoad,          // coal
+		PeakLoad,          // oil
+		PeakLoad,          // natural gas
+		BaseLoad,          // nuclear fission
+		BaseLoad,          // nuclear fusion
+		IntermediateLoad,  // solar
+		IntermediateLoad,  // wind
+		BaseLoad,          // geothermal
+		BaseLoad,          // hydroelectric
+		IntermediateLoad,  // tidal
+		PeakLoad,          // microwave
+		BaseLoad,          // biomass
+		PeakLoad,          // generators
+		BaseLoad,          // waste to energy
+	};
+
+	int32_t ClampHistory(double value)
+	{
+		if (!(value > 0.0)) return 0;
+		return value >= 2147483647.0 ? 0x7FFFFFFF : static_cast<int32_t>(value + 0.5);
+	}
+
+	struct NeonGrid
+	{
+		double baseProduced = 0, intermediateProduced = 0, peakProduced = 0;
+		double baseUsed = 0, intermediateUsed = 0, peakUsed = 0, peakShortage = 0;
+		double transmissionFree = 0, distributionFree = 0, transformerFree = 0;
+	};
+
+	double ReadField(cISCLua* lua, const char* name)
+	{
+		lua->PushString(name);
+		lua->GetTable(-2);
+		const double value = lua->IsNumber(-1) ? lua->ToNumber(-1) : 0.0;
+		lua->Pop(1);
+		return value;
+	}
+
+	// NEON (SC4 Next-gen Energy Operating System) in the advisor Lua: run its grid balance and read grid_logic_var.
+	bool ReadNeon(cISC4City* city, NeonGrid& out)
+	{
+		cISC4AdvisorSystem* const advisors = city->GetAdvisorSystem();
+		cISCLua* const lua = advisors ? advisors->GetScriptingContext() : nullptr;
+		if (!lua) return false;
+		const int32_t top = lua->GetTop();
+
+		lua->GetGlobal("run_grid_balance_variables");
+		if (!lua->IsFunction(-1))
+		{
+			lua->SetTop(top);
+			return false;
+		}
+		if (lua->CallProtected(0, 0) != 0)
+		{
+			const char* const error = lua->IsString(-1) ? lua->ToString(-1) : "?";
+			SimLog::Write(SimLog::Level::Warning, "PowerGraph: NEON run_grid_balance_variables failed: %s", error);
+			lua->SetTop(top);
+			return false;
+		}
+
+		lua->GetGlobal("grid_logic_var");
+		if (!lua->IsTable(-1))
+		{
+			lua->SetTop(top);
+			return false;
+		}
+		out.baseProduced = ReadField(lua, "GEN_B_POWER");
+		out.intermediateProduced = ReadField(lua, "GEN_I_POWER");
+		out.peakProduced = ReadField(lua, "GEN_P_POWER");
+		out.baseUsed = ReadField(lua, "USED_B_POWER");
+		out.intermediateUsed = ReadField(lua, "USED_I_POWER");
+		out.peakUsed = ReadField(lua, "USED_P_POWER");
+		out.peakShortage = ReadField(lua, "SHORT_P_POWER");
+		out.transmissionFree = ReadField(lua, "TRANSMIT_AVAILABLE");
+		out.distributionFree = ReadField(lua, "DISTRIB_AVAILABLE");
+		out.transformerFree = ReadField(lua, "TRANSFORM_AVAILABLE");
+		lua->SetTop(top);
+		return true;
+	}
 
 	// First Uint32 of a property, single value or array.
 	bool ReadFirstUint32(cISCPropertyHolder* holder, uint32_t id, uint32_t& value)
@@ -216,6 +309,37 @@ namespace
 			const int32_t value = totals[i] > 0x7FFFFFFFull ? 0x7FFFFFFF : static_cast<int32_t>(totals[i]);
 			history->RecordHistoryData(kClasses[i].historyType, value);
 		}
+
+		// Power Grid graph.
+		std::array<uint64_t, 3> loads{};
+		for (size_t i = 0; i < kClasses.size(); ++i) loads[kLoadOfClass[i]] += totals[i];
+		NeonGrid neon;
+		const bool hasNeon = ReadNeon(city, neon);
+		if (hasNeon)
+		{
+			history->RecordHistoryData(PowerGraphHistory::kHistoryBaseLoad, ClampHistory(neon.baseProduced));
+			history->RecordHistoryData(PowerGraphHistory::kHistoryIntermediateLoad, ClampHistory(neon.intermediateProduced));
+			history->RecordHistoryData(PowerGraphHistory::kHistoryPeakLoad, ClampHistory(neon.peakProduced));
+			history->RecordHistoryData(PowerGraphHistory::kHistoryNeonBaseUsed, ClampHistory(neon.baseUsed));
+			history->RecordHistoryData(PowerGraphHistory::kHistoryNeonIntermediateUsed, ClampHistory(neon.intermediateUsed));
+			history->RecordHistoryData(PowerGraphHistory::kHistoryNeonPeakUsed, ClampHistory(neon.peakUsed));
+			history->RecordHistoryData(PowerGraphHistory::kHistoryNeonPeakShortage, ClampHistory(neon.peakShortage));
+			history->RecordHistoryData(PowerGraphHistory::kHistoryNeonTransmissionFree, ClampHistory(neon.transmissionFree));
+			history->RecordHistoryData(PowerGraphHistory::kHistoryNeonDistributionFree, ClampHistory(neon.distributionFree));
+			history->RecordHistoryData(PowerGraphHistory::kHistoryNeonTransformerFree, ClampHistory(neon.transformerFree));
+		}
+		else
+		{
+			history->RecordHistoryData(PowerGraphHistory::kHistoryBaseLoad, ClampHistory(static_cast<double>(loads[BaseLoad])));
+			history->RecordHistoryData(PowerGraphHistory::kHistoryIntermediateLoad,
+				ClampHistory(static_cast<double>(loads[IntermediateLoad])));
+			history->RecordHistoryData(PowerGraphHistory::kHistoryPeakLoad, ClampHistory(static_cast<double>(loads[PeakLoad])));
+		}
+		SimLog::Write(SimLog::Level::Debug, "PowerGraph: grid %s; base %.0f, intermediate %.0f, peak %.0f.",
+			hasNeon ? "from NEON" : "from the plants",
+			hasNeon ? neon.baseProduced : static_cast<double>(loads[BaseLoad]),
+			hasNeon ? neon.intermediateProduced : static_cast<double>(loads[IntermediateLoad]),
+			hasNeon ? neon.peakProduced : static_cast<double>(loads[PeakLoad]));
 
 		SimLog::Write(SimLog::Level::Debug,
 			"PowerGraph: %u plants; coal %llu, oil %llu, gas %llu, fission %llu, fusion %llu, solar %llu, wind %llu, "

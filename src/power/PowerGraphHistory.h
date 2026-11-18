@@ -27,4 +27,18 @@ namespace PowerGraphHistory
 	inline constexpr uint32_t kHistoryBiomass = 0x5C4DE00C;
 	inline constexpr uint32_t kHistoryElectricGenerator = 0x5C4DE00D;
 	inline constexpr uint32_t kHistoryWasteToEnergy = 0x5C4DE00E;
+
+	// Power Grid graph (0x6534284A / 0xCA4AD545 / 0x0000001A): production by load class, always recorded (from NEON's
+	// grid_logic_var when NEON is installed, else from the plants), and NEON's load balance and grid capacities, recorded
+	// only when NEON (run_grid_balance_variables / grid_logic_var in the advisor Lua) is installed.
+	inline constexpr uint32_t kHistoryBaseLoad = 0x5C4DE041;
+	inline constexpr uint32_t kHistoryIntermediateLoad = 0x5C4DE042;
+	inline constexpr uint32_t kHistoryPeakLoad = 0x5C4DE043;
+	inline constexpr uint32_t kHistoryNeonBaseUsed = 0x5C4DE044;
+	inline constexpr uint32_t kHistoryNeonIntermediateUsed = 0x5C4DE045;
+	inline constexpr uint32_t kHistoryNeonPeakUsed = 0x5C4DE046;
+	inline constexpr uint32_t kHistoryNeonPeakShortage = 0x5C4DE047;
+	inline constexpr uint32_t kHistoryNeonTransmissionFree = 0x5C4DE048;   // kVA
+	inline constexpr uint32_t kHistoryNeonDistributionFree = 0x5C4DE049;   // kVA
+	inline constexpr uint32_t kHistoryNeonTransformerFree = 0x5C4DE04A;    // kVA
 }
