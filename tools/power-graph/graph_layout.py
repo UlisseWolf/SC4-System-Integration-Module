@@ -17,11 +17,14 @@ LAYOUT = {
     0x12: (0, 8),   # Education by Age
     # government, economy, transport
     0x01: (1, 0),   # Mayor Rating
-    0x02: (1, 1),   # Funds
-    0x03: (1, 2),   # City Income/Expenses
-    0x04: (1, 3),   # Res. Avg. Income
-    0x0B: (1, 4),   # Commute Time
-    0x18: (1, 5),   # Traffic Volume
+    0x02: (1, 1),   # Funds (with loans)
+    0x03: (1, 2),   # City Income/Expenses (with tax income, neighbour deals, loan payments)
+    0x21: (1, 3),   # Tax Rates (SC4SIM graph, button added by the DLL)
+    0x04: (1, 4),   # Res. Avg. Income
+    0x0B: (1, 5),   # Commute Time
+    0x22: (1, 6),   # Mass Transit (SC4SIM graph, button added by the DLL)
+    0x18: (1, 7),   # Traffic Volume
+    0x23: (1, 8),   # Traffic Congestion (SC4SIM graph, button added by the DLL)
     # services and environment
     0x0C: (2, 0),   # Crime (crimes, arrests, unsolved crimes, criminals, inmates)
     0x1C: (2, 1),   # Police & Jails (SC4SIM graph, button added by the DLL)

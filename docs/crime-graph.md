@@ -72,7 +72,8 @@ CAM's Lua (police panel and advisor constants) was checked against the graphs:
   not plotted: a different scale.
 - **graph_window_types** (advisor constants, Lua `0xFF048A3E`): `game.window_graph(graph_window_types.X)` opens a
   graph from advisor messages and scripts. `WATER_POLLUTION` (0x09) would open a graph without a button, so it now
-  points to Pollution (0x08); `POLLUTION`, `POLICE_JAILS` (0x1C), `FIRE_PROTECTION` (0x1D), `HEALTH` (0x1E), `POPULATION_RCI` (0x1F), `DEMAND_FORECAST` (0x20), `POWER_GRID` (0x1A) and
+  points to Pollution (0x08); `POLLUTION`, `POLICE_JAILS` (0x1C), `FIRE_PROTECTION` (0x1D), `HEALTH` (0x1E), `POPULATION_RCI` (0x1F), `DEMAND_FORECAST` (0x20), `TAX_RATES` (0x21), `MASS_TRANSIT` (0x22), `TRAFFIC_CONGESTION` (0x23),
+  `POWER_GRID` (0x1A) and
   `WATER_GRID` (0x1B) are added for scripts. No message of the game or of CAM links to the pollution or crime graphs today
   (SimCityLocale.DAT links Power, Funds, Life Expectancy, Water, EQ and Garbage). Patch:
   `tools/power-graph/patch_graph_window_types.py`.

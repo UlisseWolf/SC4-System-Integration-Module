@@ -8,7 +8,8 @@
 #  - Crime (0x0C): crimes and arrests with unsolved crimes, criminals and inmates; Police & Jails (0x1C), new;
 #  - Fire Protection (0x1D), new: coverage, protection, flammability, fire outbreaks, fire stations;
 #  - Population R/C/I (0x1F) and Demand Forecast (0x20), new;
-#  - Jobs & Pop. (0x11), Life Expectancy (0x05) and Education (0x0D): plots added (EXTEND);
+#  - Jobs & Pop. (0x11), Life Expectancy (0x05), Education (0x0D), Funds (0x02), City Income/Expenses (0x03): plots
+#    added (EXTEND); Tax Rates (0x21), Mass Transit (0x22), Traffic Congestion (0x23), new;
 #  - Health (0x1E), new: coverage, average health, health grade, hospital occupancy, hospitals, clinics;
 #  - Power Grid (0x1A) and Water Grid (0x1B), new: buttons added by SC4SIM.dll (docs/graph-window.md).
 #   python make_utility_graphs.py <CAM_Exemplar_Graphs.dat> <CAM_Locale_en.dat> <out_dir>
@@ -150,6 +151,42 @@ NEW_GRAPHS = {
         (0x5C4DE1E3, 'Industrial Forecast', 0x5C4DE0E4, (220, 180, 0)),
         (0x5C4DE1E4, 'Workforce Demand', 0x5C4DE0E5, (170, 60, 255)),
     ]),
+    # Tax Rates: the 12 tax rates (SC4SIM.dll, recorded x 10 and drawn at scale 0.1, see SCALE), with the labels and
+    # colours of the Maxis Jobs & Pop. groups. Mass Transit: station utilization of every transit type. Traffic
+    # Congestion: average congestion of every network (below 100 = no congestion) and potholes. See
+    # docs/economy-transport-graphs.md.
+    0x21: (0x04, 'Tax Rates', 0x5C4DE210, 'Tax Rates %', LAYOUT[0x21], [
+        (0x0A8713B2, None, 0x5C4DE111, (4, 255, 98)),
+        (0xCA8713B6, None, 0x5C4DE112, (2, 207, 79)),
+        (0xEA8713B9, None, 0x5C4DE113, (0, 126, 47)),
+        (0xEA871396, None, 0x5C4DE114, (0, 126, 255)),
+        (0x4A8713A4, None, 0x5C4DE115, (1, 93, 188)),
+        (0x2A8713A7, None, 0x5C4DE116, (4, 1, 128)),
+        (0x0A8713AB, None, 0x5C4DE117, (0, 234, 255)),
+        (0x0A8713AF, None, 0x5C4DE118, (3, 182, 198)),
+        (0x2A8713BD, None, 0x5C4DE119, (219, 219, 15)),
+        (0x0A8713C1, None, 0x5C4DE11A, (180, 180, 46)),
+        (0xCA8713C5, None, 0x5C4DE11B, (129, 129, 43)),
+        (0xCA8713C8, None, 0x5C4DE11C, (103, 103, 22)),
+    ]),
+    0x22: (0x0C, 'Mass Transit', 0x5C4DE220, 'Mass Transit', LAYOUT[0x22], [
+        (0x5C4DE221, 'Bus Station Use %', 0x5C4DE121, (210, 26, 35)),
+        (0x5C4DE222, 'Train Station Use %', 0x5C4DE122, (51, 102, 246)),
+        (0x5C4DE223, 'Subway Station Use %', 0x5C4DE123, (216, 205, 35)),
+        (0x5C4DE224, 'El Train Station Use %', 0x5C4DE124, (0, 170, 0)),
+        (0x5C4DE225, 'Monorail Station Use %', 0x5C4DE125, (93, 130, 185)),
+    ]),
+    0x23: (0x0C, 'Traffic Congestion', 0x5C4DE230, 'Traffic Congestion', LAYOUT[0x23], [
+        (0x5C4DE231, 'Roads', 0x5C4DE131, (12, 210, 26)),
+        (0x5C4DE232, 'Streets', 0x5C4DE132, (128, 128, 128)),
+        (0x5C4DE233, 'Avenues', 0x5C4DE133, (0, 0, 0)),
+        (0x5C4DE234, 'Bridges', 0x5C4DE134, (150, 95, 40)),
+        (0x5C4DE235, 'Rail', 0x5C4DE135, (51, 102, 246)),
+        (0x5C4DE236, 'Subway', 0x5C4DE136, (216, 205, 35)),
+        (0x5C4DE237, 'El Train', 0x5C4DE137, (0, 170, 0)),
+        (0x5C4DE238, 'Monorail', 0x5C4DE138, (93, 130, 185)),
+        (0x5C4DE239, 'Potholes', 0x5C4DE139, (220, 11, 11)),
+    ]),
     # Power grid: demand and unused power (game), production by load class (SC4SIM.dll, from NEON when installed),
     # NEON's load balance and free grid capacities (SC4SIM.dll, only with NEON). See docs/power-grid-graph.md.
     0x1A: (0x09, 'Power Grid', 0x5C4DE160, 'Power Grid', LAYOUT[0x1A], [
@@ -194,6 +231,18 @@ EXTEND = {
         (0x5C4DE1C7, 'Highest Neighborhood', 0x5C4DE0C7, (0, 170, 0)),
         (0x5C4DE1C8, 'Lowest Neighborhood', 0x5C4DE0C8, (220, 11, 11)),
     ],
+    # Funds (in thousands): loans outstanding and borrowing limit (SC4SIM.dll, in thousands too).
+    0x02: [
+        (0x5C4DE201, 'Loans Outstanding', 0x5C4DE101, (220, 11, 11)),
+        (0x5C4DE202, 'Borrowing Limit', 0x5C4DE102, (128, 128, 128)),
+    ],
+    # City Income/Expenses: tax income, neighbour deals income and expense, loan payments (SC4SIM.dll).
+    0x03: [
+        (0x5C4DE203, 'Tax Income', 0x5C4DE103, (0, 120, 0)),
+        (0x5C4DE204, 'Neighbor Deals Income', 0x5C4DE104, (40, 110, 255)),
+        (0x5C4DE205, 'Neighbor Deals Expense', 0x5C4DE105, (255, 140, 0)),
+        (0x5C4DE206, 'Loan Payments', 0x5C4DE106, (140, 60, 90)),
+    ],
     # Education (EQ, fixed 0-200 scale): coverage, grades and best / worst neighbourhood EQ (SC4SIM.dll).
     0x0D: [
         (0x5C4DE1F3, 'Education Coverage %', 0x5C4DE0F1, (40, 110, 255)),
@@ -204,6 +253,8 @@ EXTEND = {
         (0x5C4DE1F8, 'Lowest Neighborhood EQ', 0x5C4DE0F6, (220, 11, 11)),
     ],
 }
+# Graph Plot scale of every plot of a new graph (the template must have the property, as Res. Avg. Income has).
+SCALE = {0x21: 0.1}
 P_NAME, P_TITLE, P_BUTTON_CELL, P_BUTTON_HIDDEN = 0x00000020, 0x8A416A99, 0x5C4DE350, 0x5C4DE351
 T_STRING = 0x0C
 
@@ -211,8 +262,8 @@ def string_prop(pid, text):
     data = text.encode('latin1')
     return struct.pack('<IHHBI', pid, T_STRING << 8, 0x80, 0, len(data)) + data
 
-def new_graph(template, name, title_instance, cell, plots):
-    header, props = records(build_graph(template, plots))
+def new_graph(template, name, title_instance, cell, plots, scale=1.0):
+    header, props = records(build_graph(template, plots, scale))
     replace = {P_NAME: string_prop(P_NAME, name),
                P_TITLE: array(P_TITLE, T_UINT32, 'I', [LTEXT, LTEXT_GROUP, title_instance])}
     out = [replace.get(pid, raw) for pid, raw in props if pid != P_BUTTON_CELL]
@@ -255,7 +306,7 @@ def records(data):
 def array(pid, typ, fmt, values):
     return struct.pack('<IHHBI', pid, typ << 8, 0x80, 0, len(values)) + struct.pack('<%d%s' % (len(values), fmt), *values)
 
-def build_graph(data, plots):
+def build_graph(data, plots, scale=1.0):
     header, props = records(data)
     new = {
         P_SOURCE1: array(P_SOURCE1, T_UINT32, 'I', [p[2] for p in plots]),
@@ -266,7 +317,9 @@ def build_graph(data, plots):
     # consumed + sold. Graph Plot scale, where present (Garbage), becomes 1.0 for every plot.
     ids = [pid for pid, _ in props]
     if P_SCALE in ids:
-        new[P_SCALE] = array(P_SCALE, T_FLOAT32, 'f', [1.0] * len(plots))
+        new[P_SCALE] = array(P_SCALE, T_FLOAT32, 'f', [scale] * len(plots))
+    else:
+        assert scale == 1.0, 'template without Graph Plot scale'
     out = [new.get(pid, raw) for pid, raw in props]
     return header + struct.pack('<I', len(out)) + b''.join(out)
 
@@ -318,7 +371,7 @@ def main(exemplars, locale, out_dir):
     assert set(EXTEND) <= done, 'graph exemplar missing'
     by_instance = {e['i']: e for e in entries if e['t'] == EXEMPLAR and e['g'] == GRAPH_GROUP}
     for instance, (template, name, title, _, cell, plots) in NEW_GRAPHS.items():
-        data = new_graph(by_instance[template]['data'], name, title, cell, plots)
+        data = new_graph(by_instance[template]['data'], name, title, cell, plots, SCALE.get(instance, 1.0))
         if instance in by_instance:
             by_instance[instance]['data'] = data
         else:
