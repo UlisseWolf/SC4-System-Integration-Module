@@ -3,7 +3,7 @@
 > **Not yet tested in game.**
 
 The Power graph of the Graphs window (graph exemplar `0x6534284A / 0xCA4AD545 / 0x00000006`, in
-`a_CAM/1 CAM Core/CAM_Exemplars.dat`) shows 15 lines:
+`a_CAM/1 CAM Core/CAM_Exemplars.dat`) shows 18 lines:
 
 | # | Line | History type | Recorded by |
 |---|---|---|---|
@@ -22,10 +22,13 @@ The Power graph of the Graphs window (graph exemplar `0x6534284A / 0xCA4AD545 / 
 | 13 | Hydroelectric | `0x5C4DE009` | SC4SIM.dll |
 | 14 | Tidal | `0x5C4DE00A` | SC4SIM.dll |
 | 15 | Microwave | `0x5C4DE00B` | SC4SIM.dll |
+| 16 | Biomass | `0x5C4DE00C` | SC4SIM.dll |
+| 17 | Generators | `0x5C4DE00D` | SC4SIM.dll |
+| 18 | Waste to Energy | `0x5C4DE00E` | SC4SIM.dll |
 
 Lines 1-4 are the CAM graph as it was; lines 3 and 4 now have their own labels (`0x5C4DE10C` "Energy Bought",
 `0x5C4DE10D` "Energy Sold") instead of the "Imported" label shared with the Water graph and a missing one. The labels
-are LTEXT `0x2026960B / 0x6A231EAA / 0x5C4DE101-0x5C4DE10D` in `CAM Locale/CAM_Locale_en.dat`.
+are LTEXT `0x2026960B / 0x6A231EAA / 0x5C4DE101-0x5C4DE110` in `CAM Locale/CAM_Locale_en.dat`.
 
 ## How the lines are recorded
 
@@ -49,11 +52,11 @@ slot 33, `0x006EB420`: Power Generated × the plant's efficiency). Power plants 
 1. **ExtendedPowerType** (`0x713C8912`, New_Properties.xml, set by the PIM-X generators):
    Coal `0xB0C1D6F9`, Oil `0x45DEA4F8`, Natural Gas `0x5D4CE371`, Nuclear Fission `0xD8B65889`,
    Nuclear Fusion `0xF5DAF839`, Solar `0xA934E93E`, Wind `0x9E43F5C9`, Geothermal `0xA4FFC9DA`,
-   Hydroelectric `0x0A8B2E1C`, Tidal and Wave `0x951653B7`, Microwave `0x03D5C8FD`. Biomass, Waste To Energy,
-   Electric Generator, Power Storage and the transformers are not plotted.
+   Hydroelectric `0x0A8B2E1C`, Tidal and Wave `0x951653B7`, Microwave `0x03D5C8FD`, Biomass `0x9BE9788B`,
+   Electric Generator `0xEA9F7384`, Waste To Energy `0xC291E217`. Power Storage and the transformers are not plotted.
 2. Without it, **Power Plant Type** (`0x27812853`): 1 Coal, 2 Hydrogen (= Nuclear Fusion, the Maxis fusion plant),
-   3 Natural Gas, 4 Microwave, 5 Nuclear Fission, 6 Oil, 7 Solar, 9 Wind. 8 (Waste To Energy) and 10 (Auxiliary) are
-   not plotted.
+   3 Natural Gas, 4 Microwave, 5 Nuclear Fission, 6 Oil, 7 Solar, 8 Waste to Energy, 9 Wind. 10 (Auxiliary) is not
+   plotted. Biomass plants (type 6) and generators (type 3) without ExtendedPowerType count as oil and natural gas.
 
 ## Notes
 
@@ -66,4 +69,4 @@ slot 33, `0x006EB420`: Power Generated × the plant's efficiency). Power plants 
 ## Data files
 
 `tools/power-graph/make_power_graph.py <CAM_Exemplars.dat> <CAM_Locale_en.dat> <out_dir>` rebuilds the graph
-exemplar (every other entry and property unchanged) and adds the 13 labels.
+exemplar (every other entry and property unchanged) and adds the 16 labels.

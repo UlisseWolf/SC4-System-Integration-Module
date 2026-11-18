@@ -1,7 +1,7 @@
 # Adds bought / sold energy and the production of each energy class to the Power graph of CAM.
 #   python make_power_graph.py <CAM_Exemplars.dat> <CAM_Locale_en.dat> <out_dir>
 # Writes <out_dir>/CAM_Exemplars.dat (graph exemplar 0x6534284A / 0xCA4AD545 / 0x00000006 rebuilt, every other entry
-# unchanged) and <out_dir>/CAM_Locale_en.dat (the 13 plot labels added, LTEXT group 0x6A231EAA). The class lines read
+# unchanged) and <out_dir>/CAM_Locale_en.dat (the 16 plot labels added, LTEXT group 0x6A231EAA). The class lines read
 # the history types SC4SIM.dll 1.13+ records every month (src/power/PowerGraphHistory.h). See docs/power-graph.md.
 import os, struct, sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -33,6 +33,9 @@ PLOTS = [
     (0x5C4DE109, 'Hydroelectric', 0x5C4DE009, (40, 110, 255)),
     (0x5C4DE10A, 'Tidal', 0x5C4DE00A, (0, 160, 150)),
     (0x5C4DE10B, 'Microwave', 0x5C4DE00B, (120, 200, 255)),
+    (0x5C4DE10E, 'Biomass', 0x5C4DE00C, (60, 150, 40)),
+    (0x5C4DE10F, 'Generators', 0x5C4DE00D, (230, 230, 230)),
+    (0x5C4DE110, 'Waste to Energy', 0x5C4DE00E, (140, 60, 90)),
 ]
 
 def records(data):

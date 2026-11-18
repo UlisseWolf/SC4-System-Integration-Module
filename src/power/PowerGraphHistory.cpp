@@ -62,6 +62,7 @@ namespace
 	enum EnergyClass : size_t
 	{
 		Coal, Oil, NaturalGas, NuclearFission, NuclearFusion, Solar, Wind, Geothermal, Hydroelectric, Tidal, Microwave,
+		Biomass, ElectricGenerator, WasteToEnergy,
 		ClassCount, None = ClassCount
 	};
 
@@ -84,6 +85,9 @@ namespace
 		{ "hydroelectric", PowerGraphHistory::kHistoryHydroelectric, 0x0A8B2E1C },
 		{ "tidal", PowerGraphHistory::kHistoryTidal, 0x951653B7 },
 		{ "microwave", PowerGraphHistory::kHistoryMicrowave, 0x03D5C8FD },
+		{ "biomass", PowerGraphHistory::kHistoryBiomass, 0x9BE9788B },
+		{ "electric generator", PowerGraphHistory::kHistoryElectricGenerator, 0xEA9F7384 },
+		{ "waste to energy", PowerGraphHistory::kHistoryWasteToEnergy, 0xC291E217 },
 	} };
 
 	bool enabled = true;
@@ -116,7 +120,7 @@ namespace
 			{
 				if (kClasses[i].extendedPowerType == extended) return static_cast<EnergyClass>(i);
 			}
-			return None; // biomass, waste to energy, generators, storage, transformers: not plotted
+			return None; // power storage, transformers: not plotted
 		}
 
 		uint32_t type = 0;
@@ -130,8 +134,9 @@ namespace
 		case 5: return NuclearFission;
 		case 6: return Oil;
 		case 7: return Solar;
+		case 8: return WasteToEnergy;
 		case 9: return Wind;
-		default: return None;           // 8 waste to energy, 10 auxiliary
+		default: return None;           // 10 auxiliary
 		}
 	}
 
@@ -214,10 +219,11 @@ namespace
 
 		SimLog::Write(SimLog::Level::Debug,
 			"PowerGraph: %u plants; coal %llu, oil %llu, gas %llu, fission %llu, fusion %llu, solar %llu, wind %llu, "
-			"geothermal %llu, hydro %llu, tidal %llu, microwave %llu.",
+			"geothermal %llu, hydro %llu, tidal %llu, microwave %llu, biomass %llu, generators %llu, waste to energy %llu.",
 			static_cast<unsigned>(iteration.plants.size()), totals[Coal], totals[Oil], totals[NaturalGas],
 			totals[NuclearFission], totals[NuclearFusion], totals[Solar], totals[Wind], totals[Geothermal],
-			totals[Hydroelectric], totals[Tidal], totals[Microwave]);
+			totals[Hydroelectric], totals[Tidal], totals[Microwave], totals[Biomass], totals[ElectricGenerator],
+			totals[WasteToEnergy]);
 	}
 }
 
