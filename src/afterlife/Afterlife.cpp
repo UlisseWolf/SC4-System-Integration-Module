@@ -41,6 +41,7 @@
 #include "SCPropertyUtil.h"
 #include "cISC4AdvisorSystem.h"
 #include "cISC4City.h"
+#include "cISC4HistoryWarehouse.h"
 #include "cISC4ResidentialSimulator.h"
 #include "cISC4SimGrid.h"
 #include "cISCLua.h"
@@ -54,6 +55,7 @@
 #include <cwchar>
 #include <filesystem>
 #include <functional>
+#include <iterator>
 #include <map>
 #include <random>
 #include <string>
@@ -688,6 +690,25 @@ namespace
 		return deaths;
 	}
 
+	// The month's values in the city history, for the Afterlife graph: one point per series, in the order of
+	// Afterlife::kHistoryFirst.
+	void RecordHistory()
+	{
+		cISC4HistoryWarehouse* const history = currentCity ? currentCity->GetHistoryWarehouse() : nullptr;
+		if (!history) return;
+		const Deathcare::Totals& care = Deathcare::GetTotals();
+		const double values[] = {
+			state.totalDeathsThisCycle, state.prematureDeaths, state.impKillsThisCycle,
+			state.winnerCountThisCycle, state.sinnerCountThisCycle, state.redeemedThisCycle,
+			care.buried, care.cremated, care.uncollected,
+		};
+		for (size_t i = 0; i < std::size(values); i++)
+		{
+			const double v = std::isfinite(values[i]) && values[i] > 0 ? std::min(values[i], 2147483647.0) : 0.0;
+			history->RecordHistoryData(Afterlife::kHistoryFirst + static_cast<uint32_t>(i), static_cast<int32_t>(std::lround(v)));
+		}
+	}
+
 	// On the game's new-month message, the same message that starts the residential simulator's monthly cycle.
 	void RunMonthlyCycle()
 	{
@@ -711,6 +732,7 @@ namespace
 			Deathcare::RunMonth(grid, DeathsPerTract(grid, waves, waveTract));
 		}
 		MirrorState(lua);
+		RecordHistory();
 		if (resetTracts > 0)
 		{
 			SimLog::Write(SimLog::Level::Info, "Afterlife: %u tract reset(s) this month: %.0f wave death(s), %.0f premature.",

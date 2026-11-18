@@ -115,6 +115,32 @@ monthly cycle (before 1.9.3 the cycle ran when the news script first asked for i
 Cemeteries and crematoria collect the dead of each month by radius and capacity; uncollected dead lower the health
 of their tract. See [deathcare.md](deathcare.md).
 
+## Afterlife graph (1.13.0)
+
+> **Not yet tested in game.**
+
+After every monthly cycle the DLL also records the month in the city history (`RecordHistory` in `Afterlife.cpp`),
+and CAM's graph exemplar `0x6534284A / 0xCA4AD545 / 0x00000024` ("Afterlife", in `CAM_Exemplar_Graphs.dat`) plots
+it. Its button, under Health in the *population, health and education* column of the Graphs window, is added by the
+DLL (Graph Button Cell (0, 7), `docs/graph-window.md`).
+
+| Plot | History type | Value | Label |
+|---|---|---|---|
+| Deaths | `0x5C4DE141` | `TOTAL_DEATHS_THIS_CYCLE` | `0x5C4DE241` |
+| Premature Deaths | `0x5C4DE142` | `PREMATURE_DEATHS` | `0x5C4DE242` |
+| I.M.P. Kills | `0x5C4DE143` | `IMP_KILLS_THIS_CYCLE` | `0x5C4DE243` |
+| Winners (Heaven) | `0x5C4DE144` | `WINNER_COUNT_THIS_CYCLE` | `0x5C4DE244` |
+| Sinners (Hell) | `0x5C4DE145` | `SINNER_COUNT_THIS_CYCLE` | `0x5C4DE245` |
+| Redeemed | `0x5C4DE146` | `REDEEMED_THIS_CYCLE` | `0x5C4DE246` |
+| Buried | `0x5C4DE147` | `DEATHCARE_BURIED` (this month) | `0x5C4DE247` |
+| Cremated | `0x5C4DE148` | `DEATHCARE_CREMATED` (this month) | `0x5C4DE248` |
+| Uncollected Dead | `0x5C4DE149` | `DEATHCARE_UNCOLLECTED` (now) | `0x5C4DE249` |
+
+Title LTEXT `0x5C4DE240` "Afterlife". All values are monthly counts of the same size, so they share one scale; the
+cumulative populations (souls in Heaven and Hell, natives) are left to the church and cemetery queries, since they
+would flatten every other line. Without the DLL, with `[Afterlife] Enabled=false` or with deathcare off (the last
+three lines), the lines stay at 0. `game.window_graph(graph_window_types.AFTERLIFE)` opens the graph from Lua.
+
 ## Saved with the city (1.9.3)
 
 The game saves nothing about deaths. Since 1.11.1, when it saves a city the DLL writes the cumulative populations

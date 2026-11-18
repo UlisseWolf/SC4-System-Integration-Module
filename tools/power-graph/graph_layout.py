@@ -13,8 +13,9 @@ LAYOUT = {
     0x13: (0, 4),   # Population by Age
     0x05: (0, 5),   # Life Expectancy
     0x1E: (0, 6),   # Health (SC4SIM graph, button added by the DLL)
-    0x0D: (0, 7),   # Education
-    0x12: (0, 8),   # Education by Age
+    0x24: (0, 7),   # Afterlife (SC4SIM graph, button added by the DLL)
+    0x0D: (0, 8),   # Education
+    0x12: (0, 9),   # Education by Age
     # government, economy, transport
     0x01: (1, 0),   # Mayor Rating
     0x02: (1, 1),   # Funds (with loans)

@@ -35,7 +35,7 @@ background image 0x5C4DE200). Needs Pillow.
 SC4SIM.dll to add a button for every graph exemplar (`docs/graph-window.md`); `make_utility_graphs.py` writes the
 Pollution graph (0x08: air, water, garbage, radiation), the Crime (0x0C), Police & Jails (0x1C), Fire Protection (0x1D), Health (0x1E), Population R/C/I (0x1F) and Demand
 Forecast (0x20) graphs, the plots added to Jobs & Pop., Life Expectancy, Education, Funds and City Income/Expenses (EXTEND),
-the Tax Rates (0x21, scale 0.1: SCALE), Mass Transit (0x22) and Traffic Congestion (0x23) graphs, the Power
+the Tax Rates (0x21, scale 0.1: SCALE), Mass Transit (0x22), Traffic Congestion (0x23) and Afterlife (0x24) graphs, the Power
 Grid and Water Grid graphs, and Graph Button Hidden
 (0x5C4DE351) in the merged Water Pollution graph (0x09, `HIDDEN` in `graph_layout.py`).
 
@@ -44,4 +44,4 @@ writes it into every graph exemplar (Graph Button Cell 0x5C4DE350) and `make_gra
 of the UI the same way (removing those of hidden graphs).
 
 `patch_graph_window_types.py <CAM_LUA_Controller.dat> <out_dir>` points the advisors' `graph_window_types.WATER_POLLUTION`
-to the Pollution graph and adds `POLLUTION`, `POLICE_JAILS`, `FIRE_PROTECTION`, `HEALTH`, `POPULATION_RCI`, `DEMAND_FORECAST`, `TAX_RATES`, `MASS_TRANSIT`, `TRAFFIC_CONGESTION`, `POWER_GRID` and `WATER_GRID` (Lua 0xFF048A3E).
+to the Pollution graph and adds `POLLUTION`, `POLICE_JAILS`, `FIRE_PROTECTION`, `HEALTH`, `POPULATION_RCI`, `DEMAND_FORECAST`, `TAX_RATES`, `MASS_TRANSIT`, `TRAFFIC_CONGESTION`, `AFTERLIFE`, `POWER_GRID` and `WATER_GRID` (Lua 0xFF048A3E).

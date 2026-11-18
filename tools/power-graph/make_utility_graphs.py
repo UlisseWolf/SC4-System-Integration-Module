@@ -9,7 +9,7 @@
 #  - Fire Protection (0x1D), new: coverage, protection, flammability, fire outbreaks, fire stations;
 #  - Population R/C/I (0x1F) and Demand Forecast (0x20), new;
 #  - Jobs & Pop. (0x11), Life Expectancy (0x05), Education (0x0D), Funds (0x02), City Income/Expenses (0x03): plots
-#    added (EXTEND); Tax Rates (0x21), Mass Transit (0x22), Traffic Congestion (0x23), new;
+#    added (EXTEND); Tax Rates (0x21), Mass Transit (0x22), Traffic Congestion (0x23), Afterlife (0x24), new;
 #  - Health (0x1E), new: coverage, average health, health grade, hospital occupancy, hospitals, clinics;
 #  - Power Grid (0x1A) and Water Grid (0x1B), new: buttons added by SC4SIM.dll (docs/graph-window.md).
 #   python make_utility_graphs.py <CAM_Exemplar_Graphs.dat> <CAM_Locale_en.dat> <out_dir>
@@ -186,6 +186,19 @@ NEW_GRAPHS = {
         (0x5C4DE237, 'El Train', 0x5C4DE137, (0, 170, 0)),
         (0x5C4DE238, 'Monorail', 0x5C4DE138, (93, 130, 185)),
         (0x5C4DE239, 'Potholes', 0x5C4DE139, (220, 11, 11)),
+    ]),
+    # Afterlife: the monthly values of SC4SIM's Afterlife module and of its deathcare (all recorded by SC4SIM.dll after
+    # the monthly cycle; fictitious, cosmetic statistics unless deathcare effects are on). See docs/afterlife.md.
+    0x24: (0x0C, 'Afterlife', 0x5C4DE240, 'Afterlife', LAYOUT[0x24], [
+        (0x5C4DE241, 'Deaths', 0x5C4DE141, (0, 0, 0)),
+        (0x5C4DE242, 'Premature Deaths', 0x5C4DE142, (128, 128, 128)),
+        (0x5C4DE243, 'I.M.P. Kills', 0x5C4DE143, (220, 11, 11)),
+        (0x5C4DE244, 'Winners (Heaven)', 0x5C4DE144, (40, 170, 255)),
+        (0x5C4DE245, 'Sinners (Hell)', 0x5C4DE145, (170, 30, 30)),
+        (0x5C4DE246, 'Redeemed', 0x5C4DE146, (220, 180, 0)),
+        (0x5C4DE247, 'Buried', 0x5C4DE147, (0, 140, 0)),
+        (0x5C4DE248, 'Cremated', 0x5C4DE148, (255, 140, 0)),
+        (0x5C4DE249, 'Uncollected Dead', 0x5C4DE149, (170, 60, 255)),
     ]),
     # Power grid: demand and unused power (game), production by load class (SC4SIM.dll, from NEON when installed),
     # NEON's load balance and free grid capacities (SC4SIM.dll, only with NEON). See docs/power-grid-graph.md.
