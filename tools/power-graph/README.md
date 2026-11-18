@@ -34,7 +34,7 @@ background image 0x5C4DE200). Needs Pillow.
 `make_graph_ui.py` also writes the button template UI (0x5C4DE300) and the panel filler (0x5C4DE310) used by
 SC4SIM.dll to add a button for every graph exemplar (`docs/graph-window.md`); `make_utility_graphs.py` writes the
 Pollution graph (0x08: air, water, garbage, radiation), the Crime (0x0C), Police & Jails (0x1C), Fire Protection (0x1D), Health (0x1E), Population R/C/I (0x1F) and Demand
-Forecast (0x20) graphs, the Power
+Forecast (0x20) graphs, the plots added to Jobs & Pop., Life Expectancy and Education (EXTEND), the Power
 Grid and Water Grid graphs, and Graph Button Hidden
 (0x5C4DE351) in the merged Water Pollution graph (0x09, `HIDDEN` in `graph_layout.py`).
 

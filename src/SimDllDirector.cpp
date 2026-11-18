@@ -119,6 +119,7 @@
 #include "safety/FireGraphHistory.h"
 #include "safety/HealthGraphHistory.h"
 #include "population/PopulationGraphHistory.h"
+#include "population/EducationGraphHistory.h"
 #include "ui/GraphButtons.h"
 #include "version.h"
 
@@ -218,6 +219,7 @@ public:
 		FireGraphHistory::OnStart();
 		HealthGraphHistory::OnStart();
 		PopulationGraphHistory::OnStart();
+		EducationGraphHistory::OnStart();
 		GraphButtons::OnStart();
 		Afterlife::OnStart();
 		cIGZFrameWork* const framework = pCOM->FrameWork();
@@ -330,6 +332,7 @@ public:
 			FireGraphHistory::DoMessage(message);
 			HealthGraphHistory::DoMessage(message);
 			PopulationGraphHistory::DoMessage(message);
+			EducationGraphHistory::DoMessage(message);
 		}
 		else if (type == kMsgPostSave || type == kMsgLoad || type == kMsgSave)
 		{

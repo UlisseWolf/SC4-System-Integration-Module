@@ -8,6 +8,7 @@
 #  - Crime (0x0C): crimes and arrests with unsolved crimes, criminals and inmates; Police & Jails (0x1C), new;
 #  - Fire Protection (0x1D), new: coverage, protection, flammability, fire outbreaks, fire stations;
 #  - Population R/C/I (0x1F) and Demand Forecast (0x20), new;
+#  - Jobs & Pop. (0x11), Life Expectancy (0x05) and Education (0x0D): plots added (EXTEND);
 #  - Health (0x1E), new: coverage, average health, health grade, hospital occupancy, hospitals, clinics;
 #  - Power Grid (0x1A) and Water Grid (0x1B), new: buttons added by SC4SIM.dll (docs/graph-window.md).
 #   python make_utility_graphs.py <CAM_Exemplar_Graphs.dat> <CAM_Locale_en.dat> <out_dir>
@@ -179,6 +180,30 @@ NEW_GRAPHS = {
         (0x5C4DE178, 'Polluted Sources', 0x5C4DE063, (150, 95, 40)),
     ]),
 }
+# Maxis graphs that keep their plots and get more: instance -> plots appended (label instance, text or None for a label
+# already written, history type, RGB[, second history type added to the first]). See docs/population-graph.md.
+EXTEND = {
+    # Jobs & Pop.: total jobs (game: commercial + industrial jobs, Graph Data Source 2 with combine 1 = add) and the
+    # workforce (SC4SIM.dll), to compare jobs and workers.
+    0x11: [
+        (0x5C4DE1F1, 'Total Jobs (C + I)', 0x0A4E2056, (0, 0, 0), 0x4A4E206B),   # G_C_POPULATION + G_I_POPULATION
+        (0x5C4DE1D5, None, 0x5C4DE0E1, (170, 60, 255)),                         # "Workforce"
+    ],
+    # Life Expectancy: best and worst neighbourhood (SC4SIM.dll).
+    0x05: [
+        (0x5C4DE1C7, 'Highest Neighborhood', 0x5C4DE0C7, (0, 170, 0)),
+        (0x5C4DE1C8, 'Lowest Neighborhood', 0x5C4DE0C8, (220, 11, 11)),
+    ],
+    # Education (EQ, fixed 0-200 scale): coverage, grades and best / worst neighbourhood EQ (SC4SIM.dll).
+    0x0D: [
+        (0x5C4DE1F3, 'Education Coverage %', 0x5C4DE0F1, (40, 110, 255)),
+        (0x5C4DE1F4, 'School Grade %', 0x5C4DE0F2, (0, 170, 0)),
+        (0x5C4DE1F5, 'Library Grade %', 0x5C4DE0F3, (170, 60, 255)),
+        (0x5C4DE1F6, 'Museum Grade %', 0x5C4DE0F4, (255, 140, 0)),
+        (0x5C4DE1F7, 'Highest Neighborhood EQ', 0x5C4DE0F5, (93, 189, 152)),
+        (0x5C4DE1F8, 'Lowest Neighborhood EQ', 0x5C4DE0F6, (220, 11, 11)),
+    ],
+}
 P_NAME, P_TITLE, P_BUTTON_CELL, P_BUTTON_HIDDEN = 0x00000020, 0x8A416A99, 0x5C4DE350, 0x5C4DE351
 T_STRING = 0x0C
 
@@ -245,6 +270,37 @@ def build_graph(data, plots):
     out = [new.get(pid, raw) for pid, raw in props]
     return header + struct.pack('<I', len(out)) + b''.join(out)
 
+def read_array(raw):
+    pid, typ, kt = struct.unpack_from('<IHH', raw, 0)
+    fmt = {T_UINT8: 'B', T_UINT32: 'I', T_FLOAT32: 'f'}[typ >> 8]
+    if not kt & 0x80:
+        return list(struct.unpack_from('<' + fmt, raw, 9))
+    count = struct.unpack_from('<I', raw, 9)[0]
+    return list(struct.unpack_from('<%d%s' % (count, fmt), raw, 13))
+
+def extend_graph(data, plots):
+    """Appends plots to a graph, keeping its own; Graph Data Source 2 and combine are padded with 0 (none)."""
+    header, props = records(data)
+    raw = dict(props)
+    sources, labels = read_array(raw[P_SOURCE1]), read_array(raw[P_LABEL])
+    colors = read_array(raw[P_COLOR]) if P_COLOR in raw else [83, 101, 153] * len(sources)
+    assert len(labels) == len(sources) and len(colors) == 3 * len(sources)
+    second = read_array(raw[P_SOURCE2]) if P_SOURCE2 in raw else []
+    combine = read_array(raw[P_COMBINE]) if P_COMBINE in raw else []
+    use_second = bool(second) or any(len(p) > 4 for p in plots)
+    second += [0] * (len(sources) - len(second))
+    combine += [0] * (len(sources) - len(combine))
+    for p in plots:
+        sources.append(p[2]); labels.append(p[0]); colors += list(p[3])
+        second.append(p[4] if len(p) > 4 else 0); combine.append(1 if len(p) > 4 else 0)
+    new = {P_SOURCE1: array(P_SOURCE1, T_UINT32, 'I', sources), P_LABEL: array(P_LABEL, T_UINT32, 'I', labels),
+           P_COLOR: array(P_COLOR, T_UINT8, 'B', colors)}
+    if use_second:
+        new[P_SOURCE2] = array(P_SOURCE2, T_UINT32, 'I', second)
+        new[P_COMBINE] = array(P_COMBINE, T_UINT32, 'I', combine)
+    out = [new.pop(pid, r) for pid, r in props] + list(new.values())
+    return header + struct.pack('<I', len(out)) + b''.join(out)
+
 def ltext(text):
     return struct.pack('<HH', len(text), 0x1000) + text.encode('utf-16-le')
 
@@ -256,6 +312,10 @@ def main(exemplars, locale, out_dir):
         if e['t'] == EXEMPLAR and e['g'] == GRAPH_GROUP and e['i'] in GRAPHS:
             e['data'] = build_graph(e['data'], GRAPHS[e['i']]); done.add(e['i'])
     assert done == set(GRAPHS), 'graph exemplar missing'
+    for e in entries:
+        if e['t'] == EXEMPLAR and e['g'] == GRAPH_GROUP and e['i'] in EXTEND:
+            e['data'] = extend_graph(e['data'], EXTEND[e['i']]); done.add(e['i'])
+    assert set(EXTEND) <= done, 'graph exemplar missing'
     by_instance = {e['i']: e for e in entries if e['t'] == EXEMPLAR and e['g'] == GRAPH_GROUP}
     for instance, (template, name, title, _, cell, plots) in NEW_GRAPHS.items():
         data = new_graph(by_instance[template]['data'], name, title, cell, plots)
@@ -276,6 +336,7 @@ def main(exemplars, locale, out_dir):
     labels = {p[0]: p[1] for plots in GRAPHS.values() for p in plots if p[1]}
     labels.update({title: text for _, _, title, text, _, _ in NEW_GRAPHS.values()})
     labels.update({p[0]: p[1] for *_, plots in NEW_GRAPHS.values() for p in plots if p[1]})
+    labels.update({p[0]: p[1] for plots in EXTEND.values() for p in plots if p[1]})
     for e in entries:
         if e['t'] == LTEXT and e['g'] == LTEXT_GROUP and e['i'] in TRIM_LABELS:
             text = e['data'][4:].decode('utf-16-le').rstrip('\r\n ')

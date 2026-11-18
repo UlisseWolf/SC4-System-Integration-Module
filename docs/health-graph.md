@@ -33,6 +33,13 @@ starts.
 - **Hospital Occupancy %**: treated patients over health capacity; above 100 means the hospitals and clinics are full;
 - **Hospitals** and **Clinics**: the counts the advisors and CAM's medical tooltip use.
 
+## Life Expectancy graph
+
+The same module records the life expectancy of the best and worst neighbourhood (`l_tract_life_exp_h` at
+`0x004156FA`, `l_tract_life_exp_l` at `0x004155EE`, in years) as `0x5C4DE0C7` and `0x5C4DE0C8`; the Maxis Life
+Expectancy graph (`0x05`) plots them next to the city average (labels `0x5C4DE1C7` "Highest Neighborhood",
+`0x5C4DE1C8` "Lowest Neighborhood"). `[HealthGraph] Enabled=false` stops them too.
+
 `game.window_graph(graph_window_types.HEALTH)` opens the graph from Lua (CAM's advisor constants, patched by
 `tools/power-graph/patch_graph_window_types.py`).
 

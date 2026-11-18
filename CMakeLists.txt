@@ -39,6 +39,7 @@ add_library(SC4SIM SHARED
   src/safety/FireGraphHistory.cpp
   src/safety/HealthGraphHistory.cpp
   src/population/PopulationGraphHistory.cpp
+  src/population/EducationGraphHistory.cpp
   src/ui/GraphButtons.cpp
   ${GZCOM}/src/cRZBaseString.cpp
   ${GZCOM}/src/cRZBaseVariant.cpp

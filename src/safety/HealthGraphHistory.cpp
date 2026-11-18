@@ -9,7 +9,9 @@
 // gzcom-dll, so the values come from the advisor Lua table `game`, which the game's advisor data pump fills
 // (0x004143C8-0x004157CE): g_health_coverage_p, ga_health, ga_health_grade, g_num_treated_patients,
 // g_health_capacity, g_num_hospitals, g_num_clinics. CAM's panels read the same fields (Health Rating C-4 =
-// ga_health / 2, medical buildings = g_num_hospitals).
+// ga_health / 2, medical buildings = g_num_hospitals). The same table gives the life expectancy of the best and worst
+// neighbourhood (l_tract_life_exp_h at 0x004156FA, l_tract_life_exp_l at 0x004155EE), plotted in the Maxis Life
+// Expectancy graph next to the city average.
 //
 ////////////////////////////////////////////////////////////////////////////
 
@@ -48,6 +50,8 @@ namespace
 		double capacity = 0.0;
 		double hospitals = 0.0;
 		double clinics = 0.0;
+		double lifeHigh = 0.0;
+		double lifeLow = 0.0;
 	};
 
 	double ReadField(cISCLua* lua, const char* name)
@@ -78,6 +82,8 @@ namespace
 		out.capacity = ReadField(lua, "g_health_capacity");
 		out.hospitals = ReadField(lua, "g_num_hospitals");
 		out.clinics = ReadField(lua, "g_num_clinics");
+		out.lifeHigh = ReadField(lua, "l_tract_life_exp_h");
+		out.lifeLow = ReadField(lua, "l_tract_life_exp_l");
 		lua->SetTop(top);
 		return true;
 	}
@@ -103,9 +109,11 @@ namespace
 		history->RecordHistoryData(HealthGraphHistory::kHistoryHospitalOccupancy, Round(occupancy));
 		history->RecordHistoryData(HealthGraphHistory::kHistoryHospitals, Round(data.hospitals));
 		history->RecordHistoryData(HealthGraphHistory::kHistoryClinics, Round(data.clinics));
+		history->RecordHistoryData(HealthGraphHistory::kHistoryLifeExpectancyHigh, Round(data.lifeHigh));
+		history->RecordHistoryData(HealthGraphHistory::kHistoryLifeExpectancyLow, Round(data.lifeLow));
 		SimLog::Write(SimLog::Level::Debug,
-			"HealthGraph: coverage %.1f%%, health %.1f, grade %.1f%%, %.0f patients of %.0f places, %.0f hospitals, %.0f clinics.",
-			data.coverage, data.health, data.grade, data.treated, data.capacity, data.hospitals, data.clinics);
+			"HealthGraph: coverage %.1f%%, health %.1f, grade %.1f%%, %.0f patients of %.0f places, %.0f hospitals, %.0f clinics, life expectancy %.0f-%.0f.",
+			data.coverage, data.health, data.grade, data.treated, data.capacity, data.hospitals, data.clinics, data.lifeLow, data.lifeHigh);
 	}
 }
 

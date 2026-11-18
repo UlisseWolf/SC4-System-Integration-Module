@@ -42,6 +42,7 @@
     <ClCompile Include="src\safety\FireGraphHistory.cpp"><Filter>Safety</Filter></ClCompile>
     <ClCompile Include="src\safety\HealthGraphHistory.cpp"><Filter>Safety</Filter></ClCompile>
     <ClCompile Include="src\population\PopulationGraphHistory.cpp"><Filter>Population</Filter></ClCompile>
+    <ClCompile Include="src\population\EducationGraphHistory.cpp"><Filter>Population</Filter></ClCompile>
     <ClCompile Include="src\ui\GraphButtons.cpp"><Filter>UI</Filter></ClCompile>
     <ClCompile Include="vendor\gzcom-dll\gzcom-dll\src\cRZBaseString.cpp"><Filter>Vendor</Filter></ClCompile>
     <ClCompile Include="vendor\gzcom-dll\gzcom-dll\src\cRZBaseVariant.cpp"><Filter>Vendor</Filter></ClCompile>
@@ -59,6 +60,7 @@
     <ClInclude Include="src\safety\FireGraphHistory.h"><Filter>Safety</Filter></ClInclude>
     <ClInclude Include="src\safety\HealthGraphHistory.h"><Filter>Safety</Filter></ClInclude>
     <ClInclude Include="src\population\PopulationGraphHistory.h"><Filter>Population</Filter></ClInclude>
+    <ClInclude Include="src\population\EducationGraphHistory.h"><Filter>Population</Filter></ClInclude>
     <ClInclude Include="src\ui\GraphButtons.h"><Filter>UI</Filter></ClInclude>
     <ClInclude Include="src\SimLogFormat.h"><Filter>Source</Filter></ClInclude>
     <ClInclude Include="src\powerpoles\PowerPoleCustomization.h"><Filter>Power poles</Filter></ClInclude>
