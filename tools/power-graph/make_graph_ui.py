@@ -4,7 +4,7 @@
 #   python make_graph_ui.py <SimCity_1.dat> <CAM_UI.dat> <out_dir> [extra_height]
 # Reads the Graphs window UI (0x00000000 / 0x96A006B0 / 0x6BC9065A) and its background image
 # (PNG 0x856DDBAC / 0x46A006B0 / 0xEBBEAE28) from the game, grows the expanded graph window (0x8A8B5B71) upward by
-# extra_height pixels (default 180) and writes <out_dir>/CAM_UI.dat = the input CAM_UI.dat plus the edited UI and a
+# extra_height pixels (default 108: the 18 lines of the Power graph legend need 94; 180 before 1.13.0's 10 button rows) and writes <out_dir>/CAM_UI.dat = the input CAM_UI.dat plus the edited UI and a
 # taller background image (PNG 0x856DDBAC / 0x46A006B0 / 0x5C4DE200). The radio-button panel and the collapsed
 # window are unchanged; the graph area (0x8A4B0AA0), its frame, the Time Scale texts and the slider keep their
 # distance from the bottom. The game lays the legend out from the graph area's height (0x0076E0F0 and following), so
@@ -16,6 +16,7 @@ import io, os, re, struct, sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import dbpf2
 from graph_layout import LAYOUT, HIDDEN
+from make_utility_graphs import NEW_GRAPHS
 from PIL import Image
 
 UI, PNG = 0x00000000, 0x856DDBAC
@@ -169,7 +170,30 @@ def order_buttons(lines):
             placed.add(instance)
         out.append(line)
     assert len(placed) == 18, sorted(placed)
-    return out
+    return add_buttons(out)
+
+def add_buttons(lines):
+    """A button in the UI for every CAM graph of graph_layout.py that the Maxis UI lacks (a copy of the Crime button,
+    ID 0x4000 + instance, caption = the graph's title). Buttons the game loads with the UI work like the Maxis ones;
+    in the first test, buttons that SC4SIM.dll created at run time from the template did not switch the graph and
+    stayed checked. The DLL still creates buttons for graphs of other plugins."""
+    crime = next(i for i, l in enumerate(lines) if 'id=0x0000400c' in l and 'clsid=GZWinBtn' in l)
+    last = max(i for i, l in enumerate(lines) if re.search(r'id=0x00004[0-9a-f]{3}', l) and 'clsid=GZWinBtn' in l)
+    present = {int(m.group(1), 16) - 0x4000 for l in lines
+               for m in [re.search(r'id=0x0000(4[0-9a-f]{3})', l)] if m and 'clsid=GZWinBtn' in l}
+    new = []
+    for instance in sorted(LAYOUT):
+        if instance in present:
+            continue
+        _, _, title, text, _, _ = NEW_GRAPHS[instance]
+        column, row = LAYOUT[instance]
+        assert row < ROWS
+        line = lines[crime].replace('id=0x0000400c', 'id=0x%08x' % (0x4000 + instance))
+        line = re.sub(r'caption="[^"]*" captionres=\{[^}]*\}', 'caption="%s" captionres={6a231eaa,%08x}' % (text, title), line)
+        assert '%08x' % title in line
+        left, right = COLUMN_X[column]
+        new.append(set_area(line, [left, 1 + 18 * row, right, 19 + 18 * row]))
+    return lines[:last + 1] + new + lines[last + 1:]
 
 def edit_panel(lines, h):
     """Radio-button panel: background image of the container stops at its bottom (no rows of the image's lower
@@ -251,7 +275,7 @@ def tall_image(png, h):
     buf = io.BytesIO(); wide_image(taller_image(new, PANEL_ROW + h)).save(buf, 'PNG')
     return buf.getvalue()
 
-def main(game, cam_ui, out_dir, h='180'):
+def main(game, cam_ui, out_dir, h='108'):
     h = int(h)
     _, game_entries = dbpf2.read(game)
     ui = find(game_entries, UI, UI_GROUP, UI_GRAPHS).decode('latin1')

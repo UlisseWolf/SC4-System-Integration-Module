@@ -29,7 +29,16 @@ built it, the module:
    `0x4000 + instance` and the graph's name (the LTEXT of *User Visible Name Key* `0x8A416A99`, else the exemplar
    name), and puts it in the cell the exemplar asks for;
 3. places the buttons in the columns of the UI's Maxis buttons (CAM_UI.dat makes them 176 pixels wide, see the wider
-   window in `docs/power-graph.md`). `CAM_UI.dat` already sizes the panel for every row of `graph_layout.py` (10
+   window in `docs/power-graph.md`).
+
+**Buttons of CAM's graphs are in the UI.** In the first in-game test the buttons the DLL created at run time from
+the template did not switch the graph and stayed checked when another graph was chosen (the game's graph handler,
+`0x0076E500`, never received their clicks), while the buttons loaded with the UI worked. So `make_graph_ui.py`
+writes a button for every graph of `graph_layout.py` into `CAM_UI.dat` (a copy of the Maxis Crime button, ID
+`0x4000 + instance`, caption = the graph's title); the DLL only moves them to their cells. Buttons for graphs of
+other plugins are still created at run time; until their clicks are routed to the game they may not work.
+
+`CAM_UI.dat` already sizes the panel for every row of `graph_layout.py` (10
    rows: the panel and both graph windows are 72 pixels taller upward, with taller backgrounds), because a window
    resized at run time keeps its old paint buffer: in the first test the rows past the sixth drew in magenta and did
    not all take clicks. Only when a graph needs a row past those of the UI does the DLL still grow the panel upward
