@@ -3,7 +3,7 @@
 > **Not yet tested in game.**
 
 The Power graph of the Graphs window (graph exemplar `0x6534284A / 0xCA4AD545 / 0x00000006`, in
-`a_CAM/1 CAM Core/CAM_Exemplars.dat`) shows 18 lines:
+`a_CAM/1 CAM Core/CAM_Exemplar_Graphs.dat`) shows 18 lines:
 
 | # | Line | History type | Recorded by |
 |---|---|---|---|
@@ -81,6 +81,11 @@ own UI file.
 
 ## Data files
 
-`tools/power-graph/make_utility_graphs.py <CAM_Exemplars.dat> <CAM_Locale_en.dat> <out_dir>` rebuilds the Power and
+Since 1.13.0 every graph exemplar of the Graphs window is in `a_CAM/1 CAM Core/CAM_Exemplar_Graphs.dat`: the 18 of
+the game (`0x6534284A / 0xCA4AD545 / 0x01`-`0x13`, `0x18`), with CAM's versions of Power, Water, Garbage and Demands.
+`CAM_Exemplars.dat` no longer holds graphs. `tools/power-graph/make_graph_exemplars.py <SimCity_1.dat>
+<CAM_Exemplars.dat> <out_dir>` builds both files; then `make_utility_graphs.py` revises Power, Water and Garbage.
+
+`tools/power-graph/make_utility_graphs.py <CAM_Exemplar_Graphs.dat> <CAM_Locale_en.dat> <out_dir>` rebuilds the Power and
 Water graph exemplars (every other entry and property unchanged) and adds their labels. The Water graph is described
 in `docs/water-graph.md`.

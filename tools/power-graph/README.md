@@ -1,16 +1,25 @@
-# Power and Water graph data
+# Graph data
+
+`make_graph_exemplars.py` collects every graph exemplar of the Graphs window (the 18 of the game, with CAM's versions
+where CAM has one) into `CAM_Exemplar_Graphs.dat`, and writes `CAM_Exemplars.dat` without them:
+
+```
+python make_graph_exemplars.py "<SimCity 4>/SimCity_1.dat" "<SIM>/a_CAM/1 CAM Core/CAM_Exemplars.dat" out
+```
+
+Then run `make_utility_graphs.py` on `out/CAM_Exemplar_Graphs.dat`.
 
 `make_utility_graphs.py` adds energy bought and sold and the production of each energy class to CAM's Power graph,
 and water bought and sold, water by source and wastewater to its Water graph; the Garbage graph gets garbage produced, real
 scale and its own labels:
 
 ```
-python make_utility_graphs.py "<SIM>/a_CAM/1 CAM Core/CAM_Exemplars.dat" "<SIM>/a_CAM/1 CAM Core/CAM Locale/CAM_Locale_en.dat" out
+python make_utility_graphs.py "out/CAM_Exemplar_Graphs.dat" "<SIM>/a_CAM/1 CAM Core/CAM Locale/CAM_Locale_en.dat" out
 ```
 
-It writes `out/CAM_Exemplars.dat` (graph exemplars `0x6534284A / 0xCA4AD545 / 0x00000006` with 18 plots and
-`0x00000007` with 10 plots) and `out/CAM_Locale_en.dat` (the plot labels added). Copy both back into the package. Plot
-lists, colours and labels are the `POWER_PLOTS` and `WATER_PLOTS` tables of the script. The new lines need SC4SIM.dll
+It writes the graphs file under the same name in the output folder (graph exemplars `0x6534284A / 0xCA4AD545 / 0x00000006` with 18 plots and
+`0x00000007` with 10 plots, Garbage `0x0000000A` with 9) and `out/CAM_Locale_en.dat` (the plot labels added). Copy both back into the package. Plot
+lists, colours and labels are the `POWER_PLOTS`, `WATER_PLOTS` and `GARBAGE_PLOTS` tables of the script. The new lines need SC4SIM.dll
 1.13.0 or later; see `docs/power-graph.md` and `docs/water-graph.md`.
 
 `make_graph_ui.py` makes the Graphs window taller so the 18-line legend fits:

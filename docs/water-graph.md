@@ -3,7 +3,7 @@
 > **Not yet tested in game.**
 
 The Water graph of the Graphs window (graph exemplar `0x6534284A / 0xCA4AD545 / 0x00000007`, in
-`a_CAM/1 CAM Core/CAM_Exemplars.dat`) shows 10 lines:
+`a_CAM/1 CAM Core/CAM_Exemplar_Graphs.dat`) shows 10 lines:
 
 | # | Line | History type | Recorded by |
 |---|---|---|---|

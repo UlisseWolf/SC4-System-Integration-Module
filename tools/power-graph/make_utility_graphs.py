@@ -3,8 +3,8 @@
 #  - Water (0x6534284A / 0xCA4AD545 / 0x00000007): water bought and sold, water by source and wastewater;
 #  - Garbage (0x6534284A / 0xCA4AD545 / 0x0000000A): garbage produced added, real scale, garbage pollution moved out,
 #    own labels for garbage imported and exported, trailing line breaks removed from two labels.
-#   python make_utility_graphs.py <CAM_Exemplars.dat> <CAM_Locale_en.dat> <out_dir>
-# Writes <out_dir>/CAM_Exemplars.dat (the two graph exemplars rebuilt, every other entry unchanged) and
+#   python make_utility_graphs.py <CAM_Exemplar_Graphs.dat> <CAM_Locale_en.dat> <out_dir>
+# Writes <out_dir>/<same file name> (the three graph exemplars rebuilt, every other entry unchanged) and
 # <out_dir>/CAM_Locale_en.dat (the plot labels added, LTEXT group 0x6A231EAA). The new lines read the history types
 # SC4SIM.dll 1.13+ records every month (src/power/PowerGraphHistory.h, src/water/WaterGraphHistory.h).
 # See docs/power-graph.md and docs/water-graph.md.
@@ -127,7 +127,7 @@ def main(exemplars, locale, out_dir):
         if e['t'] == EXEMPLAR and e['g'] == GRAPH_GROUP and e['i'] in GRAPHS:
             e['data'] = build_graph(e['data'], GRAPHS[e['i']]); done.add(e['i'])
     assert done == set(GRAPHS), 'graph exemplar missing'
-    dbpf2.write(os.path.join(out_dir, 'CAM_Exemplars.dat'), entries, header_src=raw)
+    dbpf2.write(os.path.join(out_dir, os.path.basename(exemplars)), entries, header_src=raw)
 
     raw, entries = dbpf2.read(locale)
     labels = {p[0]: p[1] for plots in GRAPHS.values() for p in plots if p[1]}
