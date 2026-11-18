@@ -11,9 +11,10 @@
 // (window 0x0A4A8176) at this+0x304. This module hooks that call and, after it, adds a button for every graph
 // exemplar of instance 0x01-0xFF that has none: the button comes from the template UI 0x00000000 / 0x96A006B0 /
 // 0x5C4DE300 (a copy of the Maxis graph button, in CAM_UI.dat), gets ID 0x4000 + instance and the graph's name
-// (User Visible Name Key 0x8A416A99, else the exemplar name), and goes to the cell of the 3-column grid that the
-// exemplar asks for with Graph Button Cell (0x5C4DE350: column 0-2, row; rows 0-5 are the Maxis buttons), or, without
-// it or when that cell is taken, to the next free cell after the Maxis rows. The panel grows upward by one 18-pixel row for every 3 new buttons; the two graph windows (0x8A8B5B71
+// (User Visible Name Key 0x8A416A99, else the exemplar name). Every button, the Maxis ones included, goes to the cell
+// of the 3-column grid that its exemplar asks for with Graph Button Cell (0x5C4DE350: column 0-2, row 0-31): this is
+// how CAM_Exemplar_Graphs.dat orders the graphs by theme. Buttons of the UI without it stay where they are; new
+// buttons without it, or whose cell is taken, go to the next free cell. The panel grows upward by one 18-pixel row for every 3 new buttons; the two graph windows (0x8A8B5B71
 // expanded, 0x8A8B5B72 collapsed) move up with it, and the filler 0x5C4DE310 (in CAM_UI.dat) paints the new rows.
 //
 ////////////////////////////////////////////////////////////////////////////
@@ -85,7 +86,9 @@ namespace
 	{
 		uint32_t instance = 0;
 		cRZBaseString name;
+		cIGZWin* button = nullptr;  // button of the UI, if any
 		bool hasCell = false;
+		bool keep = false;          // UI button without Graph Button Cell: stays where it is
 		int32_t column = 0;
 		int32_t row = 0;
 	};
@@ -168,28 +171,33 @@ namespace
 			return;
 		}
 
-		std::vector<GraphInfo> missing;
+		// Every graph exemplar, with the button it already has in the UI (the Maxis ones) or none.
+		std::vector<GraphInfo> graphs;
 		for (uint32_t instance = 1; instance <= 0xFF; ++instance)
 		{
-			if (resources->TestForKey(cGZPersistResourceKey(kExemplarType, kGraphGroup, instance))
-				&& !container->GetChildWindowFromID(kGraphButtonBase + instance))
+			if (resources->TestForKey(cGZPersistResourceKey(kExemplarType, kGraphGroup, instance)))
 			{
-				GraphInfo& info = missing.emplace_back();
+				GraphInfo& info = graphs.emplace_back();
 				info.instance = instance;
+				info.button = container->GetChildWindowFromID(kGraphButtonBase + instance);
 				ReadGraphInfo(resources, info);
 			}
 		}
-		if (missing.empty())
-		{
-			SimLog::Write(SimLog::Level::Info, "GraphWindow: every graph has its button.");
-			return;
-		}
 
-		// Cells: the Maxis rows are taken; graphs with Graph Button Cell first (by instance), then the others in the
-		// next free cells, row by row after the Maxis rows.
+		// Cells. 1) Buttons of the UI without Graph Button Cell keep their place. 2) Graphs with Graph Button Cell
+		// (lowest instance first) take their cell; existing buttons are moved there. 3) New buttons without it fill
+		// the free cells row by row after the Maxis rows.
 		std::array<std::array<bool, kColumns>, kMaxRows> taken{};
-		for (int32_t row = 0; row < kVanillaRows; ++row) taken[row].fill(true);
-		for (GraphInfo& info : missing)
+		for (GraphInfo& info : graphs)
+		{
+			if (!info.button || info.hasCell) continue;
+			const int32_t left = info.button->GetL();
+			info.column = left < kColumnLeft[1] ? 0 : (left < kColumnLeft[2] ? 1 : 2);
+			info.row = std::clamp((info.button->GetT() + kRowHeight / 2 - 1) / kRowHeight, 0, kMaxRows - 1);
+			taken[info.row][info.column] = true;
+			info.keep = true;
+		}
+		for (GraphInfo& info : graphs)
 		{
 			if (!info.hasCell) continue;
 			if (taken[info.row][info.column])
@@ -201,10 +209,10 @@ namespace
 			}
 			taken[info.row][info.column] = true;
 		}
-		int32_t nextCell = kVanillaRows * kColumns;
-		for (GraphInfo& info : missing)
+		int32_t nextCell = 0;
+		for (GraphInfo& info : graphs)
 		{
-			if (info.hasCell) continue;
+			if (info.hasCell || info.keep) continue;
 			while (nextCell < kMaxRows * kColumns && taken[nextCell / kColumns][nextCell % kColumns]) ++nextCell;
 			if (nextCell >= kMaxRows * kColumns)
 			{
@@ -218,28 +226,45 @@ namespace
 		}
 
 		uint32_t added = 0;
+		uint32_t moved = 0;
 		int32_t lastRow = kVanillaRows - 1;
-		for (GraphInfo& info : missing)
+		for (GraphInfo& info : graphs)
 		{
 			if (info.row < 0) continue;
-			cRZAutoRefCount<cIGZWin> button;
-			if (!scripts->CreateWindowFromScript(cGZPersistResourceKey(kUiType, kUiGroup, kButtonTemplateUi), container,
-				kButtonTemplateId, GZIID_cIGZWin, button.AsPPVoid()) || !button)
+			lastRow = std::max(lastRow, info.row);
+			if (info.keep) continue;
+			cIGZWin* button = info.button;
+			cRZAutoRefCount<cIGZWin> created;
+			if (!button)
 			{
-				SimLog::Write(SimLog::Level::Warning, "GraphWindow: button for graph 0x%02X not created.", info.instance);
-				continue;
+				if (!scripts->CreateWindowFromScript(cGZPersistResourceKey(kUiType, kUiGroup, kButtonTemplateUi), container,
+					kButtonTemplateId, GZIID_cIGZWin, created.AsPPVoid()) || !created)
+				{
+					SimLog::Write(SimLog::Level::Warning, "GraphWindow: button for graph 0x%02X not created.", info.instance);
+					continue;
+				}
+				button = created;
+				button->SetID(kGraphButtonBase + info.instance);
+				button->SetCaption(info.name);
+				button->ShowWindow();
+				++added;
+			}
+			else
+			{
+				++moved;
 			}
 			const int32_t top = 1 + info.row * kRowHeight;
-			button->SetID(kGraphButtonBase + info.instance);
 			button->SetArea(kColumnLeft[info.column], top, kColumnRight[info.column], top + kRowHeight);
-			button->SetCaption(info.name);
-			button->ShowWindow();
-			++added;
-			lastRow = std::max(lastRow, info.row);
-			SimLog::Write(SimLog::Level::Info, "GraphWindow: button 0x%04X \"%s\" added at column %d, row %d.",
+			SimLog::Write(SimLog::Level::Debug, "GraphWindow: button 0x%04X \"%s\" at column %d, row %d.",
 				kGraphButtonBase + info.instance, info.name.ToChar(), info.column, info.row);
 		}
-		if (added == 0) return;
+		SimLog::Write(SimLog::Level::Info, "GraphWindow: %u graphs, %u buttons added, %u moved.",
+			static_cast<unsigned>(graphs.size()), added, moved);
+		if (lastRow < kVanillaRows)
+		{
+			container->InvalidateSelf();
+			return;
+		}
 
 		// Grow upward: the panel's top moves up by the new rows, the button container and the filler grow down by
 		// the same amount (so the bottom stays where it was), the graph windows above move up with the panel.
@@ -260,7 +285,7 @@ namespace
 			}
 		}
 		panel->InvalidateSelfAndParents();
-		SimLog::Write(SimLog::Level::Info, "GraphWindow: %u graph buttons added, panel %d pixels taller.", added, delta);
+		SimLog::Write(SimLog::Level::Info, "GraphWindow: panel %d pixels taller.", delta);
 	}
 
 	void __fastcall BuildGraphsUiHook(void* controlPanel, void* /*edx*/)

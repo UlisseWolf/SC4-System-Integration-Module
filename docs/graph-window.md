@@ -40,14 +40,33 @@ built it, the module:
 |---|---|---|---|
 | `0x5C4DE350` | Graph Button Cell | Uint32 ×2 | Column (0-2, left to right) and row (from the top; rows 0-5 are the Maxis buttons, so the first free row is 6, up to 31) of the graph's button. |
 
-The position lives in the graph exemplar itself: no `SC4SIM.ini` key is needed. Graphs with Graph Button Cell are
-placed first (lowest instance first); a cell outside the grid or already taken (by a Maxis button or by another graph)
-is logged in `SC4SIM.log` and the graph goes to the next free cell instead. Graphs without the property fill the free
-cells row by row, left to right, in instance order. The panel gets as many rows as the lowest button needs, so an
+The position lives in the graph exemplar itself: no `SC4SIM.ini` key is needed. It applies to every button, the
+Maxis ones included: a button of the UI is moved to its exemplar's cell. Order of placement: buttons of the UI
+without the property keep their place; then graphs with it (lowest instance first) take their cell; then new buttons
+without it fill the free cells row by row, left to right, in instance order. A cell outside the grid or already taken
+is logged in `SC4SIM.log` and the graph goes to the next free cell instead. The panel gets as many rows as the lowest button needs, so an
 empty row between buttons is allowed. The property is defined in New_Properties.xml (Reader and PIM-X show it).
 
 `[GraphWindow] Enabled=false` in `SC4SIM.ini` turns it off. SimCity 4 1.1.641 only (the call
 site is checked before patching).
+
+## Order of the graphs
+
+CAM orders the graphs by theme, one column per theme (`tools/power-graph/graph_layout.py`, written into every graph
+exemplar of `CAM_Exemplar_Graphs.dat` as Graph Button Cell):
+
+| Row | Population and education | Government, economy, transport | Services and environment |
+|---|---|---|---|
+| 0 | Jobs & Pop. | Mayor Rating | Crime |
+| 1 | RCI Demand | Funds | Power |
+| 2 | Population by Age | City Income/Expenses | Water |
+| 3 | Life Expectancy | Res. Avg. Income | Garbage |
+| 4 | Education | Commute Time | Air Pollution |
+| 5 | Education by Age | Traffic Volume | Water Pollution |
+| 6 | | | Garbage Pollution |
+
+The 18 Maxis buttons are also placed this way in the Graphs UI of `CAM_UI.dat`, so the order is the same without the
+DLL (which only adds row 6 and later).
 
 ## Adding a graph
 

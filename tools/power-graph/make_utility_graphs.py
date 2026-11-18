@@ -13,6 +13,7 @@
 import os, struct, sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import dbpf2
+from graph_layout import LAYOUT
 
 EXEMPLAR, LTEXT = 0x6534284A, 0x2026960B
 GRAPH_GROUP, POWER_GRAPH, WATER_GRAPH, GARBAGE_GRAPH = 0xCA4AD545, 0x00000006, 0x00000007, 0x0000000A
@@ -83,7 +84,7 @@ GRAPHS = {POWER_GRAPH: POWER_PLOTS, WATER_GRAPH: WATER_PLOTS, GARBAGE_GRAPH: GAR
 # gives every other property (graph type, value range); its plots are replaced. Button cell: (column 0-2, row) of the
 # button SC4SIM.dll adds in the Graphs window (Graph Button Cell 0x5C4DE350; rows 0-5 are the Maxis buttons).
 NEW_GRAPHS = {
-    0x19: (0x09, 'Garbage Pollution', 0x5C4DE140, 'Garbage Pollution', (0, 6),
+    0x19: (0x09, 'Garbage Pollution', 0x5C4DE140, 'Garbage Pollution', LAYOUT[0x19],
            [(0xFF5D2EA7, None, 0xEA110134, (255, 0, 210))]),      # CAM label "Garbage Pollution"; G_TOTAL_GARBAGE_POLLUTION
 }
 P_NAME, P_TITLE, P_BUTTON_CELL = 0x00000020, 0x8A416A99, 0x5C4DE350
@@ -100,6 +101,11 @@ def new_graph(template, name, title_instance, cell, plots):
     out = [replace.get(pid, raw) for pid, raw in props if pid != P_BUTTON_CELL]
     if cell is not None:
         out.append(array(P_BUTTON_CELL, T_UINT32, 'I', list(cell)))
+    return header + struct.pack('<I', len(out)) + b''.join(out)
+
+def set_button_cell(data, cell):
+    header, props = records(data)
+    out = [raw for pid, raw in props if pid != P_BUTTON_CELL] + [array(P_BUTTON_CELL, T_UINT32, 'I', list(cell))]
     return header + struct.pack('<I', len(out)) + b''.join(out)
 
 # CAM labels whose text ends with a line break (an empty extra legend row): rewritten without it.
@@ -159,6 +165,10 @@ def main(exemplars, locale, out_dir):
             by_instance[instance]['data'] = data
         else:
             entries.append(dict(t=EXEMPLAR, g=GRAPH_GROUP, i=instance, data=data))
+    # Button order by theme (graph_layout.py): Graph Button Cell in every graph exemplar.
+    for e in entries:
+        if e['t'] == EXEMPLAR and e['g'] == GRAPH_GROUP and e['i'] in LAYOUT:
+            e['data'] = set_button_cell(e['data'], LAYOUT[e['i']])
     dbpf2.write(os.path.join(out_dir, os.path.basename(exemplars)), entries, header_src=raw)
 
     raw, entries = dbpf2.read(locale)

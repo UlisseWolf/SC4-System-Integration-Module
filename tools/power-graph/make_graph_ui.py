@@ -13,6 +13,7 @@
 import io, os, re, struct, sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import dbpf2
+from graph_layout import LAYOUT
 from PIL import Image
 
 UI, PNG = 0x00000000, 0x856DDBAC
@@ -65,7 +66,25 @@ def edit_ui(text, h):
                     a[1] += h; a[3] += h; line = set_area(line, a)
         out.append(line)
     assert done
-    return edit_panel(out)
+    return edit_panel(order_buttons(out))
+
+COLUMN_X = ((0, 166), (170, 336), (340, 496))
+
+def order_buttons(lines):
+    """The 18 Maxis graph buttons (IDs 0x4000 + instance) in the cells of graph_layout.py (rows 0-5)."""
+    out, placed = [], set()
+    for line in lines:
+        m = re.search(r'id=0x0000(4[0-9a-f]{3})', line)
+        if m and 'clsid=GZWinBtn' in line:
+            instance = int(m.group(1), 16) - 0x4000
+            column, row = LAYOUT[instance]
+            assert row < 6, 'Maxis graph 0x%02X outside the 6 rows of the UI' % instance
+            left, right = COLUMN_X[column]
+            line = set_area(line, [left, 1 + 18 * row, right, 19 + 18 * row])
+            placed.add(instance)
+        out.append(line)
+    assert len(placed) == 18, sorted(placed)
+    return out
 
 def edit_panel(lines):
     """Radio-button panel: background image of the container stops at its bottom (no rows of the image's lower

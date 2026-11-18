@@ -34,3 +34,7 @@ background image 0x5C4DE200). Needs Pillow.
 `make_graph_ui.py` also writes the button template UI (0x5C4DE300) and the panel filler (0x5C4DE310) used by
 SC4SIM.dll to add a button for every graph exemplar (`docs/graph-window.md`); `make_utility_graphs.py` adds the
 Garbage Pollution graph (0x19).
+
+`graph_layout.py` is the order of the graph buttons by theme (column, row per graph instance): `make_utility_graphs.py`
+writes it into every graph exemplar (Graph Button Cell 0x5C4DE350) and `make_graph_ui.py` places the 18 Maxis buttons
+of the UI the same way.
