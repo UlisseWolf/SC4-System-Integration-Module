@@ -1,6 +1,7 @@
 # Rebuilds CAM's Power and Water graphs:
 #  - Power (0x6534284A / 0xCA4AD545 / 0x00000006): energy bought and sold and the production of each energy class;
-#  - Water (0x6534284A / 0xCA4AD545 / 0x00000007): water bought and sold, water by source and wastewater.
+#  - Water (0x6534284A / 0xCA4AD545 / 0x00000007): water bought and sold, water by source and wastewater;
+#  - Garbage (0x6534284A / 0xCA4AD545 / 0x0000000A): own labels for garbage imported and exported (lines unchanged).
 #   python make_utility_graphs.py <CAM_Exemplars.dat> <CAM_Locale_en.dat> <out_dir>
 # Writes <out_dir>/CAM_Exemplars.dat (the two graph exemplars rebuilt, every other entry unchanged) and
 # <out_dir>/CAM_Locale_en.dat (the plot labels added, LTEXT group 0x6A231EAA). The new lines read the history types
@@ -11,7 +12,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import dbpf2
 
 EXEMPLAR, LTEXT = 0x6534284A, 0x2026960B
-GRAPH_GROUP, POWER_GRAPH, WATER_GRAPH = 0xCA4AD545, 0x00000006, 0x00000007
+GRAPH_GROUP, POWER_GRAPH, WATER_GRAPH, GARBAGE_GRAPH = 0xCA4AD545, 0x00000006, 0x00000007, 0x0000000A
 LTEXT_GROUP = 0x6A231EAA
 P_SOURCE1, P_SOURCE2, P_COMBINE, P_LABEL, P_COLOR = 0x6A4AEE40, 0x6A4AEE5F, 0x6A4AEE68, 0x6A4AEEDC, 0x6A4AEEDF
 T_UINT8, T_UINT32 = 0x01, 0x03
@@ -58,6 +59,25 @@ WATER_PLOTS = [
 
 GRAPHS = {POWER_GRAPH: POWER_PLOTS, WATER_GRAPH: WATER_PLOTS}
 
+# Garbage graph: only the labels change. Plots 3 and 4 (G_GARBAGE_IMPORTED 0xEA11017B, G_GARBAGE_EXPORTED 0xEA11017E)
+# used "Imported" (0xFF5D2E9E) and "Exported" (0xFF5D2E98); old label -> (new label, text).
+GARBAGE_LABELS = {
+    0xFF5D2E9E: (0x5C4DE131, 'Garbage Imported'),
+    0xFF5D2E98: (0x5C4DE132, 'Garbage Exported'),
+}
+
+def relabel_graph(data, relabels):
+    header, props = records(data)
+    out = []
+    for pid, raw in props:
+        if pid == P_LABEL:
+            count = struct.unpack_from('<I', raw, 9)[0]
+            labels = list(struct.unpack_from('<%dI' % count, raw, 13))
+            assert all(old in labels for old in relabels), 'garbage labels changed'
+            raw = array(P_LABEL, T_UINT32, 'I', [relabels[l][0] if l in relabels else l for l in labels])
+        out.append(raw)
+    return header + struct.pack('<I', len(out)) + b''.join(out)
+
 def records(data):
     """Exemplar -> (header, [(id, raw record bytes)]), raw kept for every property."""
     assert data[:8] == b'EQZB1###', data[:8]
@@ -102,11 +122,14 @@ def main(exemplars, locale, out_dir):
     for e in entries:
         if e['t'] == EXEMPLAR and e['g'] == GRAPH_GROUP and e['i'] in GRAPHS:
             e['data'] = build_graph(e['data'], GRAPHS[e['i']]); done.add(e['i'])
-    assert done == set(GRAPHS), 'graph exemplar missing'
+        elif e['t'] == EXEMPLAR and e['g'] == GRAPH_GROUP and e['i'] == GARBAGE_GRAPH:
+            e['data'] = relabel_graph(e['data'], GARBAGE_LABELS); done.add(e['i'])
+    assert done == set(GRAPHS) | {GARBAGE_GRAPH}, 'graph exemplar missing'
     dbpf2.write(os.path.join(out_dir, 'CAM_Exemplars.dat'), entries, header_src=raw)
 
     raw, entries = dbpf2.read(locale)
     labels = {p[0]: p[1] for plots in GRAPHS.values() for p in plots if p[1]}
+    labels.update({new: text for new, text in GARBAGE_LABELS.values()})
     entries = [e for e in entries if not (e['t'] == LTEXT and e['g'] == LTEXT_GROUP and e['i'] in labels)]
     for instance, text in labels.items():
         entries.append(dict(t=LTEXT, g=LTEXT_GROUP, i=instance, data=ltext(text)))

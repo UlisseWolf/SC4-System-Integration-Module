@@ -47,3 +47,9 @@ like the power graph (see `docs/power-graph.md`). It looks at the water building
 - Without SC4SIM.dll 1.13.0 lines 5-10 stay at zero; lines 1-4 work with the game alone.
 - With `[SC4PowerPoleCustomization] DebugLog=true` the monthly totals are written to `SC4SIM.log` (`WaterGraph:`).
 - Data files: `tools/power-graph/make_utility_graphs.py` rebuilds both graphs.
+
+## Garbage graph
+
+The Garbage graph (`0x6534284A / 0xCA4AD545 / 0x0000000A`) keeps its 9 lines, all recorded by the game. Only plots 3
+and 4 get their own labels: "Garbage Imported" (`0x5C4DE131`, was "Imported" `0xFF5D2E9E`) and "Garbage Exported"
+(`0x5C4DE132`, was "Exported" `0xFF5D2E98`).
