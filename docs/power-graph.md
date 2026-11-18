@@ -66,6 +66,19 @@ slot 33, `0x006EB420`: Power Generated × the plant's efficiency). Power plants 
 - `[PowerGraph] Enabled=false` stops the recording; points already saved in the city stay.
 - With `[SC4PowerPoleCustomization] DebugLog=true` the monthly totals are written to `SC4SIM.log` (`PowerGraph:`).
 
+## Taller Graphs window
+
+The game lays the legend out one entry under the other, from the height of the graph area (`0x8A4B0AA0`, legend
+code from `0x0076E0F0`), and cuts the entries that do not fit: the vanilla window shows about 11 lines. CAM_UI.dat
+therefore overrides the Graphs window UI (`0x00000000 / 0x96A006B0 / 0x6BC9065A`, loaded at `0x007EEB9E`): the
+expanded graph window (`0x8A8B5B71`) grows 180 pixels upward, the graph area, its frame, the Time Scale texts and the
+slider keep their distance from the bottom, and the background is a taller copy of the Maxis image
+(`0x856DDBAC / 0x46A006B0 / 0x5C4DE200`). The radio-button panel and the collapsed window are unchanged. Every graph
+gets the taller area.
+
+`tools/power-graph/make_graph_ui.py <SimCity_1.dat> <CAM_UI.dat> <out_dir> [extra_height]` builds it from the game's
+own UI file.
+
 ## Data files
 
 `tools/power-graph/make_power_graph.py <CAM_Exemplars.dat> <CAM_Locale_en.dat> <out_dir>` rebuilds the graph
