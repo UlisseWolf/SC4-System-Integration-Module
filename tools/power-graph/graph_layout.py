@@ -24,9 +24,12 @@ LAYOUT = {
     0x06: (2, 1),   # Power
     0x07: (2, 2),   # Water
     0x0A: (2, 3),   # Garbage
-    0x08: (2, 4),   # Air Pollution
-    0x09: (2, 5),   # Water Pollution
-    0x1A: (2, 6),   # Power Grid (SC4SIM graph, button added by the DLL)
-    0x1B: (2, 7),   # Water Grid (SC4SIM graph, button added by the DLL)
-    0x19: (2, 8),   # Garbage Pollution (SC4SIM graph, button added by the DLL)
+    0x08: (2, 4),   # Pollution (the Maxis Air Pollution graph, now air, water, garbage and radiation)
+    0x1A: (2, 5),   # Power Grid (SC4SIM graph, button added by the DLL)
+    0x1B: (2, 6),   # Water Grid (SC4SIM graph, button added by the DLL)
+}
+
+# Graphs without a button: Graph Button Hidden (0x5C4DE351) in the exemplar, and the button removed from the UI.
+HIDDEN = {
+    0x09,           # Water Pollution: merged into Pollution (0x08)
 }

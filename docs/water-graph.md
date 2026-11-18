@@ -67,6 +67,6 @@ version is revised:
 
 - CAM drew the amounts at 1/100 (Graph Plot scale `0x6A4AEEE2` = 0.01) so they would sit next to the garbage
   pollution index (`G_TOTAL_GARBAGE_POLLUTION`, `0xEA110134`). The amounts are now at real scale (1.0) and the
-  pollution index, a different unit, is no longer in this graph.
+  pollution index, a different unit, is no longer in this graph: it is in the Pollution graph (`docs/graph-window.md`).
 - The texts of "Total Garbage" and "Exported" ended with a line break, which took an empty legend row; they are
   rewritten without it.

@@ -13,7 +13,7 @@
 import io, os, re, struct, sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import dbpf2
-from graph_layout import LAYOUT
+from graph_layout import LAYOUT, HIDDEN
 from PIL import Image
 
 UI, PNG = 0x00000000, 0x856DDBAC
@@ -70,13 +70,24 @@ def edit_ui(text, h):
 
 COLUMN_X = ((0, 166), (170, 336), (340, 496))
 
+# Captions of Maxis buttons whose graph changed: instance -> (LTEXT instance in group 0x6A231EAA, text).
+CAPTIONS = {0x08: (0x5C4DE190, 'Pollution')}
+
 def order_buttons(lines):
-    """The 18 Maxis graph buttons (IDs 0x4000 + instance) in the cells of graph_layout.py (rows 0-5)."""
+    """The Maxis graph buttons (IDs 0x4000 + instance) in the cells of graph_layout.py (rows 0-5); buttons of
+    hidden graphs removed; captions of changed graphs replaced."""
     out, placed = [], set()
     for line in lines:
         m = re.search(r'id=0x0000(4[0-9a-f]{3})', line)
         if m and 'clsid=GZWinBtn' in line:
             instance = int(m.group(1), 16) - 0x4000
+            if instance in HIDDEN:
+                placed.add(instance)
+                continue
+            if instance in CAPTIONS:
+                ltext, text = CAPTIONS[instance]
+                line = re.sub(r'caption="[^"]*" captionres=\{[^}]*\}', 'caption="%s" captionres={6a231eaa,%08x}' % (text, ltext), line)
+                assert '%08x' % ltext in line
             column, row = LAYOUT[instance]
             assert row < 6, 'Maxis graph 0x%02X outside the 6 rows of the UI' % instance
             left, right = COLUMN_X[column]

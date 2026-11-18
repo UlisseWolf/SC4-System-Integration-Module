@@ -13,7 +13,8 @@
 // 0x5C4DE300 (a copy of the Maxis graph button, in CAM_UI.dat), gets ID 0x4000 + instance and the graph's name
 // (User Visible Name Key 0x8A416A99, else the exemplar name). Every button, the Maxis ones included, goes to the cell
 // of the 3-column grid that its exemplar asks for with Graph Button Cell (0x5C4DE350: column 0-2, row 0-31): this is
-// how CAM_Exemplar_Graphs.dat orders the graphs by theme. Buttons of the UI without it stay where they are; new
+// how CAM_Exemplar_Graphs.dat orders the graphs by theme. Graph Button Hidden (0x5C4DE351, Bool) gives a graph no
+// button (a button of the UI is hidden). Buttons of the UI without a cell stay where they are; new
 // buttons without it, or whose cell is taken, go to the next free cell. The panel grows upward by one 18-pixel row for every 3 new buttons; the two graph windows (0x8A8B5B71
 // expanded, 0x8A8B5B72 collapsed) move up with it, and the filler 0x5C4DE310 (in CAM_UI.dat) paints the new rows.
 //
@@ -60,6 +61,7 @@ namespace
 	constexpr uint32_t kPropExemplarName = 0x00000020;
 	constexpr uint32_t kPropUserVisibleNameKey = 0x8A416A99;
 	constexpr uint32_t kPropGraphButtonCell = 0x5C4DE350;   // Uint32 x2: column (0-2), row (6 = first row after Maxis)
+	constexpr uint32_t kPropGraphButtonHidden = 0x5C4DE351; // Bool: no button (a UI button is hidden)
 
 	constexpr uint32_t kUiType = 0x00000000;
 	constexpr uint32_t kUiGroup = 0x96A006B0;
@@ -89,6 +91,7 @@ namespace
 		cIGZWin* button = nullptr;  // button of the UI, if any
 		bool hasCell = false;
 		bool keep = false;          // UI button without Graph Button Cell: stays where it is
+		bool hidden = false;        // Graph Button Hidden: no button
 		int32_t column = 0;
 		int32_t row = 0;
 	};
@@ -121,6 +124,14 @@ namespace
 			holder = exemplar->AsISCPropertyHolder();
 		}
 
+		if (const cISCProperty* const hiddenProperty = holder ? holder->GetProperty(kPropGraphButtonHidden) : nullptr)
+		{
+			const cIGZVariant* const value = hiddenProperty->GetPropertyValue();
+			bool flag = false;
+			uint32_t number = 0;
+			info.hidden = value && ((value->GetType() == cIGZVariant::Bool && value->GetValBool(flag) && flag)
+				|| (value->GetType() == cIGZVariant::Uint32 && value->GetValUint32(number) && number != 0));
+		}
 		info.hasCell = ReadPair(holder, kPropGraphButtonCell, info.column, info.row);
 		if (info.hasCell && (info.column < 0 || info.column >= kColumns || info.row < 0 || info.row >= kMaxRows))
 		{
@@ -187,10 +198,18 @@ namespace
 		// Cells. 1) Buttons of the UI without Graph Button Cell keep their place. 2) Graphs with Graph Button Cell
 		// (lowest instance first) take their cell; existing buttons are moved there. 3) New buttons without it fill
 		// the free cells row by row after the Maxis rows.
+		uint32_t hiddenCount = 0;
+		for (GraphInfo& info : graphs)
+		{
+			if (!info.hidden) continue;
+			if (info.button) info.button->HideWindow();
+			info.row = -1;
+			++hiddenCount;
+		}
 		std::array<std::array<bool, kColumns>, kMaxRows> taken{};
 		for (GraphInfo& info : graphs)
 		{
-			if (!info.button || info.hasCell) continue;
+			if (info.hidden || !info.button || info.hasCell) continue;
 			const int32_t left = info.button->GetL();
 			info.column = left < kColumnLeft[1] ? 0 : (left < kColumnLeft[2] ? 1 : 2);
 			info.row = std::clamp((info.button->GetT() + kRowHeight / 2 - 1) / kRowHeight, 0, kMaxRows - 1);
@@ -199,7 +218,7 @@ namespace
 		}
 		for (GraphInfo& info : graphs)
 		{
-			if (!info.hasCell) continue;
+			if (info.hidden || !info.hasCell) continue;
 			if (taken[info.row][info.column])
 			{
 				SimLog::Write(SimLog::Level::Warning, "GraphWindow: graph 0x%02X: cell (%d, %d) is taken; next free cell used.",
@@ -212,7 +231,7 @@ namespace
 		int32_t nextCell = 0;
 		for (GraphInfo& info : graphs)
 		{
-			if (info.hasCell || info.keep) continue;
+			if (info.hidden || info.hasCell || info.keep) continue;
 			while (nextCell < kMaxRows * kColumns && taken[nextCell / kColumns][nextCell % kColumns]) ++nextCell;
 			if (nextCell >= kMaxRows * kColumns)
 			{
@@ -258,8 +277,8 @@ namespace
 			SimLog::Write(SimLog::Level::Debug, "GraphWindow: button 0x%04X \"%s\" at column %d, row %d.",
 				kGraphButtonBase + info.instance, info.name.ToChar(), info.column, info.row);
 		}
-		SimLog::Write(SimLog::Level::Info, "GraphWindow: %u graphs, %u buttons added, %u moved.",
-			static_cast<unsigned>(graphs.size()), added, moved);
+		SimLog::Write(SimLog::Level::Info, "GraphWindow: %u graphs, %u buttons added, %u moved, %u hidden.",
+			static_cast<unsigned>(graphs.size()), added, moved, hiddenCount);
 		if (lastRow < kVanillaRows)
 		{
 			container->InvalidateSelf();

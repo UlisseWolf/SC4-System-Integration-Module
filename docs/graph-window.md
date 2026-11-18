@@ -39,6 +39,7 @@ built it, the module:
 | ID | Property | Type | Meaning |
 |---|---|---|---|
 | `0x5C4DE350` | Graph Button Cell | Uint32 ×2 | Column (0-2, left to right) and row (from the top; rows 0-5 are the Maxis buttons, so the first free row is 6, up to 31) of the graph's button. |
+| `0x5C4DE351` | Graph Button Hidden | Bool | The graph gets no button; a button of the UI for it is hidden and its cell is free for other graphs. Used for graphs merged into another one. |
 
 The position lives in the graph exemplar itself: no `SC4SIM.ini` key is needed. It applies to every button, the
 Maxis ones included: a button of the UI is moved to its exemplar's cell. Order of placement: buttons of the UI
@@ -61,14 +62,13 @@ exemplar of `CAM_Exemplar_Graphs.dat` as Graph Button Cell):
 | 1 | RCI Demand | Funds | Power |
 | 2 | Population by Age | City Income/Expenses | Water |
 | 3 | Life Expectancy | Res. Avg. Income | Garbage |
-| 4 | Education | Commute Time | Air Pollution |
-| 5 | Education by Age | Traffic Volume | Water Pollution |
-| 6 | | | Power Grid |
-| 7 | | | Water Grid |
-| 8 | | | Garbage Pollution |
+| 4 | Education | Commute Time | Pollution |
+| 5 | Education by Age | Traffic Volume | Power Grid |
+| 6 | | | Water Grid |
 
-The 18 Maxis buttons are also placed this way in the Graphs UI of `CAM_UI.dat`, so the order is the same without the
-DLL (which only adds row 6 and later).
+The 17 remaining Maxis buttons are also placed this way in the Graphs UI of `CAM_UI.dat`, so the order is the same
+without the DLL (which only adds Power Grid and Water Grid). The Water Pollution button (`0x4009`) is removed from the
+UI and its exemplar has Graph Button Hidden, since its data is now in the Pollution graph.
 
 ## Adding a graph
 
@@ -81,9 +81,24 @@ DLL (which only adds row 6 and later).
 The data sources are history types of the city's history warehouse: those the game records (the `game_trends` list of
 the advisor Lua) or new ones recorded by a DLL, as SC4SIM does for the Power and Water graphs.
 
-## Included example
+## Pollution graph
 
-`CAM_Exemplar_Graphs.dat` has a new graph, **Garbage Pollution** (`0x19`): the garbage pollution index
-(`G_TOTAL_GARBAGE_POLLUTION`, `0xEA110134`), which was moved out of the Garbage graph. Its exemplar sets Graph Button Cell to
-(2, 8). The Power Grid (`0x1A`, `docs/power-grid-graph.md`) and Water Grid (`0x1B`, `docs/water-grid-graph.md`)
-graphs are at (2, 6) and (2, 7).
+The Maxis Air Pollution graph (`0x08`) becomes **Pollution**, with the four pollution totals the game records (no
+DLL needed for the data):
+
+| Plot | History type | Label | Color |
+|---|---|---|---|
+| Air Pollution | `0x0A1100E8` (`G_TOTAL_AIR_POLLUTION`) | `0x0A5D2EA0` (game) | grey |
+| Water Pollution | `0xEA110130` (`G_TOTAL_WATER_POLLUTION`) | `0x0A5D2EA1` (game) | blue |
+| Garbage Pollution | `0xEA110134` (`G_TOTAL_GARBAGE_POLLUTION`) | `0xFF5D2EA7` (CAM) | brown |
+| Radiation | `0xEA110137` (`G_TOTAL_RADIATION_POLLUTION`) | `0x5C4DE191` (new) | yellow |
+
+Title and button caption: LTEXT `0x5C4DE190` "Pollution". The separate Water Pollution graph (`0x09`) and the
+Garbage Pollution graph of the previous SC4SIM version (`0x19`) are gone: `0x09` is kept but hidden, `0x19` is no
+longer in `CAM_Exemplar_Graphs.dat`. Without SC4SIM.dll 1.13.0 the Water Pollution exemplar stays in the game but has
+no button, because the UI no longer has it.
+
+## Included graphs
+
+The Power Grid (`0x1A`, `docs/power-grid-graph.md`) and Water Grid (`0x1B`, `docs/water-grid-graph.md`) graphs are
+new exemplars whose buttons are added by the DLL, at (2, 5) and (2, 6).

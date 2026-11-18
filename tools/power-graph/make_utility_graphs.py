@@ -3,8 +3,9 @@
 #  - Water (0x6534284A / 0xCA4AD545 / 0x00000007): water bought and sold, water by source and wastewater;
 #  - Garbage (0x6534284A / 0xCA4AD545 / 0x0000000A): garbage produced added, real scale, garbage pollution moved out,
 #    own labels for garbage imported and exported, trailing line breaks removed from two labels;
-#  - Garbage Pollution (0x6534284A / 0xCA4AD545 / 0x00000019, new): the garbage pollution index, moved out of the
-#    Garbage graph. Its button is added by SC4SIM.dll (docs/graph-window.md).
+#  - Pollution (0x6534284A / 0xCA4AD545 / 0x00000008, the Maxis Air Pollution graph): air, water, garbage and
+#    radiation pollution in one graph; Water Pollution (0x09) gets Graph Button Hidden;
+#  - Power Grid (0x1A) and Water Grid (0x1B), new: buttons added by SC4SIM.dll (docs/graph-window.md).
 #   python make_utility_graphs.py <CAM_Exemplar_Graphs.dat> <CAM_Locale_en.dat> <out_dir>
 # Writes <out_dir>/<same file name> (the three graph exemplars rebuilt, every other entry unchanged) and
 # <out_dir>/CAM_Locale_en.dat (the plot labels added, LTEXT group 0x6A231EAA). The new lines read the history types
@@ -13,7 +14,7 @@
 import os, struct, sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import dbpf2
-from graph_layout import LAYOUT
+from graph_layout import LAYOUT, HIDDEN
 
 EXEMPLAR, LTEXT = 0x6534284A, 0x2026960B
 GRAPH_GROUP, POWER_GRAPH, WATER_GRAPH, GARBAGE_GRAPH = 0xCA4AD545, 0x00000006, 0x00000007, 0x0000000A
@@ -84,8 +85,14 @@ GRAPHS = {POWER_GRAPH: POWER_PLOTS, WATER_GRAPH: WATER_PLOTS, GARBAGE_GRAPH: GAR
 # gives every other property (graph type, value range); its plots are replaced. Button cell: (column 0-2, row) of the
 # button SC4SIM.dll adds in the Graphs window (Graph Button Cell 0x5C4DE350; rows 0-5 are the Maxis buttons).
 NEW_GRAPHS = {
-    0x19: (0x09, 'Garbage Pollution', 0x5C4DE140, 'Garbage Pollution', LAYOUT[0x19],
-           [(0xFF5D2EA7, None, 0xEA110134, (255, 0, 210))]),      # CAM label "Garbage Pollution"; G_TOTAL_GARBAGE_POLLUTION
+    # Pollution: the four pollution totals the game records (replaces the Maxis Air Pollution graph; the separate
+    # Water Pollution graph is hidden). See docs/graph-window.md.
+    0x08: (0x08, 'Pollution', 0x5C4DE190, 'Pollution', LAYOUT[0x08], [
+        (0x0A5D2EA0, None, 0x0A1100E8, (128, 128, 128)),           # game label "Air Pollution"; G_TOTAL_AIR_POLLUTION
+        (0x0A5D2EA1, None, 0xEA110130, (40, 110, 255)),            # game label "Water Pollution"; G_TOTAL_WATER_POLLUTION
+        (0xFF5D2EA7, None, 0xEA110134, (150, 95, 40)),             # CAM label "Garbage Pollution"; G_TOTAL_GARBAGE_POLLUTION
+        (0x5C4DE191, 'Radiation', 0xEA110137, (200, 210, 0)),      # G_TOTAL_RADIATION_POLLUTION
+    ]),
     # Power grid: demand and unused power (game), production by load class (SC4SIM.dll, from NEON when installed),
     # NEON's load balance and free grid capacities (SC4SIM.dll, only with NEON). See docs/power-grid-graph.md.
     0x1A: (0x09, 'Power Grid', 0x5C4DE160, 'Power Grid', LAYOUT[0x1A], [
@@ -116,7 +123,7 @@ NEW_GRAPHS = {
         (0x5C4DE178, 'Polluted Sources', 0x5C4DE063, (150, 95, 40)),
     ]),
 }
-P_NAME, P_TITLE, P_BUTTON_CELL = 0x00000020, 0x8A416A99, 0x5C4DE350
+P_NAME, P_TITLE, P_BUTTON_CELL, P_BUTTON_HIDDEN = 0x00000020, 0x8A416A99, 0x5C4DE350, 0x5C4DE351
 T_STRING = 0x0C
 
 def string_prop(pid, text):
@@ -135,6 +142,12 @@ def new_graph(template, name, title_instance, cell, plots):
 def set_button_cell(data, cell):
     header, props = records(data)
     out = [raw for pid, raw in props if pid != P_BUTTON_CELL] + [array(P_BUTTON_CELL, T_UINT32, 'I', list(cell))]
+    return header + struct.pack('<I', len(out)) + b''.join(out)
+
+def set_hidden(data):
+    header, props = records(data)
+    out = [raw for pid, raw in props if pid not in (P_BUTTON_CELL, P_BUTTON_HIDDEN)]
+    out.append(struct.pack('<IHHB', P_BUTTON_HIDDEN, 0x0B << 8, 0x00, 0) + b'\x01')
     return header + struct.pack('<I', len(out)) + b''.join(out)
 
 # CAM labels whose text ends with a line break (an empty extra legend row): rewritten without it.
@@ -194,10 +207,13 @@ def main(exemplars, locale, out_dir):
             by_instance[instance]['data'] = data
         else:
             entries.append(dict(t=EXEMPLAR, g=GRAPH_GROUP, i=instance, data=data))
-    # Button order by theme (graph_layout.py): Graph Button Cell in every graph exemplar.
+    # Button order by theme (graph_layout.py): Graph Button Cell in every graph exemplar, Graph Button Hidden in the
+    # merged ones.
     for e in entries:
         if e['t'] == EXEMPLAR and e['g'] == GRAPH_GROUP and e['i'] in LAYOUT:
             e['data'] = set_button_cell(e['data'], LAYOUT[e['i']])
+        elif e['t'] == EXEMPLAR and e['g'] == GRAPH_GROUP and e['i'] in HIDDEN:
+            e['data'] = set_hidden(e['data'])
     dbpf2.write(os.path.join(out_dir, os.path.basename(exemplars)), entries, header_src=raw)
 
     raw, entries = dbpf2.read(locale)
