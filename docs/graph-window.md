@@ -1,4 +1,4 @@
-# Graph buttons for every graph exemplar (1.13.0)
+# Graph buttons driven by the graph exemplars (1.13.0)
 
 > **Not yet tested in game.**
 
@@ -22,14 +22,13 @@ So a new graph is just a new exemplar in group `0xCA4AD545` with an instance fro
 `0x007EDEB0`, once per city view; the radio-button panel `0x0A4A8176` is kept at `this + 0x304`). After the game has
 built it, the module:
 
-1. looks for every graph exemplar `0x6534284A / 0xCA4AD545 / 0x01-0xFF` (`TestForKey`) whose button
-   (`0x4000 + instance`) is not in the panel;
-2. creates each missing button from the template UI `0x00000000 / 0x96A006B0 / 0x5C4DE300` (a copy of the Maxis
+1. looks for every graph exemplar `0x6534284A / 0xCA4AD545 / 0x01-0xFF` (`TestForKey`) and keeps only those with
+   *Graph Button Cell* (below); the others are ignored and a button of the UI for them is hidden;
+2. moves the buttons of the UI to their cell and creates each missing button from the template UI `0x00000000 / 0x96A006B0 / 0x5C4DE300` (a copy of the Maxis
    graph button, in `CAM_UI.dat`) with `cIGZUIScriptService::CreateWindowFromScript`, gives it ID
    `0x4000 + instance` and the graph's name (the LTEXT of *User Visible Name Key* `0x8A416A99`, else the exemplar
-   name), and puts it in the cell the exemplar asks for (*Graph Button Cell*, below) or, without it, in the next
-   free cell of the 3-column grid, below the 6 Maxis rows;
-3. makes the panel one 18-pixel row taller for every 3 new buttons, upward so its bottom stays in place, and moves the
+   name), and puts it in the cell the exemplar asks for;
+3. makes the panel one 18-pixel row taller for every row past the 6 Maxis rows, upward so its bottom stays in place, and moves the
    two graph windows (`0x8A8B5B71` expanded, `0x8A8B5B72` collapsed) up by the same amount. The new rows are painted
    by the filler `0x5C4DE310` (hidden blue FlatRect in `CAM_UI.dat`, behind the button container, whose background
    image now ends at the container's bottom).
@@ -41,12 +40,30 @@ built it, the module:
 | `0x5C4DE350` | Graph Button Cell | Uint32 ×2 | Column (0-2, left to right) and row (from the top; rows 0-5 are the Maxis buttons, so the first free row is 6, up to 31) of the graph's button. |
 | `0x5C4DE351` | Graph Button Hidden | Bool | The graph gets no button; a button of the UI for it is hidden and its cell is free for other graphs. Used for graphs merged into another one. |
 
-The position lives in the graph exemplar itself: no `SC4SIM.ini` key is needed. It applies to every button, the
-Maxis ones included: a button of the UI is moved to its exemplar's cell. Order of placement: buttons of the UI
-without the property keep their place; then graphs with it (lowest instance first) take their cell; then new buttons
-without it fill the free cells row by row, left to right, in instance order. A cell outside the grid or already taken
-is logged in `SC4SIM.log` and the graph goes to the next free cell instead. The panel gets as many rows as the lowest button needs, so an
-empty row between buttons is allowed. The property is defined in New_Properties.xml (Reader and PIM-X show it).
+The position lives in the graph exemplar itself: no `SC4SIM.ini` key is needed. Graphs with the property (lowest
+instance first) take their cell; a button of the UI is moved there. A cell outside the grid or already taken is
+logged in `SC4SIM.log` and the graph goes to the next free cell instead (row by row, left to right). The panel gets
+as many rows as the lowest button needs, so an empty row between buttons is allowed. Both properties are defined in
+New_Properties.xml (Reader and PIM-X show them).
+
+### Graphs without Graph Button Cell are ignored
+
+*Graph Button Cell* is what puts a graph in the window. A graph exemplar without it gets no button, and a button
+of the UI for it (one of the 18 Maxis buttons) is hidden, whoever made the exemplar: the Maxis originals in
+`SimCity_1.dat`, an older CAM version or another mod. So:
+
+- an exemplar that overrides one of `CAM_Exemplar_Graphs.dat` without the property (an older mod loaded later)
+  removes that graph's button instead of taking a cell at random; it is listed in `SC4SIM.log` (Debug level) as
+  "has no Graph Button Cell; ignored", and adding the property brings it back;
+- a stray exemplar in group `0xCA4AD545` adds no button;
+- the window is described by the data alone: the set of exemplars with Graph Button Cell *is* the list of buttons,
+  without relying on the 18 buttons of the Maxis UI. This is meant to ease a later move from the Maxis files to
+  SC4SIM data (for example an open reimplementation such as OpenSC4): the graph exemplars already carry everything
+  the window needs (data sources, labels, colours, title, position).
+
+Transition: when no graph exemplar has Graph Button Cell (SC4SIM's `CAM_Exemplar_Graphs.dat` not installed, Maxis
+files only), the DLL leaves the window exactly as the game builds it, with the 18 Maxis buttons, and logs it.
+*Graph Button Hidden* still works on a graph with Graph Button Cell (hide it without losing its position).
 
 `[GraphWindow] Enabled=false` in `SC4SIM.ini` turns it off. SimCity 4 1.1.641 only (the call
 site is checked before patching).
