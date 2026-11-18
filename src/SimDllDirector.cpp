@@ -115,6 +115,7 @@
 #include "advisors/UnderfundedNotices.h"
 #include "power/PowerGraphHistory.h"
 #include "water/WaterGraphHistory.h"
+#include "ui/GraphButtons.h"
 #include "version.h"
 
 #include "cIGZCOM.h"
@@ -209,6 +210,7 @@ public:
 		UnderfundedNotices::OnStart();
 		PowerGraphHistory::OnStart();
 		WaterGraphHistory::OnStart();
+		GraphButtons::OnStart();
 		Afterlife::OnStart();
 		cIGZFrameWork* const framework = pCOM->FrameWork();
 		if (framework->GetState() < cIGZFrameWork::kStatePreAppInit) framework->AddHook(this);
@@ -243,6 +245,7 @@ public:
 		BudgetFixes::PostAppInit();
 		PortUpgradeFix::PostAppInit();
 		SeaportDemandCapFix::PostAppInit();
+		GraphButtons::PostAppInit();
 
 		// Cheat codes (keepwires, ScanPumps, MixedOccupancy, IMZone, RemovePhantomBudgetItems...) are registered by the modules; the notification is added once here.
 		cISC4AppPtr app;
@@ -272,6 +275,7 @@ public:
 				ms2->RemoveNotification(this, type);
 			}
 		}
+		GraphButtons::PostAppShutdown();
 		SeaportDemandCapFix::PostAppShutdown();
 		PortUpgradeFix::PostAppShutdown();
 		BudgetFixes::PostAppShutdown();

@@ -30,3 +30,7 @@ python make_graph_ui.py "<SimCity 4>/SimCity_1.dat" "<SIM>/a_CAM/1 CAM Core/CAM_
 
 It writes `out/CAM_UI.dat` (the Graphs window UI 0x6BC9065A grown upward, default 180 pixels, and its taller
 background image 0x5C4DE200). Needs Pillow.
+
+`make_graph_ui.py` also writes the button template UI (0x5C4DE300) and the panel filler (0x5C4DE310) used by
+SC4SIM.dll to add a button for every graph exemplar (`docs/graph-window.md`); `make_utility_graphs.py` adds the
+Garbage Pollution graph (0x19).

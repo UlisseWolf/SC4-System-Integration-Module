@@ -49,6 +49,7 @@ such as NEON.
 | Advanced Water Management | 1.2.0 | The real efficiency of water buildings in the query dialog and tool tip, a monthly warning for fresh or salt water pumps that produce nothing, and the `ScanPumps` cheat. |
 | Power graph by energy class | 1.13.0 | The Power graph shows the energy bought and sold and the production of each energy class (coal, oil, natural gas, nuclear fission, nuclear fusion, solar, wind, geothermal, hydroelectric, tidal, microwave, biomass, generators, waste to energy), recorded monthly in the city history. See `docs/power-graph.md`. *Not yet tested in game.* |
 | Water graph by source and wastewater | 1.13.0 | The Water graph shows the water bought and sold, the water from aquifers, fresh water and salt water, the wastewater produced, treated by treatment plants and recycled by sewage plants, recorded monthly in the city history. See `docs/water-graph.md`. *Not yet tested in game.* |
+| Graph buttons | 1.13.0 | The Graphs window gets a button for every graph exemplar (instances up to 0xFF), added when a city opens; a new graph is just a new exemplar. Example included: Garbage Pollution. See `docs/graph-window.md`. *Not yet tested in game.* |
 
 ## Requirements
 
@@ -314,6 +315,7 @@ Details, the news events and the tests are in [`docs/afterlife.md`](docs/afterli
 | `[Afterlife]` | `Enabled` | `true` | Registers the DLL version of the Afterlife functions in the advisor Lua. |
 | `[PowerGraph]` | `Enabled` | `true` | Records the monthly production of each energy class for the Power graph. |
 | `[WaterGraph]` | `Enabled` | `true` | Records the monthly water by source and wastewater for the Water graph. |
+| `[GraphWindow]` | `Enabled` | `true` | Adds a button in the Graphs window for every graph exemplar. |
 | `[ManufacturingZone]` | `Enabled` | `true` | Turns the I-M zone on or off. |
 | | `ZoneSlot` | `13` | Zone slot reused for the I-M zone: 13 Spaceport or 10 Military (other values refused). |
 | | `StageHook` | `true` | Every growth stage fits the slot; required for the I-M redirect. |
