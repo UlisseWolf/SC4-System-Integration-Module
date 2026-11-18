@@ -115,6 +115,7 @@
 #include "advisors/UnderfundedNotices.h"
 #include "power/PowerGraphHistory.h"
 #include "water/WaterGraphHistory.h"
+#include "safety/CrimeGraphHistory.h"
 #include "ui/GraphButtons.h"
 #include "version.h"
 
@@ -210,6 +211,7 @@ public:
 		UnderfundedNotices::OnStart();
 		PowerGraphHistory::OnStart();
 		WaterGraphHistory::OnStart();
+		CrimeGraphHistory::OnStart();
 		GraphButtons::OnStart();
 		Afterlife::OnStart();
 		cIGZFrameWork* const framework = pCOM->FrameWork();
@@ -318,6 +320,7 @@ public:
 			Afterlife::DoMessage(message);
 			PowerGraphHistory::DoMessage(message);
 			WaterGraphHistory::DoMessage(message);
+			CrimeGraphHistory::DoMessage(message);
 		}
 		else if (type == kMsgPostSave || type == kMsgLoad || type == kMsgSave)
 		{

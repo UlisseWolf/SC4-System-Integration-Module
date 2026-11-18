@@ -35,6 +35,7 @@ add_library(SC4SIM SHARED
   src/afterlife/Deathcare.cpp
   src/power/PowerGraphHistory.cpp
   src/water/WaterGraphHistory.cpp
+  src/safety/CrimeGraphHistory.cpp
   src/ui/GraphButtons.cpp
   ${GZCOM}/src/cRZBaseString.cpp
   ${GZCOM}/src/cRZBaseVariant.cpp

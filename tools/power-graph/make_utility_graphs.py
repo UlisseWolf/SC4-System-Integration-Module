@@ -5,6 +5,7 @@
 #    own labels for garbage imported and exported, trailing line breaks removed from two labels;
 #  - Pollution (0x6534284A / 0xCA4AD545 / 0x00000008, the Maxis Air Pollution graph): air, water, garbage and
 #    radiation pollution in one graph; Water Pollution (0x09) gets Graph Button Hidden;
+#  - Crime (0x0C): crimes and arrests with unsolved crimes, criminals and inmates; Police & Jails (0x1C), new;
 #  - Power Grid (0x1A) and Water Grid (0x1B), new: buttons added by SC4SIM.dll (docs/graph-window.md).
 #   python make_utility_graphs.py <CAM_Exemplar_Graphs.dat> <CAM_Locale_en.dat> <out_dir>
 # Writes <out_dir>/<same file name> (the three graph exemplars rebuilt, every other entry unchanged) and
@@ -92,6 +93,22 @@ NEW_GRAPHS = {
         (0x0A5D2EA1, None, 0xEA110130, (40, 110, 255)),            # game label "Water Pollution"; G_TOTAL_WATER_POLLUTION
         (0xFF5D2EA7, None, 0xEA110134, (150, 95, 40)),             # CAM label "Garbage Pollution"; G_TOTAL_GARBAGE_POLLUTION
         (0x5C4DE191, 'Radiation', 0xEA110137, (200, 210, 0)),      # G_TOTAL_RADIATION_POLLUTION
+    ]),
+    # Crime: the game's crimes and arrests, with unsolved crimes, criminals and inmates (SC4SIM.dll). Police & Jails:
+    # the game's police coverage and average crime, with arrest rate and jail occupancy (SC4SIM.dll). See
+    # docs/crime-graph.md.
+    0x0C: (0x0C, 'Crime', 0x5C4DE1A8, 'Crime', LAYOUT[0x0C], [
+        (0x0A5D2EA4, None, 0x0A5CC155, (83, 101, 153)),            # game label "Crimes"; G_NUM_CRIMES
+        (0x0A5D2EA5, None, 0x0A5CC156, (93, 189, 152)),            # game label "Arrests"; G_NUM_ARRESTS
+        (0x5C4DE1A3, 'Unsolved Crimes', 0x5C4DE083, (220, 11, 11)),
+        (0x5C4DE1A1, 'Criminals', 0x5C4DE081, (255, 140, 0)),
+        (0x5C4DE1A2, 'Inmates', 0x5C4DE082, (128, 128, 128)),
+    ]),
+    0x1C: (0x0C, 'Police & Jails', 0x5C4DE1A0, 'Police & Jails', LAYOUT[0x1C], [
+        (0x5C4DE1A4, 'Police Coverage %', 0x4A11D354, (40, 110, 255)),   # G_POLICE_PROTECTION_COVERAGE_P
+        (0x5C4DE1A5, 'Average Crime', 0xAA662693, (220, 11, 11)),        # GA_CRIME
+        (0x5C4DE1A6, 'Arrest Rate %', 0x5C4DE084, (93, 189, 152)),
+        (0x5C4DE1A7, 'Jail Occupancy %', 0x5C4DE085, (128, 128, 128)),
     ]),
     # Power grid: demand and unused power (game), production by load class (SC4SIM.dll, from NEON when installed),
     # NEON's load balance and free grid capacities (SC4SIM.dll, only with NEON). See docs/power-grid-graph.md.

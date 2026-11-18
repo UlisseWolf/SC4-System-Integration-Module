@@ -76,15 +76,16 @@ exemplar of `CAM_Exemplar_Graphs.dat` as Graph Button Cell):
 | Row | Population and education | Government, economy, transport | Services and environment |
 |---|---|---|---|
 | 0 | Jobs & Pop. | Mayor Rating | Crime |
-| 1 | RCI Demand | Funds | Power |
-| 2 | Population by Age | City Income/Expenses | Water |
-| 3 | Life Expectancy | Res. Avg. Income | Garbage |
-| 4 | Education | Commute Time | Pollution |
-| 5 | Education by Age | Traffic Volume | Power Grid |
-| 6 | | | Water Grid |
+| 1 | RCI Demand | Funds | Police & Jails |
+| 2 | Population by Age | City Income/Expenses | Power |
+| 3 | Life Expectancy | Res. Avg. Income | Water |
+| 4 | Education | Commute Time | Garbage |
+| 5 | Education by Age | Traffic Volume | Pollution |
+| 6 | | | Power Grid |
+| 7 | | | Water Grid |
 
 The 17 remaining Maxis buttons are also placed this way in the Graphs UI of `CAM_UI.dat`, so the order is the same
-without the DLL (which only adds Power Grid and Water Grid). The Water Pollution button (`0x4009`) is removed from the
+without the DLL (which only adds Police & Jails, Power Grid and Water Grid). The Water Pollution button (`0x4009`) is removed from the
 UI and its exemplar has Graph Button Hidden, since its data is now in the Pollution graph.
 
 ## Adding a graph
@@ -117,5 +118,6 @@ no button, because the UI no longer has it.
 
 ## Included graphs
 
-The Power Grid (`0x1A`, `docs/power-grid-graph.md`) and Water Grid (`0x1B`, `docs/water-grid-graph.md`) graphs are
-new exemplars whose buttons are added by the DLL, at (2, 5) and (2, 6).
+The Police & Jails (`0x1C`, `docs/crime-graph.md`), Power Grid (`0x1A`, `docs/power-grid-graph.md`) and Water Grid
+(`0x1B`, `docs/water-grid-graph.md`) graphs are new exemplars whose buttons are added by the DLL, at (2, 1), (2, 6)
+and (2, 7). The Crime graph (`0x0C`) is also rebuilt (`docs/crime-graph.md`).

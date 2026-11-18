@@ -71,7 +71,7 @@ def edit_ui(text, h):
 COLUMN_X = ((0, 166), (170, 336), (340, 496))
 
 # Captions of Maxis buttons whose graph changed: instance -> (LTEXT instance in group 0x6A231EAA, text).
-CAPTIONS = {0x08: (0x5C4DE190, 'Pollution')}
+CAPTIONS = {0x08: (0x5C4DE190, 'Pollution'), 0x0C: (0x5C4DE1A8, 'Crime')}
 
 def order_buttons(lines):
     """The Maxis graph buttons (IDs 0x4000 + instance) in the cells of graph_layout.py (rows 0-5); buttons of
