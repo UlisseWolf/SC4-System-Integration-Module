@@ -38,7 +38,7 @@ writes a button for every graph of `graph_layout.py` into `CAM_UI.dat` (a copy o
 `0x4000 + instance`, caption = the graph's title); the DLL only moves them to their cells. Buttons for graphs of
 other plugins are still created at run time; until their clicks are routed to the game they may not work.
 
-The three windows are also lifted 36 pixels (`LIFT`), so that the 10 button rows clear the news ticker at the
+The three windows are also lifted (`LIFT`, now 66 pixels), so that the 10 button rows clear the news ticker at the
 bottom of the screen (third test: the last rows were hidden behind it).
 
 `CAM_UI.dat` already sizes the panel for every row of `graph_layout.py` (10
@@ -62,8 +62,9 @@ type 3, `0x287259F6`, button ID), turns the page and leaves every other message 
 before patching and restored when the game closes. Every CAM button is in `CAM_UI.dat` (pages after the first start
 hidden), since buttons created at run time do not receive clicks yet. Without the DLL only page 1 is shown.
 
-The window is 24 pixels taller than the Maxis one for the page row, plus 120 pixels of graph area, and lifted 36
-pixels.
+The window is 24 pixels taller than the Maxis one for the page row, plus 100 pixels of graph area, and lifted 66
+pixels so that the page row clears the news ticker. Previous and Next are text-only buttons (no image, transparent,
+the flags of the Maxis graph buttons): the flat button image of another Maxis UI drew black boxes.
 
 ## Button position: Graph Button Cell
 

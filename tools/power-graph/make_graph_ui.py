@@ -4,7 +4,7 @@
 #   python make_graph_ui.py <SimCity_1.dat> <CAM_UI.dat> <out_dir> [extra_height]
 # Reads the Graphs window UI (0x00000000 / 0x96A006B0 / 0x6BC9065A) and its background image
 # (PNG 0x856DDBAC / 0x46A006B0 / 0xEBBEAE28) from the game, grows the expanded graph window (0x8A8B5B71) upward by
-# extra_height pixels (default 120: the 18 lines of the Power graph legend need 94) and writes <out_dir>/CAM_UI.dat = the input CAM_UI.dat plus the edited UI and a
+# extra_height pixels (default 100: the 18 lines of the Power graph legend need 94) and writes <out_dir>/CAM_UI.dat = the input CAM_UI.dat plus the edited UI and a
 # taller background image (PNG 0x856DDBAC / 0x46A006B0 / 0x5C4DE200). The radio-button panel and the collapsed
 # window are unchanged; the graph area (0x8A4B0AA0), its frame, the Time Scale texts and the slider keep their
 # distance from the bottom. The game lays the legend out from the graph area's height (0x0076E0F0 and following), so
@@ -37,8 +37,9 @@ EXTRA = 24                  # navigation row under the buttons (Previous, page n
                             # windows grow upward by EXTRA
 NAV_TOP = 113               # top of the navigation row in the panel (the container's last row ends at 113)
 NAV_PREV, NAV_NEXT, NAV_LABEL = 0x5C4DE320, 0x5C4DE321, 0x5C4DE322
-LIFT = 36                   # the three windows move up by this many pixels, so that the 10 button rows clear the
-                            # news ticker at the bottom of the screen (third in-game test: the last rows were behind it)
+LIFT = 66                   # the three windows move up by this many pixels, so that the 10 button rows clear the
+                            # news ticker at the bottom of the screen (third and fourth in-game tests: the last row was
+                            # behind it)
 PANEL_ROW = 400             # background row (inside the button panel) repeated EXTRA times, expanded window image
 COLLAPSED_PANEL_ROW = 100   # the same, collapsed window image
 
@@ -238,12 +239,14 @@ def filler_line(lines):
 # Button of the Maxis UIs used for the navigation buttons (flat text button, 18 pixels high).
 NAV_BUTTON = ('<LEGACY clsid=GZWinBtn iid=IGZWinBtn id=0x%08x area=(%d,%d,%d,%d) fillcolor=(156,178,194) caption="%s" '
     'winflag_visible=no winflag_enabled=yes winflag_moveable=yes winflag_sizeable=no winflag_sortable=no winflag_pbuff=no '
-    'winflag_pbufftrans=no winflag_pbufferase=yes winflag_pbuffvid=no winflag_alphablend=no winflag_acceptfocus=yes '
-    'winflag_mousetrans=no winflag_ignoremouse=no image={46a006b0,14416242} font=GenBodyLight colorfontnormal=(63,73,103) '
-    'colorfontdisabled=(102,102,102) colorfonthilited=(255,255,255) colorfontnormalbkg=(153,187,204) '
-    'colorfontdisabledbkg=(153,187,204) colorfonthilitedbkg=(153,187,204) toggle=off triggerondown=off showcaption=yes '
-    'fill=yes autosize=no wrapcaption=no shiftcaption=yes tips=no tipsdelay=no tipstimeout=no style=standard '
-    'gutters=(0,0,0,0) tiptext="" tipoffsets=(0,0) tipflag=0x01000000 align=center btnclicksnd={ca47efd9,8a5c321b} >')
+    'winflag_pbufftrans=yes winflag_pbufferase=yes winflag_pbuffvid=no winflag_alphablend=yes winflag_acceptfocus=yes '
+    'winflag_mousetrans=no winflag_ignoremouse=no font=GenBodyLight colorfontnormal=(63,73,103) '
+    'colorfontdisabled=(102,102,102) colorfonthilited=(255,255,255) colorfontnormalbkg=(0,0,0) '
+    'colorfontdisabledbkg=(0,0,0) colorfonthilitedbkg=(0,0,0) toggle=off triggerondown=off showcaption=yes '
+    'fill=no autosize=no wrapcaption=no shiftcaption=no tips=no tipsdelay=no tipstimeout=no style=standard '
+    'gutters=(0,0,0,0) tiptext="" tipoffsets=(0,0) tipflag=0x01000000 align=center btnclicksnd={ca4d1943,2a5c322b} >')
+# Text-only buttons (no image, no fill, transparent buffer: the flags of the Maxis graph buttons). The first version
+# used the flat button image 0x14416242 of another Maxis UI, which drew black boxes here.
 
 def nav_lines(lines):
     """Previous / page number / Next under the buttons, hidden: SC4SIM.dll shows them when there is more than one
@@ -309,7 +312,7 @@ def tall_image(png, h):
     buf = io.BytesIO(); wide_image(taller_image(new, PANEL_ROW + h)).save(buf, 'PNG')
     return buf.getvalue()
 
-def main(game, cam_ui, out_dir, h='120'):
+def main(game, cam_ui, out_dir, h='100'):
     h = int(h)
     _, game_entries = dbpf2.read(game)
     ui = find(game_entries, UI, UI_GROUP, UI_GRAPHS).decode('latin1')
