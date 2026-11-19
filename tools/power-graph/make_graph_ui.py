@@ -33,11 +33,11 @@ IMG_COLLAPSED_SRC = 0xABBEAD86
 assert (488 + WIDTH) % 3 == 0
 assert PAGE_ROWS == 6        # the button container keeps the 6 Maxis rows; more graphs go on more pages
 PAGES = max(row for _, row in LAYOUT.values()) // PAGE_ROWS + 1
-EXTRA = 24                  # navigation row above the buttons (Previous, page number, Next): the panel and both graph
-                            # windows grow upward by EXTRA, so their bottoms and the 6 button rows stay exactly where the
-                            # Maxis window has them (fourth and fifth in-game tests: a row under the buttons, even with
-                            # the windows lifted, ended behind the news ticker: the game keeps the window's bottom)
-NAV_TOP = 4                 # top of the navigation row in the panel; the button container starts EXTRA lower
+EXTRA = 0                   # the panel keeps its Maxis size: the page buttons take the last cell of the right column
+                            # (NAV_CELL), free on every page. In-game tests 4-6: a page row under or above the buttons
+                            # did not fit (the game keeps the bottom of the windows, and the graph frame of the expanded
+                            # window keeps its distance from the window's bottom, so a row above covered Time Scale)
+NAV_CELL = (2, 5)           # (column, row within the page) of < / page number / > on every page
 NAV_PREV, NAV_NEXT, NAV_LABEL = 0x5C4DE320, 0x5C4DE321, 0x5C4DE322
 LIFT = 0                    # the windows keep their Maxis bottom (lifting them did not help: see EXTRA)
 PANEL_ROW = 328             # background row at the top of the button panel, repeated EXTRA times (expanded image)
@@ -185,6 +185,8 @@ def add_buttons(lines):
     present = {int(m.group(1), 16) - 0x4000 for l in lines
                for m in [re.search(r'id=0x0000(4[0-9a-f]{3})', l)] if m and 'clsid=GZWinBtn' in l}
     new = []
+    for instance, (column, row) in LAYOUT.items():
+        assert (column, row % PAGE_ROWS) != NAV_CELL, 'graph 0x%02X in the page-button cell' % instance
     for instance in sorted(LAYOUT):
         if instance in present:
             continue
@@ -193,7 +195,8 @@ def add_buttons(lines):
         line = re.sub(r'caption="[^"]*" captionres=\{[^}]*\}', 'caption="%s" captionres={6a231eaa,%08x}' % (text, title), line)
         assert '%08x' % title in line
         new.append(place(line, instance))
-    return lines[:last + 1] + new + lines[last + 1:]
+    indent = lines[last][:len(lines[last]) - len(lines[last].lstrip())]
+    return lines[:last + 1] + new + [indent + nav for nav in nav_lines(lines)] + lines[last + 1:]
 
 def place(line, instance):
     """The button in its cell: the row within its page; buttons of the pages after the first start hidden."""
@@ -221,7 +224,6 @@ def edit_panel(lines, h):
             line = line.replace('winflag_sizeable=no', 'winflag_sizeable=yes')
             indent = line[:len(line) - len(line.lstrip())]
             out.append(indent + filler_line(lines))
-            out.extend(indent + nav for nav in nav_lines(lines))
             done = True
         out.append(line)
     assert done
@@ -251,19 +253,20 @@ NAV_BUTTON = ('<LEGACY clsid=GZWinBtn iid=IGZWinBtn id=0x%08x area=(%d,%d,%d,%d)
 # used the flat button image 0x14416242 of another Maxis UI, which drew black boxes here.
 
 def nav_lines(lines):
-    """Previous / page number / Next above the buttons, hidden: SC4SIM.dll shows them when there is more than one
-    page and handles their clicks (Graph pages, docs/graph-window.md)."""
+    """< / page number / > in the page-button cell of the button container, hidden: SC4SIM.dll shows them when there
+    is more than one page and handles their clicks (docs/graph-window.md)."""
     text = next(l for l in lines if 'id=0x8a2871d8' in l).strip()          # the "Time Scale" text of the Maxis UI
     text = text.replace('id=0x8a2871d8', 'id=0x%08x' % NAV_LABEL)
-    text = re.sub(r'caption="[^"]*" captionres=\{[^}]*\}', 'caption="Page 1 / %d"' % PAGES, text)
-    right = 505 + WIDTH                                                     # right edge of the button container
-    text = re.sub(r'area=\([^)]*\)', 'area=(%d,%d,%d,%d)' % (110, NAV_TOP, right - 104, NAV_TOP + 18), text, count=1)
+    text = re.sub(r'caption="[^"]*" captionres=\{[^}]*\}', 'caption="1 / %d"' % PAGES, text)
+    left, right = COLUMN_X[NAV_CELL[0]]
+    top = 1 + 18 * NAV_CELL[1]
+    width = 54
+    text = re.sub(r'area=\([^)]*\)', 'area=(%d,%d,%d,%d)' % (left + width, top, right - width, top + 18), text, count=1)
     text = text.replace('align=rightcenter', 'align=center').replace('winflag_visible=yes', 'winflag_visible=no', 1)
     assert 'align=center' in text and 'winflag_visible=no' in text
-    width = 100
-    return [NAV_BUTTON % (NAV_PREV, 8, NAV_TOP, 8 + width, NAV_TOP + 18, '< Previous'),
+    return [NAV_BUTTON % (NAV_PREV, left, top, left + width, top + 18, '< Prev'),
             text,
-            NAV_BUTTON % (NAV_NEXT, right - width, NAV_TOP, right, NAV_TOP + 18, 'Next >')]
+            NAV_BUTTON % (NAV_NEXT, right - width, top, right, top + 18, 'Next >')]
 
 def button_template(text):
     """The Maxis Crime button (0x0000400C) as a one-window UI: ID 0x5C4DE301, no caption, at the origin."""

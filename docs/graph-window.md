@@ -49,8 +49,10 @@ other plugins are still created at run time; until their clicks are routed to th
 
 The button container keeps the 6 rows of the Maxis window, and the graphs are split in **pages** of 6 rows: row r
 of *Graph Button Cell* is row r % 6 of page r / 6 (so rows 6-11 are page 2, 12-17 page 3, up to 31). One page is
-shown at a time; a row above the buttons holds **< Previous**, the page number and **Next >** (`0x5C4DE320`,
-`0x5C4DE322`, `0x5C4DE321` in `CAM_UI.dat`), shown only when there is more than one page. Page 1 holds the Maxis
+shown at a time. The last cell of the right column (column 2, row 5 of every page) is kept free for **< Prev**,
+the page number and **Next >** (`0x5C4DE320`, `0x5C4DE322`, `0x5C4DE321` in `CAM_UI.dat`), shown only when there is
+more than one page. The window keeps the exact Maxis size and position: the game anchors the graph frame and Time
+Scale to the bottom of the window, so any extra row would cover them. Page 1 holds the Maxis
 graphs, as in the original window, page 2 the graphs SC4SIM adds, each in the column of its theme.
 
 The DLL takes the Previous / Next clicks from the graph window's message handler (`cIGZWinProc` built at

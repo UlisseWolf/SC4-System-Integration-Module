@@ -86,10 +86,12 @@ namespace
 	constexpr std::array<int32_t, 3> kColumnLeft = { 0, 170, 340 };
 	constexpr std::array<int32_t, 3> kColumnRight = { 166, 336, 496 };
 
-	// Pages: Previous / Next buttons and the page number (CAM_UI.dat, hidden until the DLL shows them).
+	// Pages: < / page number / > (CAM_UI.dat, in the button container, hidden until the DLL shows them), in the last
+	// cell of the right column of every page, which no graph may use.
 	constexpr uint32_t kNavPrevId = 0x5C4DE320;
 	constexpr uint32_t kNavNextId = 0x5C4DE321;
 	constexpr uint32_t kNavLabelId = 0x5C4DE322;
+	constexpr int32_t kNavColumn = 2;
 	// The graph window's message handler (cIGZWinProc::DoWinProcMessage of the object built at 0x0076CFE0), slot 3
 	// of its vtable 0x00AB4FE0: button clicks of the Graphs window (message type 3, 0x287259F6, button ID) arrive
 	// there; the Previous / Next clicks are taken before it.
@@ -125,7 +127,7 @@ namespace
 		if (navLabel)
 		{
 			cRZBaseString text;
-			text.Sprintf("Page %d / %d", currentPage + 1, pageCount);
+			text.Sprintf("%d / %d", currentPage + 1, pageCount);
 			navLabel->SetCaption(text);
 		}
 		if (buttonContainer) buttonContainer->InvalidateSelf();
@@ -336,6 +338,13 @@ namespace
 			if (info.button) info.button->HideWindow();
 			info.row = -1;
 		}
+		// The page-button cell of every page (last row of the right column) stays free when the UI has the buttons.
+		cIGZWin* const navInUi = container->GetChildWindowFromID(kNavPrevId);
+		const int32_t pageRowsForNav = std::max(1, (container->GetB() - container->GetT() - 1 + kRowHeight - 1) / kRowHeight);
+		if (navInUi)
+		{
+			for (int32_t row = pageRowsForNav - 1; row < kMaxRows; row += pageRowsForNav) taken[row][kNavColumn] = true;
+		}
 		for (GraphInfo& info : graphs)
 		{
 			if (info.hidden || info.keep || !info.hasCell) continue;
@@ -412,9 +421,9 @@ namespace
 
 		pageCount = lastPage + 1;
 		buttonContainer = container;
-		navPrev = panel->GetChildWindowFromID(kNavPrevId);
-		navNext = panel->GetChildWindowFromID(kNavNextId);
-		navLabel = panel->GetChildWindowFromID(kNavLabelId);
+		navPrev = container->GetChildWindowFromID(kNavPrevId);
+		navNext = container->GetChildWindowFromID(kNavNextId);
+		navLabel = container->GetChildWindowFromID(kNavLabelId);
 		for (cIGZWin* const nav : { static_cast<cIGZWin*>(navPrev), static_cast<cIGZWin*>(navNext), static_cast<cIGZWin*>(navLabel) })
 		{
 			if (!nav) continue;
