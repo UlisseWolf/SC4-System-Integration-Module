@@ -32,6 +32,9 @@ namespace Deathcare
 		double collected = 0, cremated = 0, buried = 0, uncollected = 0, relocation = 0, emptied = 0;
 		double gravesUsed = 0, gravesTotal = 0, cremationCapacity = 0;
 		double cemeteries = 0, crematoria = 0, cemeteriesNearlyFull = 0;
+		// Health advisor notice of this month (lua/deathcare_advice.lua): 0 none, 1 uncollected dead, 2 every cemetery
+		// full and no crematorium, 3 cemeteries nearly full; with its count (dead or cemeteries) and the worst cell.
+		double advice = 0, adviceCount = 0, adviceX = 0, adviceZ = 0;
 	};
 
 	// [Afterlife] keys of SC4SIM.ini (DEATHCARE, DEATHCARE_EFFECTS, ...).

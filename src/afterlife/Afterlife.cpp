@@ -351,6 +351,10 @@ namespace
 			{ "DEATHCARE_RELOCATION", care.relocation },
 			{ "DEATHCARE_EMPTIED", care.emptied },
 			{ "CEMETERIES_NEARLY_FULL", care.cemeteriesNearlyFull },
+			{ "DEATHCARE_ADVICE", care.advice },
+			{ "DEATHCARE_ADVICE_COUNT", care.adviceCount },
+			{ "DEATHCARE_ADVICE_X", care.adviceX },
+			{ "DEATHCARE_ADVICE_Z", care.adviceZ },
 		};
 		for (const auto& [name, value] : deathcare)
 		{

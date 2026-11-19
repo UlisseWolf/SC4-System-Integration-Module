@@ -62,19 +62,22 @@ UI_ROWS = {
 }
 UI_ROW_STEP = 20
 
-# Deathcare notifications (src/afterlife/Deathcare.cpp), advisor text group.
-# #count#, #x# and #z# are filled in by SC4SIM.dll.
+# Deathcare notices: advice of the Health advisor (lua/deathcare_advice.lua), advisor text group. The numbers come
+# from afterlife_grid_var, which SC4SIM.dll fills (DEATHCARE_ADVICE_COUNT, DEATHCARE_ADVICE_X, DEATHCARE_ADVICE_Z).
 DEATHCARE_TEXTS = [
     (0xBB3C4000, "Uncollected Dead"),
-    (0xBB3C4001, "#count# dead have nowhere to go: no cemetery or crematorium in range has room. The worst neighborhood "
-                 "is around cell #x#, #z#. Until they are collected, the health of those neighborhoods keeps falling. "
-                 "Build a cemetery or a crematorium nearby."),
+    (0xBB3C4001, "Mayor, #afterlife_grid_var.DEATHCARE_ADVICE_COUNT# dead have nowhere to go: no cemetery or crematorium "
+                 "in range has room. The worst neighborhood is around cell #afterlife_grid_var.DEATHCARE_ADVICE_X#, "
+                 "#afterlife_grid_var.DEATHCARE_ADVICE_Z#. Until they are collected, the health of those neighborhoods "
+                 "keeps falling. Build a cemetery or a crematorium nearby."),
     (0xBB3C4002, "Cemeteries Full"),
-    (0xBB3C4003, "Every cemetery in the city is full and there is no crematorium. #count# dead are left uncollected and "
-                 "the health of their neighborhoods keeps falling. Build a new cemetery or a crematorium."),
+    (0xBB3C4003, "Mayor, every cemetery in #city# is full and there is no crematorium. "
+                 "#afterlife_grid_var.DEATHCARE_ADVICE_COUNT# dead are left uncollected and the health of their "
+                 "neighborhoods keeps falling. Build a new cemetery or a crematorium."),
     (0xBB3C4004, "Cemeteries Nearly Full"),
-    (0xBB3C4005, "#count# cemetery(ies) are nearly full. A crematorium in range empties full cemeteries with the room it "
-                 "has left each month; otherwise build a new cemetery before the dead are left uncollected."),
+    (0xBB3C4005, "Mayor, #afterlife_grid_var.DEATHCARE_ADVICE_COUNT# cemetery(ies) are nearly full. A crematorium in "
+                 "range empties full cemeteries with the room it has left each month; otherwise build a new cemetery "
+                 "before the dead are left uncollected."),
 ]
 
 

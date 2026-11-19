@@ -87,13 +87,20 @@ The Transient Aura data view of the same DLL shows the whole grid, positive effe
 
 ## Notices
 
-Each at most once a year (LTEXT `6A231EA4`; `#count#`, `#x#`, `#z#` are filled in by the DLL):
+The notices are advice of the **Health & Education advisor** (`lua/deathcare_advice.lua`, Lua
+`CA63E2A3-4A5E8EF6-8BB3C400` in `CAM_LUA_Controller.dat`), with the advisor's face, the advisor panel and a popup when
+the priority reaches the popup threshold of the difficulty level. Up to 1.13 they were plain notification windows.
+The DLL decides each month which notice is due, each at most once a year, and leaves it in `afterlife_grid_var` for
+one month: `DEATHCARE_ADVICE` (0 none, 1, 2 or 3 as below), `DEATHCARE_ADVICE_COUNT`, `DEATHCARE_ADVICE_X`,
+`DEATHCARE_ADVICE_Z`. The texts (LTEXT `6A231EA4`, in `CAM_Locale_en.dat`) show them with
+`#afterlife_grid_var.DEATHCARE_ADVICE_COUNT#` and the like. `tools/deathcare-advice/install_advice.py` puts the script
+and the texts into the two DAT files.
 
-| Notice | When | LTEXT |
-| --- | --- | --- |
-| Uncollected Dead | uncollected dead reach `DEATHCARE_NOTIFY_UNCOLLECTED` (50); gives their number and the cell of the worst neighborhood | `BB3C4000`, `BB3C4001` |
-| Cemeteries Full | the same, when every cemetery is full and there is no crematorium | `BB3C4002`, `BB3C4003` |
-| Cemeteries Nearly Full | a cemetery reaches `DEATHCARE_NOTIFY_NEARLY_FULL` (80%) | `BB3C4004`, `BB3C4005` |
+| Advice | `DEATHCARE_ADVICE` | When | Priority | LTEXT |
+| --- | --- | --- | --- | --- |
+| Uncollected Dead (`BB3C4010`) | 1 | uncollected dead reach `DEATHCARE_NOTIFY_UNCOLLECTED` (50); gives their number and the cell of the worst neighborhood | Urgent | `BB3C4000`, `BB3C4001` |
+| Cemeteries Full (`BB3C4011`) | 2 | the same, when every cemetery is full and there is no crematorium | Urgent | `BB3C4002`, `BB3C4003` |
+| Cemeteries Nearly Full (`BB3C4012`) | 3 | a cemetery reaches `DEATHCARE_NOTIFY_NEARLY_FULL` (80%) | High | `BB3C4004`, `BB3C4005` |
 
 ## News
 

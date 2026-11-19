@@ -41,7 +41,6 @@
 #include "Deathcare.h"
 #include "SimLog.h"
 #include "VersionDetection.h"
-#include "SC4NotificationDialog.h"
 #include "QueryUIHooks/cIBuildingQueryDialogHookTarget.h"
 #include "QueryUIHooks/cIBuildingQueryHookServer.h"
 
@@ -58,13 +57,10 @@
 #include "cISCLua.h"
 #include "cISCPropertyHolder.h"
 #include "cRZAutoRefCount.h"
-#include "cRZBaseString.h"
 #include "cS3DVector3.h"
 #include "GZServPtrs.h"
 #include "SC4Rect.h"
 #include "SCPropertyUtil.h"
-#include "StringResourceKey.h"
-#include "StringResourceManager.h"
 
 #include <Windows.h>
 #include <algorithm>
@@ -78,11 +74,6 @@ namespace
 {
 	constexpr uint32_t kOccupantTypeBuilding = 0x278128A0;
 	constexpr float kCellSize = 16.0f;
-	constexpr uint32_t kLTEXTGroup = 0x6A231EA4;
-	// Notices: caption, message (the message may hold #count#, #x#, #z#).
-	constexpr uint32_t kTextUncollectedCaption = 0xBB3C4000, kTextUncollectedMessage = 0xBB3C4001;
-	constexpr uint32_t kTextFullCaption = 0xBB3C4002, kTextFullMessage = 0xBB3C4003;
-	constexpr uint32_t kTextNearlyFullCaption = 0xBB3C4004, kTextNearlyFullMessage = 0xBB3C4005;
 
 	struct Settings
 	{
@@ -404,29 +395,16 @@ namespace
 	}
 
 	// ---------------------------------------------------------------- notices
+	// The notices are advice of the Health advisor (lua/deathcare_advice.lua): the DLL only decides, at most once a year
+	// per notice, which one is due this month and leaves it in the totals, which Afterlife mirrors into
+	// afterlife_grid_var (DEATHCARE_ADVICE, DEATHCARE_ADVICE_COUNT, DEATHCARE_ADVICE_X, DEATHCARE_ADVICE_Z).
 
-	void Notify(uint32_t captionId, uint32_t messageId, double count, int32_t x, int32_t z)
+	void Advise(double code, double count, int32_t x, int32_t z)
 	{
-		cRZAutoRefCount<cIGZString> message, caption;
-		if (!StringResourceManager::GetLocalizedString(StringResourceKey(kLTEXTGroup, messageId), message)
-			|| !StringResourceManager::GetLocalizedString(StringResourceKey(kLTEXTGroup, captionId), caption))
-		{
-			return;
-		}
-		std::string text(message->ToChar(), message->Strlen());
-		const auto replace = [&text](const std::string& token, const std::string& value)
-		{
-			for (size_t at = text.find(token); at != std::string::npos; at = text.find(token, at + value.size()))
-			{
-				text.replace(at, token.size(), value);
-			}
-		};
-		char number[32]{};
-		snprintf(number, sizeof(number), "%.0f", count);
-		replace("#count#", number);
-		replace("#x#", std::to_string(x));
-		replace("#z#", std::to_string(z));
-		SC4NotificationDialog::ShowDialog(cRZBaseString(text), *caption);
+		totals.advice = code;
+		totals.adviceCount = std::round(count);
+		totals.adviceX = x;
+		totals.adviceZ = z;
 	}
 
 	double ReadDouble(const wchar_t* ini, const wchar_t* key, double fallback)
@@ -651,13 +629,12 @@ void Deathcare::RunMonth(const TractGrid& tracts, const std::vector<double>& dea
 		monthsSince[allFull ? 1 : 0] = 0;
 		const int32_t cellX = (KeyX(worstKey) << tracts.shift) + (1 << tracts.shift) / 2;
 		const int32_t cellZ = (KeyZ(worstKey) << tracts.shift) + (1 << tracts.shift) / 2;
-		Notify(allFull ? kTextFullCaption : kTextUncollectedCaption, allFull ? kTextFullMessage : kTextUncollectedMessage,
-			totals.uncollected, cellX, cellZ);
+		Advise(allFull ? 2 : 1, totals.uncollected, cellX, cellZ);
 	}
 	else if (settings.notifyNearlyFull > 0 && totals.cemeteriesNearlyFull > 0 && !allFull && monthsSince[2] >= 12)
 	{
 		monthsSince[2] = 0;
-		Notify(kTextNearlyFullCaption, kTextNearlyFullMessage, totals.cemeteriesNearlyFull, 0, 0);
+		Advise(3, totals.cemeteriesNearlyFull, 0, 0);
 	}
 	SimLog::Write(SimLog::Level::Debug,
 		"Deathcare: %.0f collected (%.0f cremated, %.0f buried), %.0f uncollected, %.0f relocating, %.0f emptied, graves %.0f/%.0f.",
