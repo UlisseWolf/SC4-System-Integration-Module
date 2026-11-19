@@ -4,7 +4,7 @@
 #   python make_graph_ui.py <SimCity_1.dat> <CAM_UI.dat> <out_dir> [extra_height]
 # Reads the Graphs window UI (0x00000000 / 0x96A006B0 / 0x6BC9065A) and its background image
 # (PNG 0x856DDBAC / 0x46A006B0 / 0xEBBEAE28) from the game, grows the expanded graph window (0x8A8B5B71) upward by
-# extra_height pixels (default 100: the 18 lines of the Power graph legend need 94) and writes <out_dir>/CAM_UI.dat = the input CAM_UI.dat plus the edited UI and a
+# extra_height pixels (default 120: the 18 lines of the Power graph legend need 94) and writes <out_dir>/CAM_UI.dat = the input CAM_UI.dat plus the edited UI and a
 # taller background image (PNG 0x856DDBAC / 0x46A006B0 / 0x5C4DE200). The radio-button panel and the collapsed
 # window are unchanged; the graph area (0x8A4B0AA0), its frame, the Time Scale texts and the slider keep their
 # distance from the bottom. The game lays the legend out from the graph area's height (0x0076E0F0 and following), so
@@ -33,15 +33,15 @@ IMG_COLLAPSED_SRC = 0xABBEAD86
 assert (488 + WIDTH) % 3 == 0
 assert PAGE_ROWS == 6        # the button container keeps the 6 Maxis rows; more graphs go on more pages
 PAGES = max(row for _, row in LAYOUT.values()) // PAGE_ROWS + 1
-EXTRA = 24                  # navigation row under the buttons (Previous, page number, Next): the panel and both graph
-                            # windows grow upward by EXTRA
-NAV_TOP = 113               # top of the navigation row in the panel (the container's last row ends at 113)
+EXTRA = 24                  # navigation row above the buttons (Previous, page number, Next): the panel and both graph
+                            # windows grow upward by EXTRA, so their bottoms and the 6 button rows stay exactly where the
+                            # Maxis window has them (fourth and fifth in-game tests: a row under the buttons, even with
+                            # the windows lifted, ended behind the news ticker: the game keeps the window's bottom)
+NAV_TOP = 4                 # top of the navigation row in the panel; the button container starts EXTRA lower
 NAV_PREV, NAV_NEXT, NAV_LABEL = 0x5C4DE320, 0x5C4DE321, 0x5C4DE322
-LIFT = 66                   # the three windows move up by this many pixels, so that the 10 button rows clear the
-                            # news ticker at the bottom of the screen (third and fourth in-game tests: the last row was
-                            # behind it)
-PANEL_ROW = 400             # background row (inside the button panel) repeated EXTRA times, expanded window image
-COLLAPSED_PANEL_ROW = 100   # the same, collapsed window image
+LIFT = 0                    # the windows keep their Maxis bottom (lifting them did not help: see EXTRA)
+PANEL_ROW = 328             # background row at the top of the button panel, repeated EXTRA times (expanded image)
+COLLAPSED_PANEL_ROW = 33    # the same, collapsed window image
 
 def find(entries, t, g, i):
     for e in entries:
@@ -105,6 +105,8 @@ def taller_panel(lines):
                 root = wid
                 if root in ('0x8a8b5b71', '0x8a8b5b72', '0x0a4a8176'):
                     a[1] -= EXTRA + LIFT; a[3] -= LIFT; line = set_area(line, a)
+            elif depth == 1 and root == '0x0a4a8176' and wid == '0xaa9244b6':  # button container, under the page row
+                a[1] += EXTRA; a[3] += EXTRA; line = set_area(line, a)
             elif depth == 1 and root in ('0x8a8b5b71', '0x8a8b5b72'):
                 if wid == '0x6a2871bc':                                    # background
                     a[3] += EXTRA; line = set_area(line, a)
@@ -213,9 +215,9 @@ def edit_panel(lines, h):
         if not done and s.startswith('<LEGACY') and 'id=0xaa9244b6' in s:
             assert 'image={46a006b0,ebbeae28} imagerect=(6,332,509,448)' in line and 'winflag_sizeable=no' in line
             line = line.replace('image={46a006b0,ebbeae28} imagerect=(6,332,509,448)',
-                                'image={46a006b0,%08x} imagerect=(6,%d,%d,%d)' % (IMG_TALL, 332 + h, 509 + WIDTH, 439 + h))
+                                'image={46a006b0,%08x} imagerect=(6,%d,%d,%d)' % (IMG_TALL, 332 + h + EXTRA, 509 + WIDTH, 439 + h + EXTRA))
             _, a = area(line)
-            assert a == [6, 4, 505 + WIDTH, 111], a
+            assert a == [6, 4 + EXTRA, 505 + WIDTH, 111 + EXTRA], a
             line = line.replace('winflag_sizeable=no', 'winflag_sizeable=yes')
             indent = line[:len(line) - len(line.lstrip())]
             out.append(indent + filler_line(lines))
@@ -229,7 +231,7 @@ def filler_line(lines):
     """The filler: a copy of the graph frame FlatRect of the Maxis UI, hidden, blue, zero height."""
     frame = next(l for l in lines if 'clsid=GZWinFlatRect' in l and 'area=(9,32,%d,' % (507 + WIDTH) in l).strip()
     frame = frame.replace('clsid=GZWinFlatRect iid=IGZWinFlatRect ', 'clsid=GZWinFlatRect iid=IGZWinFlatRect id=0x%08x ' % FILLER_ID, 1)
-    frame = re.sub(r'area=\([^)]*\)', 'area=(6,111,%d,111)' % (505 + WIDTH), frame, count=1)
+    frame = re.sub(r'area=\([^)]*\)', 'area=(6,%d,%d,%d)' % (111 + EXTRA, 505 + WIDTH, 111 + EXTRA), frame, count=1)
     blue = '(%d,%d,%d)' % PANEL_BLUE
     frame = re.sub(r'(fillcolor|colorleft|colortop|colorright|colorbottom)=\([^)]*\)', lambda m: m.group(1) + '=' + blue, frame)
     frame = frame.replace('winflag_visible=yes', 'winflag_visible=no').replace('winflag_ignoremouse=no', 'winflag_ignoremouse=yes')
@@ -249,7 +251,7 @@ NAV_BUTTON = ('<LEGACY clsid=GZWinBtn iid=IGZWinBtn id=0x%08x area=(%d,%d,%d,%d)
 # used the flat button image 0x14416242 of another Maxis UI, which drew black boxes here.
 
 def nav_lines(lines):
-    """Previous / page number / Next under the buttons, hidden: SC4SIM.dll shows them when there is more than one
+    """Previous / page number / Next above the buttons, hidden: SC4SIM.dll shows them when there is more than one
     page and handles their clicks (Graph pages, docs/graph-window.md)."""
     text = next(l for l in lines if 'id=0x8a2871d8' in l).strip()          # the "Time Scale" text of the Maxis UI
     text = text.replace('id=0x8a2871d8', 'id=0x%08x' % NAV_LABEL)
@@ -312,7 +314,7 @@ def tall_image(png, h):
     buf = io.BytesIO(); wide_image(taller_image(new, PANEL_ROW + h)).save(buf, 'PNG')
     return buf.getvalue()
 
-def main(game, cam_ui, out_dir, h='100'):
+def main(game, cam_ui, out_dir, h='120'):
     h = int(h)
     _, game_entries = dbpf2.read(game)
     ui = find(game_entries, UI, UI_GROUP, UI_GRAPHS).decode('latin1')

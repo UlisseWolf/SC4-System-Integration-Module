@@ -38,9 +38,6 @@ writes a button for every graph of `graph_layout.py` into `CAM_UI.dat` (a copy o
 `0x4000 + instance`, caption = the graph's title); the DLL only moves them to their cells. Buttons for graphs of
 other plugins are still created at run time; until their clicks are routed to the game they may not work.
 
-The three windows are also lifted (`LIFT`, now 66 pixels), so that the 10 button rows clear the news ticker at the
-bottom of the screen (third test: the last rows were hidden behind it).
-
 `CAM_UI.dat` already sizes the panel for every row of `graph_layout.py` (10
    rows: the panel and both graph windows are 72 pixels taller upward, with taller backgrounds), because a window
    resized at run time keeps its old paint buffer: in the first test the rows past the sixth drew in magenta and did
@@ -52,7 +49,7 @@ bottom of the screen (third test: the last rows were hidden behind it).
 
 The button container keeps the 6 rows of the Maxis window, and the graphs are split in **pages** of 6 rows: row r
 of *Graph Button Cell* is row r % 6 of page r / 6 (so rows 6-11 are page 2, 12-17 page 3, up to 31). One page is
-shown at a time; a row under the buttons holds **< Previous**, the page number and **Next >** (`0x5C4DE320`,
+shown at a time; a row above the buttons holds **< Previous**, the page number and **Next >** (`0x5C4DE320`,
 `0x5C4DE322`, `0x5C4DE321` in `CAM_UI.dat`), shown only when there is more than one page. Page 1 holds the Maxis
 graphs, as in the original window, page 2 the graphs SC4SIM adds, each in the column of its theme.
 
@@ -62,9 +59,11 @@ type 3, `0x287259F6`, button ID), turns the page and leaves every other message 
 before patching and restored when the game closes. Every CAM button is in `CAM_UI.dat` (pages after the first start
 hidden), since buttons created at run time do not receive clicks yet. Without the DLL only page 1 is shown.
 
-The window is 24 pixels taller than the Maxis one for the page row, plus 100 pixels of graph area, and lifted 66
-pixels so that the page row clears the news ticker. Previous and Next are text-only buttons (no image, transparent,
-the flags of the Maxis graph buttons): the flat button image of another Maxis UI drew black boxes.
+The page row is **above** the buttons. The panel and both graph windows grow only upward (24 pixels for the page
+row, 120 for the graph area): their bottoms and the 6 button rows are exactly where the Maxis window has them. In
+earlier tests a row under the buttons ended behind the news ticker even with the windows lifted, since the game
+keeps the window's bottom in place. Previous and Next are text-only buttons (no image, transparent, the flags of the
+Maxis graph buttons): the flat button image of another Maxis UI drew black boxes.
 
 ## Button position: Graph Button Cell
 
