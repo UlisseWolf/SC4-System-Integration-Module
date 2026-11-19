@@ -75,12 +75,12 @@ sc4pac's `150-mods`), and is rebuilt from it with `tools/data-view/make_cam_data
 changes:
 
     python tools/data-view/make_cam_data_view.py <sc4-data-view-extensions>/dat/ExtendedDataViewUI.dat \
-        <sc4-data-view-extensions>/dat/DataViews.dat <SimCity_1.dat> <out dir>
+        <sc4-data-view-extensions>/dat/DataViews.dat <out dir>
 
-The file also holds every Maxis data view (the 44 exemplars of `SimCity_1.dat` with a *DataView: Data source*) as the
-dependency's `DataViews.dat` has them, with their Data View Button Cell (Moisture with its colour ramp and legend
-texts). Since `a_CAM` loads after most data view mods, a mod that loads earlier and overrides a Maxis data view without
-the property no longer sends its button back to page 1; a mod that loads after CAM still wins.
+The file also holds every data view of the dependency's `DataViews.dat`: the 44 Maxis data views of `SimCity_1.dat`
+and Park Aura, Landmark Aura and Transient Aura, with their Data View Button Cell and the legend texts of the
+dependency. Since `a_CAM` loads after most data view mods, a mod that loads earlier and overrides one of these data
+views without the property no longer sends its button back to page 1; a mod that loads after CAM still wins.
 
 The Transient Aura data view of the same DLL shows the whole grid, positive effects included.
 

@@ -2,7 +2,7 @@
 # Builds CAM_DataView.dat: the Deathcare data view for SC4DataViewExtensions 1.1 (dependency, not modified).
 #
 #   python tools/data-view/make_cam_data_view.py <sc4-data-view-extensions>/dat/ExtendedDataViewUI.dat \
-#       <sc4-data-view-extensions>/dat/DataViews.dat <SimCity_1.dat> <out dir>
+#       <sc4-data-view-extensions>/dat/DataViews.dat <out dir>
 #
 # SC4DataViewExtensions gives a button to every data view with Data View Button Cell (0x5C4DF150), but only when its
 # button 0x5200 + view mode is in the Data Views panel UI (buttons created at run time do not receive clicks). So the
@@ -13,10 +13,10 @@
 #   - a copy of the panel UI of ExtendedDataViewUI.dat (0x00000000 / 0x96A006B0 / 0x2BC9060F) with the button
 #     0x5200 + DEATHCARE_MODE added. It must load after ExtendedDataViewUI.dat, and must be rebuilt when that UI changes;
 #   - the caption and legend texts;
-#   - every Maxis data view (the 44 exemplars of SimCity_1.dat with a DataView: Data source), as DataViews.dat of the
-#     dependency has them: with their Data View Button Cell, Moisture with its 1.0 colour ramp, and the legend texts
-#     DataViews.dat adds for them. Loaded after the dependency and most data view mods, they keep the Maxis buttons in
-#     their cells when a mod that loads before CAM overrides a Maxis data view without the property.
+#   - every data view of the dependency's DataViews.dat: the 44 Maxis data views of SimCity_1.dat and Park Aura,
+#     Landmark Aura and Transient Aura, with their Data View Button Cell, Moisture with its 1.0 colour ramp, and the
+#     legend texts DataViews.dat holds for them. Loaded after the dependency and most data view mods, they keep the
+#     buttons in their cells when a mod that loads before CAM overrides a data view without the property.
 import os, re, struct, sys
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'power-graph'))
 import dbpf2
@@ -102,7 +102,6 @@ def build_ui(text):
     lines.insert(end, indent + line)
     return '\r\n'.join(lines)
 
-PROP_DATA_SOURCE = 0x4A0B47E5
 PROP_LEGENDS_GUIDS, PROP_LEGENDS_HEADER = 0x4A0B47F3, 0x4A0B47F4
 
 def legend_texts(data):
@@ -123,18 +122,16 @@ def legend_texts(data):
         p += size * count
     return out
 
-def maxis_data_views(data_views, game):
-    """The Maxis data views as DataViews.dat has them, and the legend texts it adds for them."""
-    maxis = {e['i'] for e in dbpf2.read(game)[1] if e['t'] == EXEMPLAR and e['g'] == DATA_VIEW_GROUP
-             and DATA_VIEW_BASE <= e['i'] <= DATA_VIEW_BASE + 0xFF and struct.pack('<I', PROP_DATA_SOURCE) in e['data']}
+def dependency_data_views(data_views):
+    """Every data view of DataViews.dat, and the legend texts it holds for them."""
     entries = dbpf2.read(data_views)[1]
-    views = [e for e in entries if e['t'] == EXEMPLAR and e['g'] == DATA_VIEW_GROUP and e['i'] in maxis]
-    assert len(views) == len(maxis), 'DataViews.dat lacks Maxis data views'
+    views = [e for e in entries if e['t'] == EXEMPLAR and e['g'] == DATA_VIEW_GROUP]
+    assert len(views) >= 47, 'not the DataViews.dat of SC4DataViewExtensions 1.1'
     wanted = set().union(*(legend_texts(e['data']) for e in views))
     texts = [e for e in entries if e['t'] == LTEXT and e['g'] == LEGEND_TEXT_GROUP and e['i'] in wanted]
     return sorted(views, key=lambda e: e['i']) + texts
 
-def main(extended_ui, data_views, game, out_dir):
+def main(extended_ui, data_views, out_dir):
     ui = next(e for e in dbpf2.read(extended_ui)[1] if (e['t'], e['g'], e['i']) == UI_KEY)
     entries = [
         dict(t=UI_KEY[0], g=UI_KEY[1], i=UI_KEY[2], data=build_ui(ui['data'].decode('latin1')).encode('latin1')),
@@ -142,13 +139,13 @@ def main(extended_ui, data_views, game, out_dir):
         dict(t=LTEXT, g=BUTTON_TEXT_GROUP, i=CAPTION, data=ltext('Deathcare')),
         dict(t=LTEXT, g=LEGEND_TEXT_GROUP, i=LEGEND_HEADER, data=ltext('Uncollected Dead')),
     ] + [dict(t=LTEXT, g=LEGEND_TEXT_GROUP, i=i, data=ltext(s)) for _, i, s in LEGEND]
-    maxis = maxis_data_views(data_views, game)
-    entries += maxis
+    views = dependency_data_views(data_views)
+    entries += views
     keys = [(e['t'], e['g'], e['i']) for e in entries]
     assert len(keys) == len(set(keys))
     os.makedirs(out_dir, exist_ok=True)
     dbpf2.write(os.path.join(out_dir, 'CAM_DataView.dat'), entries)
-    print('CAM_DataView.dat: %d entries, %d Maxis data views' % (len(entries), sum(e['t'] == EXEMPLAR for e in maxis)))
+    print('CAM_DataView.dat: %d entries, %d data views of the dependency' % (len(entries), sum(e['t'] == EXEMPLAR for e in views)))
 
 if __name__ == '__main__':
-    main(*sys.argv[1:5])
+    main(*sys.argv[1:4])
