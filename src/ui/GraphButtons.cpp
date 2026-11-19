@@ -54,6 +54,7 @@
 #include <cwctype>
 #include <filesystem>
 #include <string>
+#include <utility>
 #include <vector>
 
 EXTERN_C IMAGE_DOS_HEADER __ImageBase;
@@ -105,6 +106,14 @@ namespace
 	cRZAutoRefCount<cIGZWin> navPrev, navNext, navLabel, buttonContainer;
 	int32_t pageCount = 1;
 	int32_t currentPage = 0;
+
+	// Keeps a reference to the button (operator= adds it; the AddRef constructor of cRZAutoRefCount warns C4100).
+	void AddPageButton(cIGZWin* button, int32_t page)
+	{
+		cRZAutoRefCount<cIGZWin> reference;
+		reference = button;
+		pageButtons.emplace_back(std::move(reference), page);
+	}
 
 	void ShowPage(int32_t page)
 	{
@@ -371,7 +380,7 @@ namespace
 			{
 				// Kept where the UI has it: on the first page if the UI shows it, else on the second.
 				const int32_t page = button->IsVisible() ? 0 : 1;
-				pageButtons.emplace_back(cRZAutoRefCount<cIGZWin>(button, cRZAutoRefCount<cIGZWin>::kAddRef), page);
+				AddPageButton(button, page);
 				lastPage = std::max(lastPage, page);
 				continue;
 			}
@@ -395,7 +404,7 @@ namespace
 			const int32_t page = info.row / pageRows;
 			const int32_t top = 1 + (info.row % pageRows) * kRowHeight;
 			button->SetArea(columnLeft[info.column], top, columnRight[info.column], top + kRowHeight);
-			pageButtons.emplace_back(cRZAutoRefCount<cIGZWin>(button, cRZAutoRefCount<cIGZWin>::kAddRef), page);
+			AddPageButton(button, page);
 			lastPage = std::max(lastPage, page);
 			SimLog::Write(SimLog::Level::Debug, "GraphWindow: button 0x%04X \"%s\" on page %d, column %d, row %d.",
 				kGraphButtonBase + info.instance, info.name.ToChar(), page + 1, info.column, info.row % pageRows);
