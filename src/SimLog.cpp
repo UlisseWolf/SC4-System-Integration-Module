@@ -2,6 +2,7 @@
 #include "SimLogFormat.h"
 #include <Windows.h>
 #include <cstdio>
+#include <share.h>
 #include <filesystem>
 #include <atomic>
 #include <mutex>
@@ -25,7 +26,9 @@ void SimLog::Open()
 	const std::filesystem::path log = std::filesystem::path(path).replace_filename(L"SC4SIM.log");
 	const std::filesystem::path ini = std::filesystem::path(path).replace_filename(L"SC4SIM.ini");
 	debugCheats = GetPrivateProfileIntW(L"SC4SIM", L"DebugCheats", 0, ini.c_str()) != 0;
-	_wfopen_s(&file, log.c_str(), L"w");
+	// _wfopen_s opens the file without sharing: other programs (a text editor, SC4MCP read_log) could not read the
+	// log while the game runs. Deny writes only.
+	file = _wfsopen(log.c_str(), L"w", _SH_DENYWR);
 }
 
 void SimLog::Write(Level level, const char* format, ...)
