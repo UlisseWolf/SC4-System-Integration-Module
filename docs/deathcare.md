@@ -72,7 +72,8 @@ created at run time do not receive clicks. So `CAM_DataView.dat` also holds a co
 `ExtendedDataViewUI.dat` (`0x00000000 / 0x96A006B0 / 0x2BC9060F`) with the button `0x52C0` added: it must load after
 `ExtendedDataViewUI.dat` (it does when that file is in the Plugins root or in a folder that sorts before `a_CAM`, as
 sc4pac's `150-mods`), and is rebuilt from it with `tools/data-view/make_cam_data_view.py` when the dependency's UI
-changes:
+changes. It carries the button captions and page-arrow images of that file too, so the copied UI works whichever
+`ExtendedDataViewUI.dat` is installed:
 
     python tools/data-view/make_cam_data_view.py <sc4-data-view-extensions>/dat/ExtendedDataViewUI.dat \
         <sc4-data-view-extensions>/dat/DataViews.dat <out dir>

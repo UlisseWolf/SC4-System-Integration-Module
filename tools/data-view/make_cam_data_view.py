@@ -12,7 +12,9 @@
 #     with a colour ramp for the negative side only and its legend, in cell (3, 7) (page 2, under Transient Aura);
 #   - a copy of the panel UI of ExtendedDataViewUI.dat (0x00000000 / 0x96A006B0 / 0x2BC9060F) with the button
 #     0x5200 + DEATHCARE_MODE added. It must load after ExtendedDataViewUI.dat, and must be rebuilt when that UI changes;
-#   - the caption and legend texts;
+#   - the caption and legend texts, and the button captions and page-arrow images of ExtendedDataViewUI.dat, so the
+#     copied UI does not depend on which ExtendedDataViewUI.dat is installed (with the 1.0 file the arrows were grey
+#     squares and the Moisture, Park Aura and Landmark Aura buttons read "Data View");
 #   - every data view of the dependency's DataViews.dat: the 44 Maxis data views of SimCity_1.dat and Park Aura,
 #     Landmark Aura and Transient Aura, with their Data View Button Cell, Moisture with its 1.0 colour ramp, and the
 #     legend texts DataViews.dat holds for them. Loaded after the dependency and most data view mods, they keep the
@@ -82,7 +84,15 @@ def exemplar():
     ]
     return b'EQZB1###' + b'\0' * 12 + struct.pack('<I', len(props)) + b''.join(props)
 
-def build_ui(text):
+def ltext_string(data):
+    n = struct.unpack_from('<H', data, 0)[0]
+    return data[4:4 + 2 * n].decode('utf-16-le')
+
+def build_ui(text, captions):
+    # Buttons whose caption is only the generic "Data View" get the text of their captionres.
+    text = re.sub(r'caption="Data View" captionres=\{(6a554afd),([0-9a-fA-F]{8})\}',
+                  lambda m: 'caption="%s" captionres={%s,%s}' % (captions.get(int(m.group(2), 16), 'Data View'),
+                                                                 m.group(1), m.group(2)), text)
     lines = text.split('\r\n')
     assert 'id=0x%08x' % (CUSTOM_BUTTON_BASE + DEATHCARE_MODE) not in text, 'the UI already has the Deathcare button'
     start = next(i for i, l in enumerate(lines) if 'id=0x%08x' % GRID in l)
@@ -131,16 +141,23 @@ def dependency_data_views(data_views):
     texts = [e for e in entries if e['t'] == LTEXT and e['g'] == LEGEND_TEXT_GROUP and e['i'] in wanted]
     return sorted(views, key=lambda e: e['i']) + texts
 
+PNG = 0x856DDBAC
+
 def main(extended_ui, data_views, out_dir):
-    ui = next(e for e in dbpf2.read(extended_ui)[1] if (e['t'], e['g'], e['i']) == UI_KEY)
+    ext = dbpf2.read(extended_ui)[1]
+    ui = next(e for e in ext if (e['t'], e['g'], e['i']) == UI_KEY)
+    button_texts = [e for e in ext if e['t'] == LTEXT and e['g'] == BUTTON_TEXT_GROUP]
+    images = [e for e in ext if e['t'] == PNG]
+    assert images, 'ExtendedDataViewUI.dat without the page-arrow images'
+    captions = {e['i']: ltext_string(e['data']) for e in button_texts}
     entries = [
-        dict(t=UI_KEY[0], g=UI_KEY[1], i=UI_KEY[2], data=build_ui(ui['data'].decode('latin1')).encode('latin1')),
+        dict(t=UI_KEY[0], g=UI_KEY[1], i=UI_KEY[2], data=build_ui(ui['data'].decode('latin1'), captions).encode('latin1')),
         dict(t=EXEMPLAR, g=DATA_VIEW_GROUP, i=DATA_VIEW_BASE + DEATHCARE_MODE, data=exemplar()),
         dict(t=LTEXT, g=BUTTON_TEXT_GROUP, i=CAPTION, data=ltext('Deathcare')),
         dict(t=LTEXT, g=LEGEND_TEXT_GROUP, i=LEGEND_HEADER, data=ltext('Uncollected Dead')),
     ] + [dict(t=LTEXT, g=LEGEND_TEXT_GROUP, i=i, data=ltext(s)) for _, i, s in LEGEND]
     views = dependency_data_views(data_views)
-    entries += views
+    entries += views + button_texts + images
     keys = [(e['t'], e['g'], e['i']) for e in entries]
     assert len(keys) == len(set(keys))
     os.makedirs(out_dir, exist_ok=True)
