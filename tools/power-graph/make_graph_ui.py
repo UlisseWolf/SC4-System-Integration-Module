@@ -240,33 +240,50 @@ def filler_line(lines):
     assert 'winflag_visible=no' in frame and frame.endswith('>')
     return frame
 
-# Button of the Maxis UIs used for the navigation buttons (flat text button, 18 pixels high).
-NAV_BUTTON = ('<LEGACY clsid=GZWinBtn iid=IGZWinBtn id=0x%08x area=(%d,%d,%d,%d) fillcolor=(156,178,194) caption="%s" '
+# Page buttons: the Maxis "Show previous / next picture" arrows (UI 0x4A8CC5EA, PNG 0x1ABE787D / 0x14416272 and
+# 0x14416273, 4 states of 20 x 24) scaled to the 18-pixel button rows (4 states of 15 x 18, PNG 0x46A006B0 /
+# 0x5C4DE220 and 0x5C4DE221), with the flags of that Maxis button. Earlier versions: text buttons, and before them
+# the flat 16 x 16 image 0x14416242 stretched over a wide button, which drew black boxes.
+NAV_IMAGE_SRC_GROUP = 0x1ABE787D
+NAV_IMAGES = {0x5C4DE320: (0x14416272, 0x5C4DE220), 0x5C4DE321: (0x14416273, 0x5C4DE221)}  # button: (Maxis, scaled)
+NAV_W, NAV_H, NAV_LABEL_W = 15, 18, 50
+NAV_BUTTON = ('<LEGACY clsid=GZWinBtn iid=IGZWinBtn id=0x%08x area=(%d,%d,%d,%d) fillcolor=(192,192,192) '
     'winflag_visible=no winflag_enabled=yes winflag_moveable=yes winflag_sizeable=no winflag_sortable=no winflag_pbuff=no '
     'winflag_pbufftrans=yes winflag_pbufferase=yes winflag_pbuffvid=no winflag_alphablend=yes winflag_acceptfocus=yes '
-    'winflag_mousetrans=no winflag_ignoremouse=no font=GenBodyLight colorfontnormal=(63,73,103) '
-    'colorfontdisabled=(102,102,102) colorfonthilited=(255,255,255) colorfontnormalbkg=(0,0,0) '
-    'colorfontdisabledbkg=(0,0,0) colorfonthilitedbkg=(0,0,0) toggle=off triggerondown=off showcaption=yes '
-    'fill=no autosize=no wrapcaption=no shiftcaption=no tips=no tipsdelay=no tipstimeout=no style=standard '
-    'gutters=(0,0,0,0) tiptext="" tipoffsets=(0,0) tipflag=0x01000000 align=center btnclicksnd={ca4d1943,2a5c322b} >')
-# Text-only buttons (no image, no fill, transparent buffer: the flags of the Maxis graph buttons). The first version
-# used the flat button image 0x14416242 of another Maxis UI, which drew black boxes here.
+    'winflag_mousetrans=no winflag_ignoremouse=no image={46a006b0,%08x} colorfontnormal=(0,0,0) colorfontdisabled=(0,0,0) '
+    'colorfonthilited=(0,0,0) colorfontnormalbkg=(0,0,0) colorfontdisabledbkg=(0,0,0) colorfonthilitedbkg=(0,0,0) '
+    'toggle=off triggerondown=off showcaption=no fill=yes autosize=no wrapcaption=no shiftcaption=yes tips=yes '
+    'tipsdelay=no tipstimeout=no style=standard gutters=(0,0,0,0) tiptext="%s" tipoffsets=(0,0) tipflag=0x01000000 '
+    'align=center btnclicksnd={ca47efd9,4a5c31d7} >')
 
 def nav_lines(lines):
-    """< / page number / > in the page-button cell of the button container, hidden: SC4SIM.dll shows them when there
-    is more than one page and handles their clicks (docs/graph-window.md)."""
+    """Previous arrow / page number / next arrow at the right end of the page-button cell, hidden: SC4SIM.dll shows
+    them when there is more than one page and handles their clicks (docs/graph-window.md)."""
     text = next(l for l in lines if 'id=0x8a2871d8' in l).strip()          # the "Time Scale" text of the Maxis UI
     text = text.replace('id=0x8a2871d8', 'id=0x%08x' % NAV_LABEL)
     text = re.sub(r'caption="[^"]*" captionres=\{[^}]*\}', 'caption="1 / %d"' % PAGES, text)
-    left, right = COLUMN_X[NAV_CELL[0]]
+    right = COLUMN_X[NAV_CELL[0]][1]
+    left = right - 2 * NAV_W - NAV_LABEL_W
     top = 1 + 18 * NAV_CELL[1]
-    width = 54
-    text = re.sub(r'area=\([^)]*\)', 'area=(%d,%d,%d,%d)' % (left + width, top, right - width, top + 18), text, count=1)
+    text = re.sub(r'area=\([^)]*\)', 'area=(%d,%d,%d,%d)' % (left + NAV_W, top, right - NAV_W, top + 18), text, count=1)
     text = text.replace('align=rightcenter', 'align=center').replace('winflag_visible=yes', 'winflag_visible=no', 1)
     assert 'align=center' in text and 'winflag_visible=no' in text
-    return [NAV_BUTTON % (NAV_PREV, left, top, left + width, top + 18, '< Prev'),
+    return [NAV_BUTTON % (NAV_PREV, left, top, left + NAV_W, top + NAV_H, NAV_IMAGES[NAV_PREV][1], 'Previous page'),
             text,
-            NAV_BUTTON % (NAV_NEXT, right - width, top, right, top + 18, 'Next >')]
+            NAV_BUTTON % (NAV_NEXT, right - NAV_W, top, right, top + NAV_H, NAV_IMAGES[NAV_NEXT][1], 'Next page')]
+
+def nav_images(game_entries):
+    """The two arrow strips scaled to NAV_W x NAV_H per state."""
+    out = []
+    for maxis, scaled in NAV_IMAGES.values():
+        src = Image.open(io.BytesIO(find(game_entries, PNG, NAV_IMAGE_SRC_GROUP, maxis))).convert('RGBA')
+        w, h = src.width // 4, src.height
+        strip = Image.new('RGBA', (4 * NAV_W, NAV_H))
+        for state in range(4):
+            strip.paste(src.crop((w * state, 0, w * state + w, h)).resize((NAV_W, NAV_H), Image.LANCZOS), (NAV_W * state, 0))
+        buf = io.BytesIO(); strip.save(buf, 'PNG')
+        out.append(dict(t=PNG, g=IMG_GROUP, i=scaled, data=buf.getvalue()))
+    return out
 
 def button_template(text):
     """The Maxis Crime button (0x0000400C) as a one-window UI: ID 0x5C4DE301, no caption, at the origin."""
@@ -325,12 +342,13 @@ def main(game, cam_ui, out_dir, h='120'):
     png_collapsed = find(game_entries, PNG, IMG_GROUP, IMG_COLLAPSED_SRC)
     raw, entries = dbpf2.read(cam_ui)
     keys = {(UI, UI_GROUP, UI_GRAPHS), (PNG, IMG_GROUP, IMG_TALL), (UI, UI_GROUP, UI_BUTTON_TEMPLATE),
-            (PNG, IMG_GROUP, IMG_COLLAPSED)}
+            (PNG, IMG_GROUP, IMG_COLLAPSED)} | {(PNG, IMG_GROUP, scaled) for _, scaled in NAV_IMAGES.values()}
     entries = [e for e in entries if (e['t'], e['g'], e['i']) not in keys]
     entries.append(dict(t=UI, g=UI_GROUP, i=UI_GRAPHS, data=edit_ui(ui, h).encode('latin1')))
     entries.append(dict(t=PNG, g=IMG_GROUP, i=IMG_TALL, data=tall_image(png, h)))
     entries.append(dict(t=PNG, g=IMG_GROUP, i=IMG_COLLAPSED, data=collapsed_image(png_collapsed)))
     entries.append(dict(t=UI, g=UI_GROUP, i=UI_BUTTON_TEMPLATE, data=button_template(ui)))
+    entries += nav_images(game_entries)
     os.makedirs(out_dir, exist_ok=True)
     dbpf2.write(os.path.join(out_dir, 'CAM_UI.dat'), entries, header_src=raw)
 
