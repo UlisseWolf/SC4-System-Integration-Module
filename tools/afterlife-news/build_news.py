@@ -63,21 +63,23 @@ UI_ROWS = {
 UI_ROW_STEP = 20
 
 # Deathcare notices: advice of the Health advisor (lua/deathcare_advice.lua), advisor text group. The numbers come
-# from afterlife_grid_var, which SC4SIM.dll fills (DEATHCARE_ADVICE_COUNT, DEATHCARE_ADVICE_X, DEATHCARE_ADVICE_Z).
+# from afterlife_grid_var, which SC4SIM.dll fills (DEATHCARE_ADVICE_COUNT). Written in the tone of the Maxis advisors.
 DEATHCARE_TEXTS = [
-    (0xBB3C4000, "Uncollected Dead"),
-    (0xBB3C4001, "Mayor, #afterlife_grid_var.DEATHCARE_ADVICE_COUNT# dead have nowhere to go: no cemetery or crematorium "
-                 "in range has room. The worst neighborhood is around cell #afterlife_grid_var.DEATHCARE_ADVICE_X#, "
-                 "#afterlife_grid_var.DEATHCARE_ADVICE_Z#. Until they are collected, the health of those neighborhoods "
-                 "keeps falling. Build a cemetery or a crematorium nearby."),
-    (0xBB3C4002, "Cemeteries Full"),
-    (0xBB3C4003, "Mayor, every cemetery in #city# is full and there is no crematorium. "
-                 "#afterlife_grid_var.DEATHCARE_ADVICE_COUNT# dead are left uncollected and the health of their "
-                 "neighborhoods keeps falling. Build a new cemetery or a crematorium."),
-    (0xBB3C4004, "Cemeteries Nearly Full"),
-    (0xBB3C4005, "Mayor, #afterlife_grid_var.DEATHCARE_ADVICE_COUNT# cemetery(ies) are nearly full. A crematorium in "
-                 "range empties full cemeteries with the room it has left each month; otherwise build a new cemetery "
-                 "before the dead are left uncollected."),
+    (0xBB3C4000, "Grave Concerns: Nowhere to Rest in Peace"),
+    (0xBB3C4001, "Mayor, I hate to dig up bad news, but #afterlife_grid_var.DEATHCARE_ADVICE_COUNT# of our dearly departed have nowhere to go. Every "
+                 "cemetery and crematorium in reach is full up, and the neighbors are getting restless... and, frankly, "
+                 "so is the smell. Until we lay them to rest, the health of those neighborhoods will keep sinking. A new "
+                 "cemetery or crematorium nearby would put this problem six feet under."),
+    (0xBB3C4002, "No Vacancy at the Cemetery"),
+    (0xBB3C4003, "Mayor, every cemetery in #city# is filled to the last plot, and we don't have a single crematorium "
+                 "to lighten the load. #afterlife_grid_var.DEATHCARE_ADVICE_COUNT# Sims are still waiting for a final resting place, and their neighbors' "
+                 "health is going downhill fast. Break ground on a new cemetery or fire up a crematorium before this "
+                 "turns into a truly grave situation."),
+    (0xBB3C4004, "Cemeteries Running Out of Room"),
+    (0xBB3C4005, "Mayor, business is booming at our cemeteries, and that's not the good kind of news: #afterlife_grid_var.DEATHCARE_ADVICE_COUNT# of them "
+                 "are almost out of plots. A crematorium in range will clear out full cemeteries with whatever room it "
+                 "has left each month. Otherwise, start planning a new cemetery now, before our late citizens are left "
+                 "out in the cold."),
 ]
 
 
