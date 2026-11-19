@@ -60,9 +60,23 @@ With `DEATHCARE_EFFECTS=1` (default), a tract with uncollected dead:
 
 ## Map of the uncollected dead
 
-The **Transient Aura** data view of [SC4DataViewExtensions](https://github.com/0xC0000054/sc4-data-view-extensions)
-(its optional `z_DataView - TransientAura.dat`) shows the transient aura grid, so the neighborhoods with uncollected
-dead appear on it as negative areas. The view also shows other transient effects of the game, if any.
+`CAM_DataView.dat` adds a **Deathcare** data view to the Data Views panel of
+[SC4DataViewExtensions](https://github.com/UlisseWolf/sc4-data-view-extensions) 1.1 (a dependency, not modified): view
+mode `0xC0` (exemplar `0x6534284A / 0x690F693F / 0x4A0B68C0`), with Data View Button Cell (3, 7), the last row of
+the right column of page 2, under Transient Aura. It reads the transient aura grid (data source 14 of the DLL) and
+colours only its negative side, in purples: -60 and below (15 % or more of a tract uncollected), -40, -20, then no
+colour. Its legend is *Uncollected Dead*. Other negative transient effects of the game, if any, show too.
+
+SC4DataViewExtensions places a button only when the button `0x5200 + view mode` is in the panel UI, since buttons
+created at run time do not receive clicks. So `CAM_DataView.dat` also holds a copy of the panel UI of
+`ExtendedDataViewUI.dat` (`0x00000000 / 0x96A006B0 / 0x2BC9060F`) with the button `0x52C0` added: it must load after
+`ExtendedDataViewUI.dat` (it does when that file is in the Plugins root or in a folder that sorts before `a_CAM`, as
+sc4pac's `150-mods`), and is rebuilt from it with `tools/data-view/make_cam_data_view.py` when the dependency's UI
+changes:
+
+    python tools/data-view/make_cam_data_view.py <sc4-data-view-extensions>/dat/ExtendedDataViewUI.dat <out dir>
+
+The Transient Aura data view of the same DLL shows the whole grid, positive effects included.
 
 ## Notices
 
