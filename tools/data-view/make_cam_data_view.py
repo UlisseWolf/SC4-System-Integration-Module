@@ -1,12 +1,13 @@
 #!/usr/bin/env python3
-# Builds CAM_DataView.dat: the Deathcare data view for SC4DataViewExtensions 1.1 (dependency, not modified).
+# Builds CAM_DataView.dat: the Deathcare data view for SC4DataViewExtensions (dependency, not modified).
 #
 #   python tools/data-view/make_cam_data_view.py <sc4-data-view-extensions>/dat/ExtendedDataViewUI.dat \
 #       <sc4-data-view-extensions>/dat/DataViews.dat <out dir>
 #
-# SC4DataViewExtensions gives a button to every data view with Data View Button Cell (0x5C4DF150), but only when its
-# button 0x5200 + view mode is in the Data Views panel UI (buttons created at run time do not receive clicks). So the
-# file holds:
+# SC4DataViewExtensions gives a button to every data view with Data View Button Cell (0x5C4DF150). Version 1.1 does so
+# only when the button 0x5200 + view mode is in the Data Views panel UI; later versions create a missing button at run
+# time from the button template UI 0x96A006B0 / 0x5C4DF300, captioned with LTEXT 0x6A554AFD / 0x5C4DF200 + view mode.
+# The file works with both, so it holds:
 #   - the data view exemplar 0x6534284A / 0x690F693F / 0x4A0B6800 + DEATHCARE_MODE: the transient aura grid (data source
 #     14 of the DLL), where SC4SIM writes the uncollected dead of each tract as a negative aura (docs/deathcare.md),
 #     with a colour ramp for the negative side only and its legend, in cell (3, 7) (page 2, under Transient Aura);
@@ -15,6 +16,9 @@
 #   - the caption and legend texts, and the button captions and page-arrow images of ExtendedDataViewUI.dat, so the
 #     copied UI does not depend on which ExtendedDataViewUI.dat is installed (with the 1.0 file the arrows were grey
 #     squares and the Moisture, Park Aura and Landmark Aura buttons read "Data View");
+#   - for later versions: the button template UI of ExtendedDataViewUI.dat, when it has one (so a button created at run
+#     time works even with an older ExtendedDataViewUI.dat), and the run-time caption "Deathcare" (LTEXT 0x6A554AFD /
+#     0x5C4DF200 + DEATHCARE_MODE), used if the copied UI is ever dropped;
 #   - every data view of the dependency's DataViews.dat: the 44 Maxis data views of SimCity_1.dat and Park Aura,
 #     Landmark Aura and Transient Aura, with their Data View Button Cell, Moisture with its 1.0 colour ramp, and the
 #     legend texts DataViews.dat holds for them. Loaded after the dependency and most data view mods, they keep the
@@ -33,7 +37,9 @@ TEMPLATE_BUTTON = CUSTOM_BUTTON_BASE + 0x0E    # Transient Aura button of the de
 
 DEATHCARE_MODE = 0xC0                         # view mode: exemplar 0x4A0B68C0, button 0x52C0
 CELL = (3, 7)                                 # column, row (page 2, last row of the right column)
-CAPTION = 0x5C4DDA00                          # "Deathcare" (button)
+CAPTION = 0x5C4DDA00                          # "Deathcare" (button of the copied UI)
+RUNTIME_CAPTION_BASE = 0x5C4DF200             # caption of a button created at run time: + view mode
+TEMPLATE_UI = 0x5C4DF300                      # button template UI of the dependency (0x96A006B0 group)
 LEGEND_HEADER = 0x5C4DDA01
 DATA_SOURCE_TRANSIENT_AURA = 14
 ROW, PAGE_ROWS = 18, 4
@@ -154,15 +160,19 @@ def main(extended_ui, data_views, out_dir):
         dict(t=UI_KEY[0], g=UI_KEY[1], i=UI_KEY[2], data=build_ui(ui['data'].decode('latin1'), captions).encode('latin1')),
         dict(t=EXEMPLAR, g=DATA_VIEW_GROUP, i=DATA_VIEW_BASE + DEATHCARE_MODE, data=exemplar()),
         dict(t=LTEXT, g=BUTTON_TEXT_GROUP, i=CAPTION, data=ltext('Deathcare')),
+        dict(t=LTEXT, g=BUTTON_TEXT_GROUP, i=RUNTIME_CAPTION_BASE + DEATHCARE_MODE, data=ltext('Deathcare')),
         dict(t=LTEXT, g=LEGEND_TEXT_GROUP, i=LEGEND_HEADER, data=ltext('Uncollected Dead')),
     ] + [dict(t=LTEXT, g=LEGEND_TEXT_GROUP, i=i, data=ltext(s)) for _, i, s in LEGEND]
+    template = [e for e in ext if (e['t'], e['g'], e['i']) == (UI_KEY[0], UI_KEY[1], TEMPLATE_UI)]
+    entries += template
     views = dependency_data_views(data_views)
     entries += views + button_texts + images
     keys = [(e['t'], e['g'], e['i']) for e in entries]
     assert len(keys) == len(set(keys))
     os.makedirs(out_dir, exist_ok=True)
     dbpf2.write(os.path.join(out_dir, 'CAM_DataView.dat'), entries)
-    print('CAM_DataView.dat: %d entries, %d data views of the dependency' % (len(entries), sum(e['t'] == EXEMPLAR for e in views)))
+    print('CAM_DataView.dat: %d entries, %d data views of the dependency, button template %s'
+          % (len(entries), sum(e['t'] == EXEMPLAR for e in views), 'included' if template else 'absent'))
 
 if __name__ == '__main__':
     main(*sys.argv[1:4])
