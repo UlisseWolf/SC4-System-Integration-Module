@@ -46,7 +46,8 @@ target of a button of the UI (the first graph button found, else the Previous ar
 selects the graph and keeps the radio state itself, so an external mod only needs a graph exemplar with *Graph
 Button Cell*: no UI file is required. The log shows `buttons added (N routed to the graph handler)` and, at Debug
 level, each created button's target next to the one the template gave it; a warning is logged if no button of the
-UI gives a target. *Not yet confirmed in game.*
+UI gives a target. Confirmed in game with two test graphs (instances `0x30` and `0x31`, page 2, no UI file): both
+buttons switch the graph and the radio state follows (`2 buttons added (2 routed to the graph handler)`).
 
 `CAM_UI.dat` already sizes the panel for every row of `graph_layout.py` (10
    rows: the panel and both graph windows are 72 pixels taller upward, with taller backgrounds), because a window
