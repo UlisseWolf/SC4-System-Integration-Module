@@ -23,8 +23,13 @@
 // Pages: the button container keeps its 6 rows; row r of Graph Button Cell is row r % 6 of page r / 6, and one page
 // is shown at a time. CAM_UI.dat has every CAM button (pages past the first hidden) and, under the container, the
 // Previous / Next buttons and the page number (0x5C4DE320-0x5C4DE322); their clicks are taken from the graph window's
-// message handler (vtable slot 0x00AB4FEC, 0x0076E500) before it handles the graph buttons. Buttons created here
-// from the template (graphs of other plugins) do not receive clicks yet: CAM's buttons are therefore in the UI.
+// message handler (vtable slot 0x00AB4FEC, 0x0076E500) before it handles the graph buttons.
+//
+// Graphs of other plugins: their buttons are created here from the template. A button sends its click to its
+// notification target; the buttons loaded with the Graphs UI get the window whose handler selects the graph
+// (0x0076E500), while a button built from the template UI gets the template's own root, so its clicks reached nothing
+// (first in-game test: the button did not switch the graph and stayed checked). Every created button now takes the
+// notification target of the buttons of the UI, so the game selects the graph and keeps the radio state itself.
 //
 ////////////////////////////////////////////////////////////////////////////
 
@@ -373,11 +378,24 @@ namespace
 			taken[info.row][info.column] = true;
 		}
 
+		// Notification target of the buttons loaded with the UI: the window whose handler (0x0076E500) selects the graph
+		// of the clicked button (ID 0x4000 + instance). Buttons created from the template get it too (see the header).
+		cIGZWin* clickTarget = nullptr;
+		for (const GraphInfo& info : graphs)
+		{
+			if (info.button && (clickTarget = info.button->GetNotificationTarget()) != nullptr) break;
+		}
+		if (!clickTarget)
+		{
+			if (cIGZWin* const nav = container->GetChildWindowFromID(kNavPrevId)) clickTarget = nav->GetNotificationTarget();
+		}
+
 		// Pages of as many rows as the button container has (6): row r of Graph Button Cell is row r % rows of page
 		// r / rows. One page is shown at a time; Previous / Next (CAM_UI.dat) turn the pages.
 		const int32_t pageRows = std::max(1, (container->GetB() - container->GetT() - 1 + kRowHeight - 1) / kRowHeight);
 		uint32_t added = 0;
 		uint32_t moved = 0;
+		uint32_t routed = 0;
 		pageButtons.clear();
 		int32_t lastPage = 0;
 		for (GraphInfo& info : graphs)
@@ -405,6 +423,20 @@ namespace
 				button->SetID(kGraphButtonBase + info.instance);
 				button->SetCaption(info.name);
 				++added;
+				cIGZWin* const ownTarget = button->GetNotificationTarget();
+				if (clickTarget && ownTarget != clickTarget)
+				{
+					button->SetNotificationTarget(clickTarget);
+					++routed;
+				}
+				else if (!clickTarget)
+				{
+					SimLog::Write(SimLog::Level::Warning,
+						"GraphWindow: button for graph 0x%02X created, but no button of the UI gives its click target; it may not "
+						"switch the graph.", info.instance);
+				}
+				SimLog::Write(SimLog::Level::Debug, "GraphWindow: button 0x%04X click target %p (template gave %p).",
+					kGraphButtonBase + info.instance, static_cast<void*>(button->GetNotificationTarget()), static_cast<void*>(ownTarget));
 			}
 			else
 			{
@@ -437,8 +469,8 @@ namespace
 		}
 		ShowPage(0);
 		SimLog::Write(SimLog::Level::Info,
-			"GraphWindow: %u graphs, %u buttons added, %u moved, %u hidden, %u ignored, %u Maxis buttons kept; %d page(s) of %d rows.",
-			static_cast<unsigned>(graphs.size()), added, moved, hiddenCount, ignoredCount, keptCount, pageCount, pageRows);
+			"GraphWindow: %u graphs, %u buttons added (%u routed to the graph handler), %u moved, %u hidden, %u ignored, %u Maxis buttons kept; %d page(s) of %d rows.",
+			static_cast<unsigned>(graphs.size()), added, routed, moved, hiddenCount, ignoredCount, keptCount, pageCount, pageRows);
 	}
 
 	void __fastcall BuildGraphsUiHook(void* controlPanel, void* /*edx*/)

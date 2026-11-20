@@ -36,7 +36,17 @@ the template did not switch the graph and stayed checked when another graph was 
 `0x0076E500`, never received their clicks), while the buttons loaded with the UI worked. So `make_graph_ui.py`
 writes a button for every graph of `graph_layout.py` into `CAM_UI.dat` (a copy of the Maxis Crime button, ID
 `0x4000 + instance`, caption = the graph's title); the DLL only moves them to their cells. Buttons for graphs of
-other plugins are still created at run time; until their clicks are routed to the game they may not work.
+other plugins are still created at run time.
+
+**Graphs of other plugins (1.14.0).** A button sends its click to its *notification target*. The buttons loaded with
+the Graphs UI have the window whose handler (`0x0076E500`) selects graph `ID & 0xFF`; a button built from the
+template UI keeps the template's own root as target, which is why its clicks reached nothing. The DLL now reads the
+target of a button of the UI (the first graph button found, else the Previous arrow `0x5C4DE320`) with
+`cIGZWin::GetNotificationTarget` and gives it to every button it creates (`SetNotificationTarget`). The game then
+selects the graph and keeps the radio state itself, so an external mod only needs a graph exemplar with *Graph
+Button Cell*: no UI file is required. The log shows `buttons added (N routed to the graph handler)` and, at Debug
+level, each created button's target next to the one the template gave it; a warning is logged if no button of the
+UI gives a target. *Not yet confirmed in game.*
 
 `CAM_UI.dat` already sizes the panel for every row of `graph_layout.py` (10
    rows: the panel and both graph windows are 72 pixels taller upward, with taller backgrounds), because a window
@@ -60,7 +70,7 @@ The DLL takes the Previous / Next clicks from the graph window's message handler
 `0x0076CFE0`, `DoWinProcMessage` = `0x0076E500` in vtable slot `0x00AB4FEC`; button clicks arrive there as message
 type 3, `0x287259F6`, button ID), turns the page and leaves every other message to the game. The slot is checked
 before patching and restored when the game closes. Every CAM button is in `CAM_UI.dat` (pages after the first start
-hidden), since buttons created at run time do not receive clicks yet. Without the DLL only page 1 is shown.
+hidden); buttons of other plugins are created at run time and routed to the same handler (see above). Without the DLL only page 1 is shown.
 
 The page row is **above** the buttons. The panel and both graph windows grow only upward (24 pixels for the page
 row, 120 for the graph area): their bottoms and the 6 button rows are exactly where the Maxis window has them. In
