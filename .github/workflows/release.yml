@@ -94,9 +94,9 @@ jobs:
           "",
           "Source code and documentation: ${{ github.server_url }}/${{ github.repository }}"
         ) | Set-Content -Path (Join-Path $out 'README.txt') -Encoding utf8
-        # SC4SIM.dll is LGPL-3.0; the code it includes from other projects keeps its own license.
+        # SC4SIM.dll is LGPL-2.1; the code it includes from other projects keeps its own license.
         $lic = New-Item -ItemType Directory -Force -Path (Join-Path $out 'Licenses')
-        Copy-Item LICENSE (Join-Path $lic 'LICENSE-SC4SIM-LGPL-3.0.txt')
+        Copy-Item LICENSE (Join-Path $lic 'LICENSE-SC4SIM-LGPL-2.1.txt')
         Copy-Item src/powerpoles/LICENSE-sc4-render-services.txt (Join-Path $lic 'LICENSE-sc4-render-services-LGPL-2.1.txt')
         Copy-Item src/water/LICENSE-sc4-advanced-water-management.txt (Join-Path $lic 'LICENSE-sc4-advanced-water-management-MIT.txt')
         Copy-Item src/fixes/LICENSE-sc4-remove-phantom-budget-items.txt (Join-Path $lic 'LICENSE-sc4-remove-phantom-budget-items-MIT.txt')
@@ -108,7 +108,7 @@ jobs:
           "SC4SIM.dll $version - SC4 System Integration Module DLL (Colossus Addon Mod)",
           "Source code: ${{ github.server_url }}/${{ github.repository }}",
           "",
-          "SC4SIM.dll is licensed under the GNU Lesser General Public License v3.0 (LICENSE-SC4SIM-LGPL-3.0.txt).",
+          "SC4SIM.dll is licensed under the GNU Lesser General Public License v2.1 (LICENSE-SC4SIM-LGPL-2.1.txt).",
           "It includes code from other projects, which keeps its own license:",
           "- custom power poles: sc4-render-services by caspervg, LGPL 2.1 (LICENSE-sc4-render-services-LGPL-2.1.txt)",
           "- Advanced Water Management: sc4-advanced-water-management by Nicholas Hayes, MIT (LICENSE-sc4-advanced-water-management-MIT.txt)",

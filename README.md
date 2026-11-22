@@ -1,6 +1,6 @@
 # SC4SIM — SC4 System Integration Module DLL for SimCity 4
 
-[![License: LGPL v3](https://img.shields.io/badge/License-LGPL_v3-blue.svg)](LICENSE)
+[![License: LGPL v2.1](https://img.shields.io/badge/License-LGPL_v2.1-blue.svg)](LICENSE)
 ![Version](https://img.shields.io/badge/version-1.10.0-informational)
 ![Game](https://img.shields.io/badge/SimCity_4-1.1.641-success)
 ![Platform](https://img.shields.io/badge/platform-Windows_x86-lightgrey)
@@ -475,8 +475,7 @@ SC4SIM.ini           settings template
 
 ## License
 
-This project is licensed under the **GNU Lesser General Public License v3.0**. See [`LICENSE`](LICENSE). The
-LGPL-3.0 supplements the [GNU General Public License v3.0](https://www.gnu.org/licenses/gpl-3.0.html).
+This project is licensed under the **GNU Lesser General Public License, version 2.1**. See [`LICENSE`](LICENSE).
 
 Third-party code keeps its own license:
 - `src/powerpoles`: ported from sc4-render-services, LGPL 2.1

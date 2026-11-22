@@ -13,7 +13,7 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(GZCOM ${CMAKE_SOURCE_DIR}/vendor/gzcom-dll/gzcom-dll)
 
-add_library(SC4SIM SHARED
+set(SC4SIM_SOURCES
   src/SimDllDirector.cpp
   src/SimLog.cpp
   src/powerpoles/PowerPoleCustomization.cpp
@@ -43,6 +43,8 @@ add_library(SC4SIM SHARED
   src/economy/AdvisorGraphHistory.cpp
   src/ui/GraphButtons.cpp
   src/ui/GraphLegendPatch.cpp
+)
+set(GZCOM_SOURCES
   ${GZCOM}/src/cRZBaseString.cpp
   ${GZCOM}/src/cRZBaseVariant.cpp
   ${GZCOM}/src/cRZCOMDllDirector.cpp
@@ -51,9 +53,13 @@ add_library(SC4SIM SHARED
   ${GZCOM}/src/StringResourceManager.cpp
   ${GZCOM}/src/cRZCellMap.cpp
 )
+add_library(SC4SIM SHARED ${SC4SIM_SOURCES} ${GZCOM_SOURCES})
 target_include_directories(SC4SIM PRIVATE src src/powerpoles src/water src/mixed src/zones src/afterlife vendor/mINI/src ${GZCOM}/include)
 target_link_libraries(SC4SIM PRIVATE version)
 target_compile_definitions(SC4SIM PRIVATE WIN32 _WINDOWS _USRDLL NOMINMAX)
-target_compile_options(SC4SIM PRIVATE /W4 /permissive- /utf-8)
+target_compile_options(SC4SIM PRIVATE /permissive- /utf-8)
+# All warnings for SC4SIM's own code; none for the gzcom-dll submodule, which is not changed here.
+set_source_files_properties(${SC4SIM_SOURCES} PROPERTIES COMPILE_OPTIONS $<$<CXX_COMPILER_ID:MSVC>:/W4>)
+set_source_files_properties(${GZCOM_SOURCES} PROPERTIES COMPILE_OPTIONS $<$<CXX_COMPILER_ID:MSVC>:/W0>)
 # Static runtime: players do not need to install the Visual C++ redistributable.
 set_property(TARGET SC4SIM PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreaded")
