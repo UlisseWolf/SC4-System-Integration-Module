@@ -1,0 +1,25 @@
+name: sc4pac
+
+# Runs when a release is published. Off until SC4PAC_ASSET_ID is set; see "Releases" in the README.
+
+on:
+  release:
+    types: [published]
+
+permissions: {}
+
+jobs:
+  sc4pac:
+    if: ${{ vars.SC4PAC_ASSET_ID != '' && !github.event.release.prerelease }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    environment: sc4pac
+    concurrency: sc4pac-${{ vars.SC4PAC_ASSET_ID }}
+    steps:
+      - uses: caspervg/sc4pac-release-action@af95bc5692cab0a3b32e50aac5b82eb8249ffca9 # v1.0.0
+        with:
+          channel: ${{ vars.SC4PAC_CHANNEL || 'sebamarynissen/simtropolis-channel' }}
+          asset-id: ${{ vars.SC4PAC_ASSET_ID }}
+          tag: ${{ github.event.release.tag_name }}
+          token: ${{ secrets.SC4PAC_FORK_TOKEN }}

@@ -308,5 +308,7 @@ Aprire `SC4SIM.sln`, configurazione **Release | x86** (l'unica), Compila. La DLL
 va nella cartella Plugins. In alternativa: `cmake -S . -B build -A Win32` e `cmake --build build --config Release`.
 
 Runtime statico: i giocatori non devono installare il Visual C++ Redistributable. Dipendenze nel progetto:
-`vendor/gzcom-dll` (LGPL, vedi `vendor/gzcom-dll/SOURCE.txt`), `vendor/mINI` (MIT) e `version.lib` di Windows.
+`vendor/gzcom-dll` (il gzcom-dll di [SC4SDK](https://github.com/SC4SDK/gzcom-dll) come submodule git, LGPL),
+`vendor/mINI` (MIT) e `version.lib` di Windows. Clonare con `git clone --recursive`, oppure eseguire
+`git submodule update --init --remote` (anche per aggiornare l'SDK all'ultimo commit).
 Gli hook dei tralicci usano assembly inline x86 MSVC: serve il compilatore Microsoft (non MinGW o clang).

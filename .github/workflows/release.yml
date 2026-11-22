@@ -1,0 +1,133 @@
+name: Release
+
+# Builds and attests the release zip for a vMAJOR.MINOR.PATCH tag on a commit of master, with
+# memo33/sc4-dll-actions, and leaves it in a draft release. See "Releases" in the README.
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions: {}
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Validate tag
+        env:
+          TAG_NAME: ${{ github.ref_name }}
+        run: |
+          if [[ ! "$TAG_NAME" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.]+)?$ ]]; then
+            echo "::error::Release tags look like v1.0.0 or v1.0.0-rc.1, not $TAG_NAME"
+            exit 1
+          fi
+
+      - name: Require a public repository
+        if: ${{ github.event.repository.private }}
+        run: |
+          echo "::error::Attestations need a public repository"
+          exit 1
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Require a commit of master
+        run: |
+          git fetch --no-tags origin master
+          if ! git merge-base --is-ancestor "$GITHUB_SHA" origin/master; then
+            echo "::error::Releases are built only from master: merge the commit into master, then tag it"
+            exit 1
+          fi
+
+      - name: Match the version in the source
+        env:
+          TAG_NAME: ${{ github.ref_name }}
+        run: |
+          version=$(sed -n 's/.*SIM_DLL_VERSION_STR *"\([^"]*\)".*/\1/p' src/version.h)
+          if [[ "${TAG_NAME#v}" != "$version"* ]]; then
+            echo "::error::Tag $TAG_NAME does not match SIM_DLL_VERSION_STR $version in src/version.h"
+            exit 1
+          fi
+
+  build:
+    needs: check
+    # Head of its v1 branch on 2026-11-22. Change --signer-digest in the README with the pin.
+    uses: memo33/sc4-dll-actions/.github/workflows/attested-build.yaml@c7aa3d2d748a9bd52a573a79f1f6ba78dde6f25f
+    with:
+      build-os: windows-2022
+      build-script: |
+        $PSNativeCommandUseErrorActionPreference = $true
+        cmake -S . -B build -A Win32
+        cmake --build build --config Release --parallel
+
+        $version = '${{ github.ref_name }}'.TrimStart('v')
+        $dll = 'build/Release/SC4SIM.dll'
+        if (-not (Test-Path $dll)) { throw "$dll is missing" }
+        $out = New-Item -ItemType Directory -Force -Path release-package
+        Copy-Item $dll, SC4SIM.ini -Destination $out
+        # The Lua features run from scripts inside CAM_LUA_Controller.dat, which comes with the Colossus Addon Mod:
+        # the sources are shipped so the requirement is visible and the .dat can be rebuilt.
+        $lua = New-Item -ItemType Directory -Force -Path (Join-Path $out 'Lua')
+        Copy-Item lua/*.lua -Destination $lua
+        @(
+          "SC4SIM.dll $version - SC4 System Integration Module DLL (Colossus Addon Mod), for SimCity 4 1.1.641.",
+          "",
+          "Install: copy SC4SIM.dll and SC4SIM.ini to the top level of the Plugins folder.",
+          "",
+          "REQUIRED DATA FILES (not in this zip, they come with the Colossus Addon Mod):",
+          "- CAM_LUA_Controller.dat: the Lua of the advisor rewards (package 0x0151A000), of the Afterlife news",
+          "  (afterlife_news.lua) and of the deathcare hearses. Without it the DLL works, but those Lua features are absent.",
+          "- CAM_Afterlife_News_en.dat: the Afterlife news ticker lines.",
+          "- SC4SIM_ManufacturingZone.dat: colour, cursor and name of the optional I-M zone (off by default).",
+          "- CAM_PowerPoles.dat and CAM_PowerPoles_Models.dat: the P3 pole styles of SC4SIM.ini.",
+          "The Lua/ folder holds the sources of the scripts inside CAM_LUA_Controller.dat, for reference; copying them",
+          "to Plugins does nothing by themselves.",
+          "",
+          "Source code and documentation: ${{ github.server_url }}/${{ github.repository }}"
+        ) | Set-Content -Path (Join-Path $out 'README.txt') -Encoding utf8
+        # SC4SIM.dll is LGPL-3.0; the code it includes from other projects keeps its own license.
+        $lic = New-Item -ItemType Directory -Force -Path (Join-Path $out 'Licenses')
+        Copy-Item LICENSE (Join-Path $lic 'LICENSE-SC4SIM-LGPL-3.0.txt')
+        Copy-Item src/powerpoles/LICENSE-sc4-render-services.txt (Join-Path $lic 'LICENSE-sc4-render-services-LGPL-2.1.txt')
+        Copy-Item src/water/LICENSE-sc4-advanced-water-management.txt (Join-Path $lic 'LICENSE-sc4-advanced-water-management-MIT.txt')
+        Copy-Item src/fixes/LICENSE-sc4-remove-phantom-budget-items.txt (Join-Path $lic 'LICENSE-sc4-remove-phantom-budget-items-MIT.txt')
+        Copy-Item src/fixes/LICENSE-sc4-seaport-demand-cap-fix.txt (Join-Path $lic 'LICENSE-sc4-seaport-demand-cap-fix-LGPL-2.1.txt')
+        Copy-Item vendor/gzcom-dll/LICENSE (Join-Path $lic 'LICENSE-gzcom-dll-LGPL-2.1.txt')
+        Copy-Item src/water/QueryUIHooks/LICENSE-sc4-query-ui-hooks.txt (Join-Path $lic 'LICENSE-sc4-query-ui-hooks-MIT.txt')
+        Copy-Item vendor/mINI/LICENSE (Join-Path $lic 'LICENSE-mINI-MIT.txt')
+        @(
+          "SC4SIM.dll $version - SC4 System Integration Module DLL (Colossus Addon Mod)",
+          "Source code: ${{ github.server_url }}/${{ github.repository }}",
+          "",
+          "SC4SIM.dll is licensed under the GNU Lesser General Public License v3.0 (LICENSE-SC4SIM-LGPL-3.0.txt).",
+          "It includes code from other projects, which keeps its own license:",
+          "- custom power poles: sc4-render-services by caspervg, LGPL 2.1 (LICENSE-sc4-render-services-LGPL-2.1.txt)",
+          "- Advanced Water Management: sc4-advanced-water-management by Nicholas Hayes, MIT (LICENSE-sc4-advanced-water-management-MIT.txt)",
+          "- RemovePhantomBudgetItems cheat: sc4-remove-phantom-budget-items by Nicholas Hayes, MIT (LICENSE-sc4-remove-phantom-budget-items-MIT.txt)",
+          "- Seaport demand cap fix: sc4-seaport-demand-cap-fix by Nicholas Hayes, LGPL 2.1 (LICENSE-sc4-seaport-demand-cap-fix-LGPL-2.1.txt)",
+          "- query UI hook interfaces (src/water/QueryUIHooks): sc4-query-ui-hooks by Nicholas Hayes, MIT (LICENSE-sc4-query-ui-hooks-MIT.txt)",
+          "- gzcom-dll (SC4SDK): LGPL 2.1 (LICENSE-gzcom-dll-LGPL-2.1.txt)",
+          "- mINI: MIT (LICENSE-mINI-MIT.txt)"
+        ) | Set-Content -Path (Join-Path $lic 'README.txt') -Encoding utf8
+        # LF line endings, so sha256sum -c reads it on any system.
+        $sums = Get-ChildItem -File -Recurse $out | Get-FileHash -Algorithm SHA256 |
+          ForEach-Object { "$($_.Hash.ToLowerInvariant())  $([IO.Path]::GetRelativePath($out.FullName, $_.Path).Replace('\','/'))`n" }
+        [IO.File]::WriteAllText((Join-Path $out.FullName 'SHA256SUMS.txt'), -join $sums)
+      build-output: release-package
+      artifact-name: SC4SIM-${{ github.ref_name }}-win32.zip
+      attestation-subject-path: SC4SIM.dll
+      prerelease: ${{ contains(github.ref_name, '-') }}
+    permissions:
+      id-token: write
+      attestations: write
+      artifact-metadata: write
+      contents: write

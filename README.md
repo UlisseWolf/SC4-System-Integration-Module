@@ -4,7 +4,7 @@
 ![Version](https://img.shields.io/badge/version-1.10.0-informational)
 ![Game](https://img.shields.io/badge/SimCity_4-1.1.641-success)
 ![Platform](https://img.shields.io/badge/platform-Windows_x86-lightgrey)
-[![Build and release](https://github.com/UlisseWolf/SC4-System-Integration-Module/actions/workflows/build-release.yml/badge.svg?branch=master)](https://github.com/UlisseWolf/SC4-System-Integration-Module/actions/workflows/build-release.yml)
+[![Build](https://github.com/UlisseWolf/SC4-System-Integration-Module/actions/workflows/build.yml/badge.svg?branch=master)](https://github.com/UlisseWolf/SC4-System-Integration-Module/actions/workflows/build.yml)
 
 **SC4SIM.dll** is the DLL of the **SC4 System Integration Module (SIM)** of the
 [Colossus Addon Mod](https://github.com/UlisseWolf/Colossus_Addon_Mod) for SimCity 4 Deluxe / Rush Hour.
@@ -28,6 +28,7 @@ such as NEON.
 - [Afterlife](#afterlife)
 - [Configuration](#configuration)
 - [Building](#building)
+- [Releases](#releases)
 - [Repository layout](#repository-layout)
 - [Credits](#credits)
 - [License](#license)
@@ -366,6 +367,21 @@ Details, the news events and the tests are in [`docs/afterlife.md`](docs/afterli
 **Visual Studio 2022 or later** with the *Desktop development with C++* workload. The power-pole hooks use x86
 MSVC inline assembly, so the Microsoft compiler is required: MinGW and clang are not supported.
 
+The [gzcom-dll](https://github.com/SC4SDK/gzcom-dll) SDK is a git submodule in `vendor/gzcom-dll`, so clone with
+submodules:
+
+```sh
+git clone --recursive -b staging https://github.com/UlisseWolf/SC4-System-Integration-Module.git
+```
+
+In a copy cloned without `--recursive`, or to move the SDK to its latest commit, run:
+
+```sh
+git submodule update --init --remote
+```
+
+A ZIP downloaded from GitHub does not contain the submodule: clone the repository instead.
+
 1. Open `SC4SIM.sln`.
 2. Build the only configuration, **Release | x86**.
 3. The output is `bin\Release\SC4SIM.dll`.
@@ -377,26 +393,52 @@ cmake -S . -B build -A Win32
 cmake --build build --config Release
 ```
 
-Dependencies are vendored:
-- `vendor/gzcom-dll`;
-- `vendor/mINI`, the INI parser;
+Dependencies:
+- `vendor/gzcom-dll`, the [SC4SDK gzcom-dll](https://github.com/SC4SDK/gzcom-dll) as a git submodule;
+- `vendor/mINI`, the INI parser, included in the repository;
 - the DLL also links Windows' `version.lib`.
 
 The C runtime is linked statically, so players do not need the Visual C++ Redistributable.
 
-## Continuous integration
+## Releases
 
-[`.github/workflows/build-release.yml`](.github/workflows/build-release.yml) runs on every push to `master` (and on manual
-runs from `master`):
+The workflows in `.github/workflows` run only for the `master` branch:
 
-1. builds `SC4SIM.sln` (Release | x86) with MSBuild on Windows;
-2. packages `SC4SIM-<version>.zip` with `SC4SIM.dll`, `SC4SIM.ini` and the license files (`Licenses/`), and keeps it as
-   a build artifact;
-3. publishes it as the GitHub release `v<version>` if that release does not exist yet.
+- `build.yml` builds `SC4SIM.dll` with CMake (Release | x86) on every push to `master` and every pull request into
+  `master`, and keeps it as a workflow artifact with `SC4SIM.ini`. Work on `staging` is built when it is merged or
+  proposed into `master`.
+- `release.yml` runs for a `vMAJOR.MINOR.PATCH` tag (or `v1.13.0-rc.1` for a prerelease). It refuses tags on commits
+  that are not in `master` and tags that do not match `SIM_DLL_VERSION_STR` in `src/version.h`. Then the reusable
+  workflow of [sc4-dll-actions](https://github.com/memo33/sc4-dll-actions) builds `SC4SIM-<tag>-win32.zip`
+  (`SC4SIM.dll`, `SC4SIM.ini`, `README.txt`, the Lua sources in `Lua/`, the licenses in `Licenses/` and
+  `SHA256SUMS.txt`), attests the zip and the DLL, and leaves them in a draft release.
 
-The version is `SIM_DLL_VERSION_STR` in `src/version.h`: bump it to publish a new release. Pushes that do not change
-the version only check that the DLL still builds. A manual run with *Replace the zip of an existing release* replaces
-the zip of the current version's release instead.
+To release, bump `src/version.h`, merge `staging` into `master`, then tag the merge commit and push the tag:
+
+```sh
+git checkout master && git merge staging && git push origin master
+git tag v1.13.0 && git push origin v1.13.0
+```
+
+Anyone can check a download:
+
+```sh
+gh attestation verify SC4SIM-v1.13.0-win32.zip --repo UlisseWolf/SC4-System-Integration-Module \
+  --deny-self-hosted-runners --signer-repo memo33/sc4-dll-actions \
+  --signer-digest c7aa3d2d748a9bd52a573a79f1f6ba78dde6f25f
+```
+
+Publishing the draft starts `sc4pac.yml`, which updates the package in an
+[sc4pac](https://memo33.github.io/sc4pac/) channel with
+[sc4pac-release-action](https://github.com/caspervg/sc4pac-release-action). It skips prereleases and is off until:
+
+1. a fork of the channel exists (default `sebamarynissen/simtropolis-channel`),
+2. the environment `sc4pac` (tags `v*` only) has the secret `SC4PAC_FORK_TOKEN`, a fine-grained token with
+   *Contents: Read and write* on that fork,
+3. the repository variable `SC4PAC_ASSET_ID` names the release zip's asset in the channel (`SC4PAC_CHANNEL` for
+   another channel).
+
+Dependabot proposes updates of the actions to `master` once a month.
 
 ## Repository layout
 
@@ -411,7 +453,7 @@ src/advisors/        advisor notices (Fixed Underfunded Notices priorities)
 src/fixes/           game bug fixes (trip capacity by wealth, budget: phantom funding sliders and phantom budget items)
 lua/                 sim_advisor_rewards.lua (advisor reward creators)
 docs/                power-pole, mixed occupancy, I-M zone and Afterlife documentation and README.it.md (Italian notes)
-vendor/              gzcom-dll, mINI
+vendor/              gzcom-dll (git submodule), mINI
 SC4SIM.ini           settings template
 ```
 
@@ -425,7 +467,10 @@ SC4SIM.ini           settings template
   [sc4-remove-phantom-budget-items](https://github.com/0xC0000054/sc4-remove-phantom-budget-items), merged into
   SC4SIM with his consent.
 - **CoriBoom (CorinaMarie and Cyclone Boom)**: [Fixed Underfunded Notices (FUN)](https://community.simtropolis.com/forums/topic/760743-local-hospital-pockets-picked-and-other-fun-dialog-boxes/), included in CAM.
-- **nsgomez**: [gzcom-dll](https://github.com/nsgomez/gzcom-dll).
+- **SC4SDK contributors**: [gzcom-dll](https://github.com/SC4SDK/gzcom-dll), from the original SDK by
+  [nsgomez](https://github.com/nsgomez/gzcom-dll).
+- **caspervg**: the GitHub workflows of [sc4-seamless-region](https://github.com/caspervg/sc4-seamless-region);
+  **memo33**: the attested release build of [sc4-dll-actions](https://github.com/memo33/sc4-dll-actions).
 - **metayeti**: [mINI](https://github.com/metayeti/mINI).
 
 ## License
@@ -442,7 +487,7 @@ Third-party code keeps its own license:
   ([`src/fixes/LICENSE-sc4-remove-phantom-budget-items.txt`](src/fixes/LICENSE-sc4-remove-phantom-budget-items.txt));
 - `src/fixes/SeaportDemandCapFix.cpp`: ported from sc4-seaport-demand-cap-fix by Nicholas Hayes, LGPL 2.1, merged with
   the author's consent ([`src/fixes/LICENSE-sc4-seaport-demand-cap-fix.txt`](src/fixes/LICENSE-sc4-seaport-demand-cap-fix.txt));
-- `vendor/gzcom-dll`: LGPL 2.1;
+- `vendor/gzcom-dll` (git submodule): LGPL 2.1;
 - `vendor/mINI`: MIT.
 
 SimCity 4 is a trademark of Electronic Arts Inc. This project is not affiliated with or endorsed by Electronic Arts.
